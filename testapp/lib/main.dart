@@ -1739,11 +1739,16 @@ class _DriverEntryScreenState extends State<DriverEntryScreen> {
       ),
       ),
     );
-    name.dispose();
-    phone.dispose();
-    password.dispose();
-    car.dispose();
-    plate.dispose();
+    // showDialog завершает Future в момент закрытия окна, но TextFormField
+    // может ещё оставаться подключённым к контроллерам во время анимации.
+    // Освобождаем контроллеры после завершения обратного перехода маршрута.
+    Future<void>.delayed(const Duration(milliseconds: 350), () {
+      name.dispose();
+      phone.dispose();
+      password.dispose();
+      car.dispose();
+      plate.dispose();
+    });
   }
 
   @override
@@ -2432,7 +2437,8 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
     } catch (e) {
       if (mounted) _notice(e.toString());
     } finally {
-      reasonController.dispose();
+      // Даём окну причины завершить анимацию закрытия до dispose контроллера.
+      Future<void>.delayed(const Duration(milliseconds: 350), () => reasonController.dispose());
       if (mounted) setState(() => _working = false);
     }
   }
@@ -2549,7 +2555,8 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
         ],
       ),
     );
-    fareController.dispose();
+    // Контроллер поля суммы нельзя освобождать до отсоединения закрытого диалога.
+    Future<void>.delayed(const Duration(milliseconds: 350), () => fareController.dispose());
     if (fare == null || !mounted) return;
     setState(() => _working = true);
     try {
