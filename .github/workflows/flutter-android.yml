@@ -26,8 +26,8 @@ concurrency:
 
 jobs:
   verify-and-build:
-    # Skip safely until the complete Flutter and Worker source trees are present.
-    if: ${{ hashFiles('testapp/pubspec.yaml', 'backend/cloudflare-worker/worker.js') != '' }}
+    # Skip until both the Flutter and Worker source trees are present.
+    if: ${{ hashFiles('testapp/pubspec.yaml') != '' && hashFiles('backend/cloudflare-worker/worker.js') != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
