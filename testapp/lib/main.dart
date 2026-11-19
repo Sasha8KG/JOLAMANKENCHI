@@ -8,7 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:livekit_client/livekit_client.dart';
+import 'package:livekit_client/livekit_client.dart' hide ConnectionState;
 import 'services/firebase_service.dart';
 import 'services/worker_api.dart';
 import 'services/route_service.dart';
@@ -440,9 +440,15 @@ class _WalkieTalkieWidgetState extends State<WalkieTalkieWidget> {
         await WorkerApi.radioFloor(action: 'release');
         return;
       }
-      await _room!.localParticipant.setMicrophoneEnabled(true);
+      final participant = _room?.localParticipant;
+      if (participant == null) {
+        await WorkerApi.radioFloor(action: 'release');
+        _notice('Голосовой канал ещё не готов. Подключитесь повторно.');
+        return;
+      }
+      await participant.setMicrophoneEnabled(true);
       if (!_pressRequested) {
-        await _room!.localParticipant.setMicrophoneEnabled(false);
+        await participant.setMicrophoneEnabled(false);
         await WorkerApi.radioFloor(action: 'release');
         return;
       }
@@ -472,7 +478,7 @@ class _WalkieTalkieWidgetState extends State<WalkieTalkieWidget> {
     _pressRequested = false;
     _floorTimer?.cancel();
     _floorTimer = null;
-    try { await _room?.localParticipant.setMicrophoneEnabled(false); } catch (_) {}
+    try { await _room?.localParticipant?.setMicrophoneEnabled(false); } catch (_) {}
     try { await WorkerApi.radioFloor(action: 'release'); } catch (_) {}
     if (mounted && _speaking) setState(() => _speaking = false);
     if (showNotice && mounted) _notice('Передача остановлена: потеряно соединение с эфиром.');
@@ -489,7 +495,7 @@ class _WalkieTalkieWidgetState extends State<WalkieTalkieWidget> {
     _chatTimer?.cancel();
     _floorTimer?.cancel();
     if (_speaking || _connecting) {
-      try { _room?.localParticipant.setMicrophoneEnabled(false); } catch (_) {}
+      try { _room?.localParticipant?.setMicrophoneEnabled(false); } catch (_) {}
       WorkerApi.radioFloor(action: 'release').catchError((_) => <String, dynamic>{});
     }
     _room?.disconnect();
@@ -1232,7 +1238,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
                       color: gpsAgeSeconds != null && gpsAgeSeconds > 60 ? Colors.red : Colors.grey.shade700,
                     ),
                   ),
-                  Text('Такси: ${order.assignedDriver!.carBrand} ${order.assignedDriver!.plateNumber}', style: const TextStyle(fontSize: 12)),
+                  Text('Такси: ${order?.assignedDriver?.carBrand ?? ''} ${order?.assignedDriver?.plateNumber ?? ''}', style: const TextStyle(fontSize: 12)),
                 ],
               ),
             ),
@@ -2004,7 +2010,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
         return;
       }
       final firstPosition = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+        desiredAccuracy: LocationAccuracy.high,
       );
       driver.currentLocation = LatLng(firstPosition.latitude, firstPosition.longitude);
       await WorkerApi.setDriverOnline(
