@@ -58,9 +58,9 @@ class RouteService {
         durationSeconds: (route['duration'] as num).toDouble(),
       );
     } on SocketException {
-      throw const SocketException('Нет соединения для загрузки маршрута.');
+      throw SocketException('Нет соединения для загрузки маршрута.');
     } on TimeoutException {
-      throw const TimeoutException('Маршрут загружается слишком долго.');
+      throw TimeoutException('Маршрут загружается слишком долго.');
     } finally {
       client.close(force: true);
     }
