@@ -2295,8 +2295,15 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
     _load();
   }
 
-  Future<void> _load() async {
-    if (mounted) setState(() { _loading = true; _error = null; });
+  Future<void> _load({bool showLoading = true}) async {
+    // При обновлении данных после изменения тарифа не убираем всю панель
+    // с экрана: это сохраняет состояние вложенных виджетов и диалогов.
+    if (mounted) {
+      setState(() {
+        if (showLoading) _loading = true;
+        _error = null;
+      });
+    }
     try {
       final data = await WorkerApi.dispatcherOverview();
       final tariffData = await WorkerApi.getTariffs();
@@ -2450,7 +2457,8 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
     setState(() => _working = true);
     try {
       await WorkerApi.saveTariffs(cityFareSom: values[0], intercityFareSom: values[1]);
-      await _load();
+      // Обновляем тарифы и сводку без полной замены дерева панели.
+      await _load(showLoading: false);
       if (mounted) _notice('Тарифы сохранены. Клиенты увидят новые цены.');
     } catch (e) {
       if (mounted) _notice(e.toString());
