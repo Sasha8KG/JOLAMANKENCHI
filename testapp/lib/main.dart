@@ -303,14 +303,14 @@ class KyrgyzOrnamentHeader extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: List.generate(
-              13,
+              11,
               (index) => Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 3),
                 child: Text(
-                  index % 2 == 0 ? '❖' : '◇',
+                  index % 2 == 0 ? '❧' : '✥',
                   style: const TextStyle(
-                    color: Color(0xFFFFD45A),
-                    fontSize: 15,
+                    color: Color(0xFFFFC928),
+                    fontSize: 17,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
@@ -633,88 +633,140 @@ class RoleSelectionScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const burgundy = Color(0xFF741D25);
+    const ink = Color(0xFF171F1D);
+    const gold = Color(0xFFFFC928);
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F2E9),
-      appBar: AppBar(
-        title: const Text('ЖОЛ АМАН КЕНЧИ такси'),
-        centerTitle: true,
-        backgroundColor: const Color(0xFF202522),
-        foregroundColor: const Color(0xFFFFD45A),
-      ),
-      body: Column(
-        children: [
-          const KyrgyzOrnamentHeader(),
-          Expanded(
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 450),
-                child: Padding(
-                  padding: const EdgeInsets.all(20.0),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const Icon(Icons.local_taxi,
-                          size: 90, color: Colors.amber),
-                      const SizedBox(height: 12),
-                      const Text(
-                        '«ЖОЛ АМАН КЕНЧИ» такси\nСулюкта и Лейлекский район',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87),
+      backgroundColor: const Color(0xFFF5EBD8),
+      body: SafeArea(
+        child: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFF202A27), Color(0xFF6F2028), Color(0xFFF5EBD8)],
+              stops: [0.0, 0.48, 1.0],
+            ),
+          ),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 480),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(18, 14, 18, 20),
+                child: Column(
+                  children: [
+                    const KyrgyzOrnamentHeader(),
+                    const SizedBox(height: 18),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF171F1D),
+                        borderRadius: BorderRadius.circular(28),
+                        border: Border.all(color: gold, width: 2),
+                        boxShadow: const [BoxShadow(color: Colors.black38, blurRadius: 18, offset: Offset(0, 8))],
                       ),
-                      const SizedBox(height: 32),
-                      ElevatedButton.icon(
-                        icon: const Icon(Icons.person),
-                        label: const Text('Я Клиент (Вход / Регистрация)'),
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          backgroundColor: Colors.amber,
-                          foregroundColor: Colors.black,
-                        ),
-                        onPressed: () {
-                          Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                  builder: (_) => const ClientAuthScreen()));
-                        },
+                      child: Column(
+                        children: [
+                          Container(
+                            width: 116, height: 116,
+                            decoration: BoxDecoration(
+                              color: burgundy,
+                              borderRadius: BorderRadius.circular(30),
+                              border: Border.all(color: gold, width: 3),
+                            ),
+                            child: const Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                Icon(Icons.landscape_rounded, size: 94, color: Color(0xFFFFE8A0)),
+                                Positioned(bottom: 12, child: Icon(Icons.local_taxi_rounded, size: 48, color: gold)),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          const Text('«ЖОЛ АМАН КЕНЧИ»', textAlign: TextAlign.center,
+                            style: TextStyle(color: gold, fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: 1.0)),
+                          const Text('ТАКСИ', style: TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.w800, letterSpacing: 5)),
+                          const SizedBox(height: 8),
+                          const Text('СУЛЮКТА  •  ЛЕЙЛЕК  •  БАТКЕН', textAlign: TextAlign.center,
+                            style: TextStyle(color: Color(0xFFFFE8A0), fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 1.3)),
+                          const SizedBox(height: 15),
+                          Container(height: 2, decoration: const BoxDecoration(
+                            gradient: LinearGradient(colors: [Colors.transparent, gold, Colors.transparent]))),
+                          const SizedBox(height: 13),
+                          const Text('Жолунуз ачык болсун!', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w600)),
+                          const SizedBox(height: 4),
+                          const Text('Быстро • Надёжно • По-нашему', style: TextStyle(color: Color(0xFFFFE8A0), fontSize: 13)),
+                        ],
                       ),
-                      const SizedBox(height: 16),
-                      ElevatedButton.icon(
-                        icon: const Icon(Icons.drive_eta),
-                        label: const Text('Я Водитель (Кабинет)'),
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          backgroundColor: Colors.black,
-                          foregroundColor: Colors.amber,
-                        ),
-                        onPressed: () {
-                          Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                  builder: (_) => const DriverEntryScreen()));
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      OutlinedButton.icon(
-                        icon: const Icon(Icons.admin_panel_settings),
-                        label: const Text('Панель Диспетчера'),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          side: const BorderSide(color: Colors.amber, width: 2),
-                        ),
-                        onPressed: () => _showDispatcherAuth(context),
-                      ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(height: 20),
+                    _roleButton(
+                      icon: Icons.person_pin_circle_rounded,
+                      label: 'Я ПАССАЖИР',
+                      subtitle: 'Заказать поездку',
+                      color: gold,
+                      foreground: ink,
+                      onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ClientAuthScreen())),
+                    ),
+                    const SizedBox(height: 12),
+                    _roleButton(
+                      icon: Icons.local_taxi_rounded,
+                      label: 'Я ВОДИТЕЛЬ',
+                      subtitle: 'Заказы и рабочий кабинет',
+                      color: const Color(0xFF202A27),
+                      foreground: gold,
+                      onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DriverEntryScreen())),
+                    ),
+                    const SizedBox(height: 12),
+                    _roleButton(
+                      icon: Icons.admin_panel_settings_rounded,
+                      label: 'ДИСПЕТЧЕР',
+                      subtitle: 'Управление таксопарком',
+                      color: burgundy,
+                      foreground: Colors.white,
+                      onPressed: () => _showDispatcherAuth(context),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text('Кыргызстан • Баткенская область', style: TextStyle(color: Color(0xFF4D302B), fontSize: 12, fontWeight: FontWeight.w700)),
+                  ],
                 ),
               ),
             ),
           ),
-          const KyrgyzOrnamentHeader(),
-        ],
+        ),
+      ),
+    );
+  }
+
+  Widget _roleButton({
+    required IconData icon,
+    required String label,
+    required String subtitle,
+    required Color color,
+    required Color foreground,
+    required VoidCallback onPressed,
+  }) {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton(
+        onPressed: onPressed,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: color,
+          foregroundColor: foreground,
+          elevation: 5,
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18), side: const BorderSide(color: Color(0xFFFFC928), width: 1.2)),
+        ),
+        child: Row(children: [
+          Icon(icon, size: 31),
+          const SizedBox(width: 15),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(label, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, letterSpacing: 0.8)),
+            Text(subtitle, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+          ])),
+          const Icon(Icons.arrow_forward_ios_rounded, size: 17),
+        ]),
       ),
     );
   }
