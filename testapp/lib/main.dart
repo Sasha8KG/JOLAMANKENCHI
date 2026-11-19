@@ -1007,9 +1007,9 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
         'status': 'new',
         'createdAt': DateTime.now(),
       };
-      // Сначала создаём документ заказа в Firestore (его видит диспетчер),
-      // затем публикуем ту же заявку в D1 через Worker для выбора водителя.
-      await FirebaseService.db.collection('orders').doc(orderId).set(orderData);
+      // Заказы хранятся в D1 через защищённый Cloudflare Worker.
+      // Прямая запись из приложения в Firestore здесь не нужна и блокировалась
+      // правилами Firestore (permission-denied).
       await WorkerApi.publishOrder(orderData);
       final price = _isIntercity ? _intercityFareSom : _cityFareSom;
       setState(() {
@@ -2451,8 +2451,9 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
         ],
       ),
     );
-    cityController.dispose();
-    intercityController.dispose();
+    // Не вызываем dispose сразу после закрытия диалога: Flutter ещё может
+    // завершать анимацию маршрута, а TextField пока остаётся подписанным
+    // на контроллер. Ранний dispose вызывает assertion _dependents.isEmpty.
     if (values == null || !mounted) return;
     setState(() => _working = true);
     try {
