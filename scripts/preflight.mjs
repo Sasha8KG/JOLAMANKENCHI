@@ -17,6 +17,9 @@ const api = read('testapp/lib/services/worker_api.dart');
 const app = read('testapp/lib/main.dart');
 
 check('Android applicationId is com.jolamankenchi.taxi', /applicationId\s+["']com\.jolamankenchi\.taxi["']/.test(gradle));
+check('Release signing uses private keystore config', /signingConfig signingConfigs\.release/.test(gradle));
+check('Release signing refuses missing secrets', /requestsRelease && !jakSigningConfigured/.test(gradle) && /JAK_KEYSTORE_PASSWORD/.test(gradle));
+check('Release signing never falls back to debug key', !/signingConfig signingConfigs\.debug/.test(gradle));
 check('Firebase config matches Android package', firebase.client?.some((c) => c.client_info?.android_client_info?.package_name === 'com.jolamankenchi.taxi'));
 check('Firebase project is jol-aman-kenchi', firebase.project_info?.project_id === 'jol-aman-kenchi');
 check('LiveKit client dependency is pinned', /livekit_client:\s*2\.4\.0/.test(pubspec));
