@@ -1005,7 +1005,8 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
         'tariff': tariff,
         'comment': '',
         'status': 'new',
-        'createdAt': DateTime.now(),
+        // JSON-совместимое время: заказ отправляется в Worker через jsonEncode.
+        'createdAt': DateTime.now().toIso8601String(),
       };
       // Заказы хранятся в D1 через защищённый Cloudflare Worker.
       // Прямая запись из приложения в Firestore здесь не нужна и блокировалась
