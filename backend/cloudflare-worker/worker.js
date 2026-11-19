@@ -342,7 +342,14 @@ export default {
           FROM trip_finances f LEFT JOIN drivers d ON d.uid=f.driver_uid
           WHERE f.completed_at >= unixepoch('now','start of day')
           GROUP BY f.driver_uid ORDER BY earned_som DESC`).all();
-        return response({ status: "ok", drivers: drivers.results || [], orders: orders.results || [],
+        // Normalize SQLite integer flags before JSON serialization so Flutter
+        // receives stable booleans for approval and online state.
+        const driverRows = (drivers.results || []).map(d => ({
+          ...d,
+          approved: Number(d.approved) === 1,
+          online: Number(d.online) === 1
+        }));
+        return response({ status: "ok", drivers: driverRows, orders: orders.results || [],
           today: today.results || [], earnings: earnings.results || [] });
       }
 
