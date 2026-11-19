@@ -22,7 +22,7 @@ check('Release signing refuses missing secrets', /requestsRelease && !jakSigning
 check('Release signing never falls back to debug key', !/signingConfig signingConfigs\.debug/.test(gradle));
 check('Firebase config matches Android package', firebase.client?.some((c) => c.client_info?.android_client_info?.package_name === 'com.jolamankenchi.taxi'));
 check('Firebase project is jol-aman-kenchi', firebase.project_info?.project_id === 'jol-aman-kenchi');
-check('LiveKit client dependency is pinned', /livekit_client:\s*2\.4\.0/.test(pubspec));
+check('LiveKit client dependency is pinned', /livekit_client:\s*2\.2\.4(?:\s|$)/.test(pubspec));
 check('App has microphone permission', /android\.permission\.RECORD_AUDIO/.test(manifest));
 check('App has location permissions', /ACCESS_FINE_LOCATION/.test(manifest) && /ACCESS_COARSE_LOCATION/.test(manifest));
 check('Worker has cancellation endpoint', worker.includes('"/orders/cancel"'));
