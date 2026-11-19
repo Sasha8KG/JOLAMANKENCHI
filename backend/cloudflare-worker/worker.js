@@ -1,6 +1,6 @@
 const FIREBASE_API_KEY = "AIzaSyAtZAv9RBWh6Qj5GUR2acWY9MLrHAq2e8";
 const PROJECT_ID = "jol-aman-kenchi";
-const DISPATCHER_UID = "2Z0sOVpx00WFqNBb67iuTGeNevH3";
+const DISPATCHER_UID = "AMGNzQEr7GfnisJcr7u4BqcdIvh1";
 
 function response(data, status = 200) {
   return new Response(JSON.stringify(data), {
