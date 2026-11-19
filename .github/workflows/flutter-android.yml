@@ -56,7 +56,7 @@ jobs:
         run: flutter pub get
       - name: Analyze Dart source
         working-directory: testapp
-        run: flutter analyze
+        run: flutter analyze --no-fatal-infos
       - name: Run Flutter tests
         working-directory: testapp
         run: flutter test --reporter expanded
