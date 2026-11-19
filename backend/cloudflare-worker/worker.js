@@ -1,4 +1,4 @@
-const FIREBASE_API_KEY = "AIzaSyAtZAv9RBWh6Qj5GUR2acWY9MLrHAq2e8";
+const FIREBASE_API_KEY = "AIzaSyBh5WG_rXaxBjDHOVPXPmmw8gqBCRubIAM";
 const PROJECT_ID = "jol-aman-kenchi";
 const DISPATCHER_UID = "AMGNzQEr7GfnisJcr7u4BqcdIvh1";
 
