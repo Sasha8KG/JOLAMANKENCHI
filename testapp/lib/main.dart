@@ -2700,14 +2700,25 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
                 _sectionTitle('Все водители', Icons.directions_car),
                 if (_drivers.isEmpty) const Text('В базе пока нет водителей.'),
                 ..._drivers.map((d) {
-                  final approved = d['approved'] == 1 || d['approved'] == true;
-                  final online = d['online'] == 1 || d['online'] == true;
+                  final approved = d['approved'] == true || d['approved'] == 1 || d['approved'].toString() == '1';
+                  final online = d['online'] == true || d['online'] == 1 || d['online'].toString() == '1';
+                  final reviewStatus = (d['review_status'] ?? 'not_submitted').toString();
+                  final approvalLabel = approved
+                      ? 'Допущен'
+                      : reviewStatus == 'pending'
+                          ? 'Ожидает проверки документов'
+                          : reviewStatus == 'rejected'
+                              ? 'Заявка отклонена'
+                              : 'Не одобрен · документы не отправлены';
                   return Card(child: ListTile(
                     leading: Icon(Icons.local_taxi, color: online ? Colors.green : Colors.grey),
                     title: Text((d['name'] ?? 'Водитель').toString()),
-                    subtitle: Text('${d['car_model'] ?? ''} · ${d['car_number'] ?? ''}\n${approved ? 'Допущен' : 'Не одобрен'} · ${online ? 'На линии' : 'Не на линии'}\nПроверка документов: ${d['review_status'] ?? 'не отправлены'}'),
+                    subtitle: Text('${d['car_model'] ?? ''} · ${d['car_number'] ?? ''}\n$approvalLabel · ${online ? 'На линии' : 'Не на линии'}\nПроверка документов: $reviewStatus'),
                     isThreeLine: true,
-                    trailing: approved ? IconButton(tooltip: 'Отключить допуск', onPressed: _working ? null : () => _approve(d, false), icon: const Icon(Icons.block, color: Colors.red)) : const Icon(Icons.hourglass_empty),
+                    trailing: approved
+                        ? IconButton(tooltip: 'Отключить допуск', onPressed: _working ? null : () => _approve(d, false), icon: const Icon(Icons.block, color: Colors.red))
+                        : Icon(reviewStatus == 'pending' ? Icons.hourglass_empty : Icons.warning_amber_rounded,
+                            color: reviewStatus == 'pending' ? Colors.orange : Colors.redAccent),
                   ));
                 }),
                 _sectionTitle('Открытые заказы', Icons.receipt_long),
