@@ -38,13 +38,17 @@ class WorkerApi {
       request.headers.set(HttpHeaders.acceptHeader, 'application/json');
       if (body != null) {
         request.headers.contentType = ContentType.json;
-        request.add(utf8.encode(jsonEncode(body)));
       }
       if (authenticated) {
         request.headers.set(
           HttpHeaders.authorizationHeader,
           'Bearer ${await _token()}',
         );
+      }
+      // HttpClientRequest headers become immutable after the first body byte
+      // is added. Set every header before writing the JSON payload.
+      if (body != null) {
+        request.add(utf8.encode(jsonEncode(body)));
       }
       final response = await request.close().timeout(_timeout);
       final text = await response.transform(utf8.decoder).join();
