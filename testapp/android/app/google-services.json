@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "729697392300",
+    "project_id": "jol-aman-kenchi",
+    "storage_bucket": "jol-aman-kenchi.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:729697392300:android:68c64e91503daea64b7109",
+        "android_client_info": {
+          "package_name": "com.jolamankenchi.taxi"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBh5WG_rXaxBjDHOVPXPmmw8gqBCRubIAM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
