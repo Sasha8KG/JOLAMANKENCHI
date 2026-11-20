@@ -57,18 +57,38 @@ class RouteService {
       if (response.contentLength > 2 * 1024 * 1024) {
         throw const FormatException('Ответ маршрутизатора слишком большой.');
       }
-      final body = await response.transform(utf8.decoder).join().timeout(_timeout);
-      if (body.length > 2 * 1024 * 1024) {
-        throw const FormatException('Ответ маршрутизатора слишком большой.');
-      }
       if (response.statusCode != 200) {
+        // Do not spend time decoding an error page or an oversized error body.
+        unawaited(response.drain<void>());
         throw FormatException('Маршрутизатор временно недоступен (HTTP ${response.statusCode}).');
       }
-      final decoded = jsonDecode(body);
+      // Enforce the response limit while streaming, not only after buffering it.
+      final responseBytes = await response.fold<BytesBuilder>(
+        BytesBuilder(copy: false),
+        (builder, chunk) {
+          if (builder.length + chunk.length > 2 * 1024 * 1024) {
+            throw const FormatException('Ответ маршрутизатора слишком большой.');
+          }
+          builder.add(chunk);
+          return builder;
+        },
+      ).timeout(_timeout);
+      final body = utf8.decode(responseBytes.takeBytes(), allowMalformed: false);
+      if (body.trim().isEmpty) {
+        throw const FormatException('Маршрутизатор вернул пустой ответ.');
+      }
+      dynamic decoded;
+      try {
+        decoded = jsonDecode(body);
+      } on FormatException {
+        throw const FormatException('Маршрутизатор вернул некорректные данные.');
+      }
       if (decoded is! Map<String, dynamic>) {
         throw const FormatException('Маршрутизатор вернул неверный формат данных.');
       }
-      if (decoded['code'] != 'Ok') throw const FormatException('Дорожный маршрут не найден.');
+      if (decoded['code'] is! String || decoded['code'] != 'Ok') {
+        throw const FormatException('Дорожный маршрут не найден.');
+      }
       final routes = decoded['routes'];
       if (routes is! List || routes.isEmpty || routes.first is! Map) {
         throw const FormatException('Дорожный маршрут не найден.');
@@ -93,6 +113,10 @@ class RouteService {
       }
       if (points.length < 2) {
         throw const FormatException('Маршрут получен без корректных дорожных точек.');
+      }
+      // A route with repeated identical coordinates cannot guide the driver.
+      if (const Distance().as(LengthUnit.Meter, points.first, points.last) < 1) {
+        throw const FormatException('Маршрут не содержит движения между точками.');
       }
       final distance = route['distance'];
       final duration = route['duration'];
