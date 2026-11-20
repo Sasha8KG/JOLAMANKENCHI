@@ -544,14 +544,45 @@ export default {
         if (b.customerUid && b.customerUid !== auth.user.localId) {
           return response({ status: "error", message: "UID клиента не совпадает" }, 403);
         }
+        const pickup = typeof b.pickup === "string" ? b.pickup.trim() : "";
+        const destination = typeof b.destination === "string" ? b.destination.trim() :
+          (typeof b.dest === "string" ? b.dest.trim() : "");
+        const pickupLat = b.pickupLat;
+        const pickupLng = b.pickupLng;
+        const people = b.people;
+        const payment = b.payment;
+        const tariff = b.tariff;
+        const comment = b.comment === undefined || b.comment === null ? "" : b.comment;
+        if (!pickup || pickup.length > 200 || /[\\u0000-\\u001f\\u007f]/.test(pickup)) {
+          return response({ status: "error", message: "Укажите корректное место подачи автомобиля" }, 400);
+        }
+        if (!destination || destination.length > 200 || /[\\u0000-\\u001f\\u007f]/.test(destination)) {
+          return response({ status: "error", message: "Укажите корректный пункт назначения" }, 400);
+        }
+        if (typeof pickupLat !== "number" || !Number.isFinite(pickupLat) || pickupLat < -90 || pickupLat > 90 ||
+            typeof pickupLng !== "number" || !Number.isFinite(pickupLng) || pickupLng < -180 || pickupLng > 180) {
+          return response({ status: "error", message: "Проверьте координаты места подачи автомобиля" }, 400);
+        }
+        if (!Number.isInteger(people) || people < 1 || people > 4) {
+          return response({ status: "error", message: "Количество пассажиров должно быть от 1 до 4" }, 400);
+        }
+        if (!["Наличные", "QR-код", "По договору"].includes(payment)) {
+          return response({ status: "error", message: "Выберите допустимый способ оплаты" }, 400);
+        }
+        if (!["По городу", "Межгород"].includes(tariff)) {
+          return response({ status: "error", message: "Выберите допустимый тариф" }, 400);
+        }
+        if (typeof comment !== "string" || comment.length > 500 || /[\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f]/.test(comment)) {
+          return response({ status: "error", message: "Комментарий не должен превышать 500 символов" }, 400);
+        }
         // Publishing is idempotent: a retry must never reset an assigned or completed order.
         await env.DB.prepare(`INSERT INTO orders
           (id, firebase_order_id, customer_uid, pickup_address, pickup_lat, pickup_lng, destination_address, destination_lat, destination_lng, passenger_count, payment_method, tariff_type, comment, status, assigned_driver_uid)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'new', NULL)
           ON CONFLICT DO NOTHING`)
-          .bind(orderId, orderId, auth.user.localId, b.pickup || "", num(b.pickupLat), num(b.pickupLng),
-            b.destination || b.dest || "", num(b.destinationLat), num(b.destinationLng),
-            Number(b.people || 1), b.payment || "", b.tariff || "", b.comment || "").run();
+          .bind(orderId, orderId, auth.user.localId, pickup, pickupLat, pickupLng,
+            destination, num(b.destinationLat), num(b.destinationLng),
+            people, payment, tariff, comment).run();
         const existing = await env.DB.prepare(
           "SELECT customer_uid FROM orders WHERE firebase_order_id=?"
         ).bind(orderId).first();
