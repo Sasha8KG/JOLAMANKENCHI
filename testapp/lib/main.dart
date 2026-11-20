@@ -2298,7 +2298,8 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
   LatLng? _orderPickup(Map<String, dynamic> order) {
     final lat = double.tryParse((order['pickup_lat'] ?? '').toString());
     final lng = double.tryParse((order['pickup_lng'] ?? '').toString());
-    if (lat == null || lng == null) return null;
+    if (lat == null || lng == null || !lat.isFinite || !lng.isFinite ||
+        lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
     return LatLng(lat, lng);
   }
 
@@ -2309,7 +2310,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
     final id = (order['id'] ?? order['firebase_order_id'] ?? '').toString();
     final pickup = _orderPickup(order);
     if (id.isEmpty || pickup == null) return;
-    final routeKey = '$id:${driver.currentLocation.latitude.toStringAsFixed(3)},${driver.currentLocation.longitude.toStringAsFixed(3)}';
+    final routeKey = '$id:${pickup.latitude.toStringAsFixed(5)},${pickup.longitude.toStringAsFixed(5)}:${driver.currentLocation.latitude.toStringAsFixed(3)},${driver.currentLocation.longitude.toStringAsFixed(3)}';
     if (_driverRouteKey == routeKey && _driverApproachRoute != null) return;
     if (_driverRouteKey == routeKey &&
         _driverRouteRetryAfter != null &&
@@ -2319,6 +2320,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
     try {
       final route = await RouteService.drivingRoute(driver.currentLocation, pickup);
       if (!mounted) return;
+      if (TaxiParkState.currentLoggedInDriver?.id != driver.id) return;
       final latestAssignedId = _serverAssignedOrders.isEmpty
           ? ''
           : (_serverAssignedOrders.first['id'] ??
@@ -2334,7 +2336,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
       });
       _focusDriverMapOnRoute(driver.currentLocation, pickup);
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || TaxiParkState.currentLoggedInDriver?.id != driver.id) return;
       final latestAssignedId = _serverAssignedOrders.isEmpty
           ? ''
           : (_serverAssignedOrders.first['id'] ??
@@ -2369,10 +2371,25 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
     _driverMapController.move(center, zoom);
   }
 
+  bool _isUsableDriverPosition(Position position) {
+    final latitude = position.latitude;
+    final longitude = position.longitude;
+    final accuracy = position.accuracy;
+    return latitude.isFinite && longitude.isFinite &&
+        latitude >= -90 && latitude <= 90 &&
+        longitude >= -180 && longitude <= 180 &&
+        accuracy.isFinite && accuracy >= 0 && accuracy <= 1000;
+  }
+
   Future<void> _publishDriverLocation(DriverModel driver) async {
     // A single in-flight request is shared by GPS updates and the heartbeat.
     // This prevents slow mobile networks from accumulating location requests.
-    if (!mounted || _locationUpdateInProgress) return;
+    final point = driver.currentLocation;
+    if (!mounted || _locationUpdateInProgress ||
+        TaxiParkState.currentLoggedInDriver?.id != driver.id ||
+        !point.latitude.isFinite || !point.longitude.isFinite ||
+        point.latitude < -90 || point.latitude > 90 ||
+        point.longitude < -180 || point.longitude > 180) return;
     _locationUpdateInProgress = true;
     try {
       await WorkerApi.setDriverOnline(
@@ -2409,6 +2426,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
     try {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
+        unawaited(WorkerApi.setDriverOnline(online: false).then<void>((_) {}).catchError((_) {}));
         _showLocationMessage('Включите геолокацию на телефоне, чтобы выйти на линию.');
         _scheduleLocationRetry();
         return;
@@ -2419,6 +2437,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
       }
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
+        unawaited(WorkerApi.setDriverOnline(online: false).then<void>((_) {}).catchError((_) {}));
         _showLocationMessage('Разрешите приложению доступ к геолокации.');
         return;
       }
@@ -2428,6 +2447,12 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
       );
       // Экран мог закрыться, пока телефон определял координаты.
       if (!mounted) return;
+      if (!_isUsableDriverPosition(firstPosition)) {
+        unawaited(WorkerApi.setDriverOnline(online: false).then<void>((_) {}).catchError((_) {}));
+        _showLocationMessage('GPS пока определяет координаты недостаточно точно. Повторяем попытку.');
+        _scheduleLocationRetry();
+        return;
+      }
       driver.currentLocation = LatLng(firstPosition.latitude, firstPosition.longitude);
       if (mounted) setState(() {});
       // A temporary API outage must not prevent the phone from starting GPS tracking.
@@ -2448,12 +2473,10 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
         ),
       ).listen((position) {
         if (!mounted) return;
+        // Ignore inaccurate or malformed fixes instead of moving the taxi marker.
+        if (!_isUsableDriverPosition(position)) return;
         final latitude = position.latitude;
         final longitude = position.longitude;
-        // Never publish malformed coordinates or move the taxi marker off-map.
-        if (!latitude.isFinite || !longitude.isFinite ||
-            latitude < -90 || latitude > 90 ||
-            longitude < -180 || longitude > 180) return;
 
         driver.currentLocation = LatLng(latitude, longitude);
         _locationStreamErrorShown = false;
