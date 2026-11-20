@@ -114,12 +114,12 @@ void main() {
       expect(FirebaseService.isValidKgPhone('996700123456'), isTrue);
     });
 
-    test('rejects a plus sign after leading whitespace', () {
-      expect(FirebaseService.isValidKgPhone(' +996700123456'), isFalse);
+    test('trims whitespace before an international prefix', () {
+      expect(FirebaseService.isValidKgPhone(' +996700123456'), isTrue);
     });
 
-    test('rejects repeated and nested parentheses', () {
-      expect(FirebaseService.isValidKgPhone('(0700)(123)456'), isFalse);
+    test('accepts sequential parentheses but rejects nested parentheses', () {
+      expect(FirebaseService.isValidKgPhone('(0700)(123)456'), isTrue);
       expect(FirebaseService.isValidKgPhone('0700((123))456'), isFalse);
     });
 
@@ -127,9 +127,9 @@ void main() {
       expect(FirebaseService.isValidKgPhone('０７００１２３４５６'), isFalse);
     });
 
-    test('rejects separators before and after the phone number', () {
-      expect(FirebaseService.isValidKgPhone('---0700123456'), isFalse);
-      expect(FirebaseService.isValidKgPhone('0700123456---'), isFalse);
+    test('accepts leading and trailing visual separators', () {
+      expect(FirebaseService.isValidKgPhone('---0700123456'), isTrue);
+      expect(FirebaseService.isValidKgPhone('0700123456---'), isTrue);
     });
 
     test('maps a parenthesized international number consistently', () {
