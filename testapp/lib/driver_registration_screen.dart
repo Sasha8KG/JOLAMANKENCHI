@@ -421,7 +421,7 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
                 ),
                 const SizedBox(height: 18),
                 if (_busy) ...[
-                  const Semantics(
+                  Semantics(
                     label: 'Идёт отправка анкеты водителя',
                     liveRegion: true,
                     child: LinearProgressIndicator(),
