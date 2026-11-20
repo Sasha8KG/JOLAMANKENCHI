@@ -1442,7 +1442,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
       }
       setState(() {
         _approachRoute = null;
-        _routeError = e.toString();
+        _routeError = 'Не удалось построить маршрут. Проверьте интернет; положение такси обновится автоматически.';
         _routeRetryAfter = DateTime.now().add(const Duration(seconds: 30));
       });
     } finally {
@@ -2509,7 +2509,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
       setState(() {
         _driverApproachRoute = null;
         _driverRouteOrderId = id;
-        _driverRouteError = e.toString();
+        _driverRouteError = 'Не удалось построить маршрут. Проверьте интернет и попробуйте ещё раз.';
         _driverRouteRetryAfter = DateTime.now().add(const Duration(seconds: 30));
       });
       _focusDriverMapOnRoute(latestPoint, pickup);
