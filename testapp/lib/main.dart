@@ -477,6 +477,7 @@ class _WalkieTalkieWidgetState extends State<WalkieTalkieWidget> {
   bool _sendingMessage = false;
   String? _radioError;
   bool _pressRequested = false;
+  bool _refreshingFloor = false;
 
   @override
   void initState() {
@@ -578,10 +579,14 @@ class _WalkieTalkieWidgetState extends State<WalkieTalkieWidget> {
       setState(() { _speaking = true; });
       _floorTimer?.cancel();
       _floorTimer = Timer.periodic(const Duration(seconds: 2), (_) async {
+        if (_refreshingFloor || !_speaking || !mounted) return;
+        _refreshingFloor = true;
         try {
           await WorkerApi.radioFloor(action: 'refresh');
         } catch (_) {
           await _stopSpeaking(showNotice: true);
+        } finally {
+          _refreshingFloor = false;
         }
       });
     } on WorkerApiException catch (e) {
