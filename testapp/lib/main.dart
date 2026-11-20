@@ -472,6 +472,7 @@ class _WalkieTalkieWidgetState extends State<WalkieTalkieWidget> {
   Timer? _floorTimer;
   bool _connecting = false;
   bool _connected = false;
+  bool _startingSpeaking = false;
   bool _speaking = false;
   bool _loadingMessages = false;
   bool _sendingMessage = false;
@@ -484,38 +485,53 @@ class _WalkieTalkieWidgetState extends State<WalkieTalkieWidget> {
     super.initState();
     _connectRoom();
     _loadMessages();
-    _chatTimer = Timer.periodic(const Duration(seconds: 3), (_) => _loadMessages());
+    _chatTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      if (mounted) _loadMessages();
+    });
   }
 
   Future<void> _connectRoom() async {
-    if (_connecting || _connected) return;
+    if (!mounted || _connecting || _connected) return;
     setState(() { _connecting = true; _radioError = null; });
+    Room? pendingRoom;
     try {
       final credentials = await WorkerApi.radioToken();
       final url = (credentials['url'] ?? '').toString();
       final token = (credentials['token'] ?? '').toString();
       if (url.isEmpty || token.isEmpty) throw Exception('Сервер голосовой рации не выдал параметры подключения.');
       final room = Room();
+      pendingRoom = room;
       await room.connect(url, token);
       _room = room;
       if (!mounted) { await room.disconnect(); return; }
       setState(() { _connected = true; _connecting = false; });
     } catch (e) {
+      try { await pendingRoom?.disconnect(); } catch (_) {}
       if (!mounted) return;
       setState(() { _connecting = false; _connected = false; _radioError = e.toString(); });
     }
   }
 
   Future<void> _loadMessages() async {
-    if (_loadingMessages) return;
+    if (!mounted || _loadingMessages) return;
     _loadingMessages = true;
     try {
       final result = await WorkerApi.radioMessages();
-      final rows = (result['messages'] as List? ?? const [])
-          .whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+      final rawRows = result['messages'];
+      final rows = <Map<String, dynamic>>[];
+      if (rawRows is List) {
+        for (final item in rawRows) {
+          if (item is Map) {
+            try { rows.add(Map<String, dynamic>.from(item)); } catch (_) {}
+          }
+        }
+      }
+      final visibleRows = rows.length > 100
+          ? rows.sublist(rows.length - 100)
+          : rows;
       if (mounted) setState(() { _messages
         ..clear()
-        ..addAll(rows); });
+        ..addAll(visibleRows); });
     } catch (_) {
       // The next poll retries; the radio remains usable for voice if chat is offline.
     } finally {
@@ -524,7 +540,7 @@ class _WalkieTalkieWidgetState extends State<WalkieTalkieWidget> {
   }
 
   Future<void> _sendTextMessage() async {
-    if (!widget.allowText || _sendingMessage || !mounted) return;
+    if (!mounted || !widget.allowText || _sendingMessage) return;
     final message = _msgController.text.trim();
     if (message.isEmpty) return;
     if (message.length > 500) {
@@ -552,11 +568,12 @@ class _WalkieTalkieWidgetState extends State<WalkieTalkieWidget> {
   }
 
   Future<void> _startSpeaking() async {
-    if (_speaking) return;
+    if (!mounted || _speaking || _startingSpeaking) return;
     if (!_connected || _room == null) {
       _notice('Голосовой канал не подключён. Нажмите «Подключить» и проверьте интернет.');
       return;
     }
+    _startingSpeaking = true;
     try {
       await WorkerApi.radioFloor(action: 'acquire');
       if (!_pressRequested) {
@@ -598,6 +615,8 @@ class _WalkieTalkieWidgetState extends State<WalkieTalkieWidget> {
     } catch (e) {
       _notice('Не удалось включить микрофон: $e');
       try { await WorkerApi.radioFloor(action: 'release'); } catch (_) {}
+    } finally {
+      _startingSpeaking = false;
     }
   }
 
