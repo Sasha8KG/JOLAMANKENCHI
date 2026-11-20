@@ -127,8 +127,45 @@ class RouteService {
       if (const Distance().as(LengthUnit.Meter, points.first, points.last) < 1) {
         throw const FormatException('Маршрут не содержит движения между точками.');
       }
+      // Validate OSRM's road-snapped endpoints before displaying the route.
+      final waypointsValue = decoded['waypoints'];
+      if (waypointsValue is! List || waypointsValue.length != 2) {
+        throw const FormatException('Маршрутизатор не подтвердил начальную и конечную точки.');
+      }
+      final snappedPoints = <LatLng>[];
+      for (final waypointValue in waypointsValue) {
+        if (waypointValue is! Map) {
+          throw const FormatException('Маршрутизатор вернул неверную точку маршрута.');
+        }
+        final waypoint = Map<String, dynamic>.from(waypointValue);
+        final location = waypoint['location'];
+        final snapDistance = waypoint['distance'];
+        if (location is! List || location.length != 2 ||
+            location[0] is! num || location[1] is! num ||
+            snapDistance is! num || !snapDistance.toDouble().isFinite ||
+            snapDistance < 0 || snapDistance > 5000) {
+          throw const FormatException('Не удалось подтвердить привязку маршрута к дороге.');
+        }
+        final snapped = LatLng(
+          (location[1] as num).toDouble(),
+          (location[0] as num).toDouble(),
+        );
+        if (!_isValidPoint(snapped)) {
+          throw const FormatException('Маршрутизатор вернул неверные координаты дороги.');
+        }
+        snappedPoints.add(snapped);
+      }
+      if (const Distance().as(LengthUnit.Meter, points.first, snappedPoints.first) > 250 ||
+          const Distance().as(LengthUnit.Meter, points.last, snappedPoints.last) > 250) {
+        throw const FormatException('Точки дорожного маршрута не совпадают с его началом и концом.');
+      }
+      final directDistance = const Distance().as(LengthUnit.Meter, from, to);
       final distance = route['distance'];
       final duration = route['duration'];
+      if (distance is num && distance.toDouble().isFinite &&
+          distance < directDistance * 0.5) {
+        throw const FormatException('Длина маршрута не соответствует расстоянию между точками.');
+      }
       if (distance is! num || duration is! num ||
           !distance.toDouble().isFinite || !duration.toDouble().isFinite ||
           distance <= 0 || duration <= 0 ||
