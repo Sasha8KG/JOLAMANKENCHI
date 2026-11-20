@@ -1913,6 +1913,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
   StreamSubscription<Position>? _positionSubscription;
   Timer? _heartbeatTimer;
   Timer? _ordersPollTimer;
+  bool _ordersPollInProgress = false;
   List<Map<String, dynamic>> _serverOpenOrders = [];
   List<Map<String, dynamic>> _serverAssignedOrders = [];
   final Set<String> _respondingOrderIds = <String>{};
@@ -1927,12 +1928,16 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
   void initState() {
     super.initState();
     _startLocationTracking();
+    unawaited(_pollServerOrders());
     _ordersPollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       _pollServerOrders();
     });
   }
 
   Future<void> _pollServerOrders() async {
+    // Не допускаем наложения запросов, если сеть отвечает дольше интервала опроса.
+    if (!mounted || _ordersPollInProgress) return;
+    _ordersPollInProgress = true;
     try {
       final data = await WorkerApi.openOrders();
       final open = (data['orders'] as List? ?? const [])
@@ -1957,6 +1962,8 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
       }
     } catch (_) {
       // Временная ошибка сети: следующий опрос повторит запрос.
+    } finally {
+      _ordersPollInProgress = false;
     }
   }
 
@@ -2101,6 +2108,8 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
       final firstPosition = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
       );
+      // Экран мог закрыться, пока телефон определял координаты.
+      if (!mounted) return;
       driver.currentLocation = LatLng(firstPosition.latitude, firstPosition.longitude);
       await WorkerApi.setDriverOnline(
         online: true,
