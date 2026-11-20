@@ -474,6 +474,7 @@ class _WalkieTalkieWidgetState extends State<WalkieTalkieWidget> {
   bool _connected = false;
   bool _speaking = false;
   bool _loadingMessages = false;
+  bool _sendingMessage = false;
   String? _radioError;
   bool _pressRequested = false;
 
@@ -522,20 +523,25 @@ class _WalkieTalkieWidgetState extends State<WalkieTalkieWidget> {
   }
 
   Future<void> _sendTextMessage() async {
-    if (!widget.allowText) return;
+    if (!widget.allowText || _sendingMessage || !mounted) return;
     final message = _msgController.text.trim();
     if (message.isEmpty) return;
     if (message.length > 500) {
       _notice('Сообщение не должно превышать 500 символов.');
       return;
     }
+    setState(() => _sendingMessage = true);
     _msgController.clear();
     try {
       await WorkerApi.sendRadioMessage(message);
-      await _loadMessages();
+      if (mounted) await _loadMessages();
     } catch (e) {
-      _msgController.text = message;
-      _notice('Не удалось отправить сообщение: $e');
+      if (mounted) {
+        _msgController.text = message;
+        _notice('Не удалось отправить сообщение: $e');
+      }
+    } finally {
+      if (mounted) setState(() => _sendingMessage = false);
     }
   }
 
@@ -668,7 +674,7 @@ class _WalkieTalkieWidgetState extends State<WalkieTalkieWidget> {
           Expanded(child: TextField(controller: _msgController, enabled: widget.allowText,
             style: const TextStyle(color: Colors.white), maxLength: 500, maxLines: 2, minLines: 1,
             decoration: const InputDecoration(counterText: '', hintText: 'Написать сообщение…', hintStyle: TextStyle(color: Colors.grey), isDense: true, border: OutlineInputBorder()))),
-          IconButton(icon: const Icon(Icons.send, color: Colors.amber), onPressed: widget.allowText ? _sendTextMessage : null),
+          IconButton(icon: Icon(_sendingMessage ? Icons.hourglass_top : Icons.send, color: Colors.amber), onPressed: widget.allowText && !_sendingMessage ? _sendTextMessage : null),
         ]),
         const SizedBox(height: 6),
         const Text('Сообщения общего канала:', style: TextStyle(color: Colors.white70, fontSize: 11)),
