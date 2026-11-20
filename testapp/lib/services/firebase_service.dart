@@ -14,7 +14,7 @@ class FirebaseService {
 
   static bool isValidKgPhone(String phone) {
     final digits = phone.replaceAll(RegExp(r'\D'), '');
-    return RegExp(r'^(?:0\\d{9}|996\\d{9})
+    return RegExp(r'^(?:0[0-9]{9}|996[0-9]{9})$').hasMatch(digits);
 
   static Future<UserCredential> signIn({
     required String email,
