@@ -140,9 +140,14 @@ async function finalizeExpiredOrders(env) {
       continue;
     }
     const winner = candidates[0];
-    await env.DB.prepare(`UPDATE orders SET status='driver_assigned', assigned_driver_uid=?, assigned_at=?
+    const assigned = await env.DB.prepare(`UPDATE orders SET status='driver_assigned',
+      assigned_driver_uid=?, assigned_at=?, response_deadline=NULL
       WHERE id=? AND status='new' AND response_deadline<=?`)
       .bind(winner.driver_uid, now, order.id, now).run();
+    if (Number(assigned.meta?.changes || 0) === 1) {
+      // Remove all competing responses only after this request wins the atomic assignment.
+      await env.DB.prepare("DELETE FROM order_responses WHERE order_id=?").bind(order.id).run();
+    }
   }
 }
 
