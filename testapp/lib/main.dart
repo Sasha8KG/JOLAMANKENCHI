@@ -1984,6 +1984,8 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
   Timer? _heartbeatTimer;
   Timer? _ordersPollTimer;
   bool _ordersPollInProgress = false;
+  bool _locationUpdateInProgress = false;
+  bool _locationStreamErrorShown = false;
   List<Map<String, dynamic>> _serverOpenOrders = [];
   List<Map<String, dynamic>> _serverAssignedOrders = [];
   final Set<String> _respondingOrderIds = <String>{};
@@ -2198,6 +2200,24 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
     _driverMapController.move(center, zoom);
   }
 
+  Future<void> _publishDriverLocation(DriverModel driver) async {
+    // A single in-flight request is shared by GPS updates and the heartbeat.
+    // This prevents slow mobile networks from accumulating location requests.
+    if (!mounted || _locationUpdateInProgress) return;
+    _locationUpdateInProgress = true;
+    try {
+      await WorkerApi.setDriverOnline(
+        online: true,
+        latitude: driver.currentLocation.latitude,
+        longitude: driver.currentLocation.longitude,
+      );
+    } catch (_) {
+      // GPS tracking continues locally; the next GPS update or heartbeat retries.
+    } finally {
+      _locationUpdateInProgress = false;
+    }
+  }
+
   Future<void> _startLocationTracking() async {
     final driver = TaxiParkState.currentLoggedInDriver;
     if (driver == null) return;
@@ -2218,46 +2238,46 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
       }
       final firstPosition = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 20),
       );
       // Экран мог закрыться, пока телефон определял координаты.
       if (!mounted) return;
       driver.currentLocation = LatLng(firstPosition.latitude, firstPosition.longitude);
-      await WorkerApi.setDriverOnline(
-        online: true,
-        latitude: firstPosition.latitude,
-        longitude: firstPosition.longitude,
-      );
       if (mounted) setState(() {});
+      // A temporary API outage must not prevent the phone from starting GPS tracking.
+      await _publishDriverLocation(driver);
+      if (!mounted) return;
+
       // Refresh the server heartbeat even when the car is standing still.
-      _heartbeatTimer = Timer.periodic(const Duration(seconds: 30), (_) async {
-        try {
-          await WorkerApi.setDriverOnline(
-            online: true,
-            latitude: driver.currentLocation.latitude,
-            longitude: driver.currentLocation.longitude,
-          );
-        } catch (_) {
-          // The next heartbeat retries after a temporary network failure.
-        }
+      _heartbeatTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+        if (!mounted) return;
+        unawaited(_publishDriverLocation(driver));
       });
       _positionSubscription = Geolocator.getPositionStream(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.high,
           distanceFilter: 20,
         ),
-      ).listen((position) async {
-        driver.currentLocation = LatLng(position.latitude, position.longitude);
-        if (mounted) setState(() {});
-        if (_serverAssignedOrders.isNotEmpty) unawaited(_loadDriverApproachRoute());
-        try {
-          await WorkerApi.setDriverOnline(
-            online: true,
-            latitude: position.latitude,
-            longitude: position.longitude,
-          );
-        } catch (_) {
-          // A later GPS update will retry the location heartbeat.
+      ).listen((position) {
+        if (!mounted) return;
+        final latitude = position.latitude;
+        final longitude = position.longitude;
+        // Never publish malformed coordinates or move the taxi marker off-map.
+        if (!latitude.isFinite || !longitude.isFinite ||
+            latitude < -90 || latitude > 90 ||
+            longitude < -180 || longitude > 180) return;
+
+        driver.currentLocation = LatLng(latitude, longitude);
+        _locationStreamErrorShown = false;
+        setState(() {});
+        if (_serverAssignedOrders.isNotEmpty) {
+          unawaited(_loadDriverApproachRoute());
         }
+        unawaited(_publishDriverLocation(driver));
+      }, onError: (Object error) {
+        if (!mounted || _locationStreamErrorShown) return;
+        _locationStreamErrorShown = true;
+        _showLocationMessage('Временно потеряно обновление геолокации. Проверяем соединение с GPS.');
       });
     } catch (e) {
       _showLocationMessage('Не удалось включить геолокацию: $e');
