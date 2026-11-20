@@ -15,8 +15,34 @@ class FirebaseService {
   static bool _hasControlCharacters(String value) =>
       value.codeUnits.any((unit) => unit < 32 || unit == 127);
 
+  static bool _hasValidPhoneCharacters(String phone) {
+    final value = phone.trim();
+    if (value.isEmpty) return false;
+    var digitCount = 0;
+    var parenthesisDepth = 0;
+    for (var i = 0; i < value.length; i++) {
+      final unit = value.codeUnitAt(i);
+      if (unit >= 48 && unit <= 57) {
+        digitCount++;
+      } else if (unit == 43) {
+        if (i != 0) return false;
+      } else if (unit == 32 || unit == 45) {
+        // Spaces and hyphens are allowed as visual separators.
+      } else if (unit == 40) {
+        if (parenthesisDepth != 0) return false;
+        parenthesisDepth = 1;
+      } else if (unit == 41) {
+        if (parenthesisDepth == 0) return false;
+        parenthesisDepth = 0;
+      } else {
+        return false;
+      }
+    }
+    return digitCount > 0 && parenthesisDepth == 0;
+  }
+
   static String _phoneDigits(String phone) =>
-      phone.trim().replaceAll(RegExp('[^0-9]'), '');
+      phone.replaceAll(RegExp('[^0-9]'), '');
 
   static String _validatedUid(String uid) {
     final value = uid.trim();
@@ -55,12 +81,20 @@ class FirebaseService {
   /// Accepts Kyrgyz numbers in local (0700123456) or international
   /// (+996700123456) form. Spaces, brackets and hyphens are ignored.
   static bool isValidKgPhone(String phone) {
+    if (!_hasValidPhoneCharacters(phone)) return false;
     final digits = _phoneDigits(phone);
     return (digits.length == 10 && digits.startsWith('0')) ||
         (digits.length == 12 && digits.startsWith('996'));
   }
 
   static String phoneLoginEmail(String phone) {
+    if (!_hasValidPhoneCharacters(phone)) {
+      throw ArgumentError.value(
+        phone,
+        'phone',
+        'Введите номер Кыргызстана, например 0700123456.',
+      );
+    }
     final digits = _phoneDigits(phone);
     final isLocal = digits.length == 10 && digits.startsWith('0');
     final isInternational = digits.length == 12 && digits.startsWith('996');

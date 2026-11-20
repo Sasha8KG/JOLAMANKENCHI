@@ -19,8 +19,35 @@ class WorkerApi {
   static bool _hasControlCharacters(String value) =>
       RegExp(r'[\x00-\x1F\x7F]').hasMatch(value);
 
+  static bool _hasValidPhoneCharacters(String value) {
+    final input = value.trim();
+    if (input.isEmpty) return false;
+    var digitCount = 0;
+    var parenthesisDepth = 0;
+    for (var i = 0; i < input.length; i++) {
+      final unit = input.codeUnitAt(i);
+      if (unit >= 48 && unit <= 57) {
+        digitCount++;
+      } else if (unit == 43) {
+        if (i != 0) return false;
+      } else if (unit == 32 || unit == 45) {
+        // Spaces and hyphens are visual separators.
+      } else if (unit == 40) {
+        if (parenthesisDepth != 0) return false;
+        parenthesisDepth = 1;
+      } else if (unit == 41) {
+        if (parenthesisDepth == 0) return false;
+        parenthesisDepth = 0;
+      } else {
+        return false;
+      }
+    }
+    return digitCount > 0 && parenthesisDepth == 0;
+  }
+
   static String _normalizeKgPhone(String value) {
     final input = value.trim();
+    if (!_hasValidPhoneCharacters(input)) return '';
     final digits = input.replaceAll(RegExp(r'\D'), '');
     if (digits.length == 10 && digits.startsWith('0')) return digits;
     if (digits.length == 12 && digits.startsWith('996')) {

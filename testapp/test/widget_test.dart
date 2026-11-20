@@ -46,3 +46,73 @@ void main() {
     });
   });
 }
+
+  group('Strict Kyrgyz phone input validation', () {
+    test('accepts local numbers with ordinary separators', () {
+      expect(FirebaseService.isValidKgPhone('0700 123 456'), isTrue);
+      expect(FirebaseService.isValidKgPhone('0700-123-456'), isTrue);
+      expect(FirebaseService.isValidKgPhone('(0700) 123-456'), isTrue);
+    });
+
+    test('accepts international numbers with balanced parentheses', () {
+      expect(FirebaseService.isValidKgPhone('+996 (700) 123-456'), isTrue);
+      expect(FirebaseService.isValidKgPhone('996 700 123 456'), isTrue);
+    });
+
+    test('rejects alphabetic text around an otherwise valid number', () {
+      expect(FirebaseService.isValidKgPhone('abc0700123456'), isFalse);
+      expect(FirebaseService.isValidKgPhone('0700123456xyz'), isFalse);
+      expect(FirebaseService.isValidKgPhone('phone: 0700123456'), isFalse);
+    });
+
+    test('rejects a plus sign anywhere except the beginning', () {
+      expect(FirebaseService.isValidKgPhone('0700+123456'), isFalse);
+      expect(FirebaseService.isValidKgPhone('++996700123456'), isFalse);
+      expect(FirebaseService.isValidKgPhone('996+700123456'), isFalse);
+    });
+
+    test('rejects unbalanced or nested parentheses', () {
+      expect(FirebaseService.isValidKgPhone('(0700123456'), isFalse);
+      expect(FirebaseService.isValidKgPhone('0700123456)'), isFalse);
+      expect(FirebaseService.isValidKgPhone('((0700))123456'), isFalse);
+    });
+
+    test('rejects punctuation that is not a phone separator', () {
+      expect(FirebaseService.isValidKgPhone('0700.123.456'), isFalse);
+      expect(FirebaseService.isValidKgPhone('0700/123/456'), isFalse);
+      expect(FirebaseService.isValidKgPhone('0700,123,456'), isFalse);
+      expect(FirebaseService.isValidKgPhone('0700;123;456'), isFalse);
+    });
+
+    test('rejects control characters and whitespace injection', () {
+      expect(FirebaseService.isValidKgPhone('0700\\n123456'), isFalse);
+      expect(FirebaseService.isValidKgPhone('0700\\t123456'), isFalse);
+      expect(FirebaseService.isValidKgPhone('0700\\r123456'), isFalse);
+    });
+
+    test('rejects incorrect lengths and country prefixes', () {
+      expect(FirebaseService.isValidKgPhone('070012345'), isFalse);
+      expect(FirebaseService.isValidKgPhone('07001234567'), isFalse);
+      expect(FirebaseService.isValidKgPhone('+995700123456'), isFalse);
+      expect(FirebaseService.isValidKgPhone('1700123456'), isFalse);
+      expect(FirebaseService.isValidKgPhone('99670012345'), isFalse);
+      expect(FirebaseService.isValidKgPhone('9967001234567'), isFalse);
+    });
+
+    test('rejects empty input and input without digits', () {
+      expect(FirebaseService.isValidKgPhone(''), isFalse);
+      expect(FirebaseService.isValidKgPhone('   '), isFalse);
+      expect(FirebaseService.isValidKgPhone('+++---()'), isFalse);
+    });
+
+    test('phone login mapping refuses text disguised as a phone number', () {
+      expect(
+        () => FirebaseService.phoneLoginEmail('abc0700123456'),
+        throwsArgumentError,
+      );
+      expect(
+        () => FirebaseService.phoneLoginEmail('0700123456xyz'),
+        throwsArgumentError,
+      );
+    });
+  });
