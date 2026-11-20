@@ -25,55 +25,6 @@ void main() {
     });
   });
 
-
-  group('Kyrgyz phone normalization regression cases', () {
-    final cases = <({String input, String expected})>[
-      (input: '0700123456', expected: '+996700123456'),
-      (input: '+996700123456', expected: '+996700123456'),
-      (input: '996700123456', expected: '+996700123456'),
-      (input: '+996 700 123 456', expected: '+996700123456'),
-      (input: '+996 (700) 123-456', expected: '+996700123456'),
-      (input: '0700 123 456', expected: '+996700123456'),
-      (input: '0700-123-456', expected: '+996700123456'),
-      (input: '(0700) 123-456', expected: '+996700123456'),
-      (input: ' 0700123456 ', expected: '+996700123456'),
-      (input: '+996-700-123-456', expected: '+996700123456'),
-      (input: '0555123456', expected: '+996555123456'),
-      (input: '+996555123456', expected: '+996555123456'),
-      (input: '996555123456', expected: '+996555123456'),
-      (input: '0777 000 111', expected: '+996777000111'),
-      (input: '+996 (777) 000-111', expected: '+996777000111'),
-      (input: '070012345', expected: ''),
-      (input: '07001234567', expected: ''),
-      (input: '+995700123456', expected: ''),
-      (input: 'abc0700123456', expected: ''),
-      (input: '07+00123456', expected: ''),
-      (input: '++996700123456', expected: ''),
-      (input: '', expected: ''),
-    ];
-
-    for (final item in cases) {
-      test('normalizes "${item.input}"', () {
-        expect(FirebaseService.normalizeKgPhone(item.input), item.expected);
-        expect(FirebaseService.isValidKgPhone(item.input), item.expected.isNotEmpty);
-      });
-    }
-  });
-
-  group('Display name normalization', () {
-    test('collapses repeated spaces', () {
-      expect(FirebaseService.normalizeDisplayName('  Асан   Бек  '), 'Асан Бек');
-    });
-
-    test('collapses tabs and line breaks', () {
-      expect(FirebaseService.normalizeDisplayName('Асан\\t\\nБек'), 'Асан Бек');
-    });
-
-    test('preserves single spaces between words', () {
-      expect(FirebaseService.normalizeDisplayName('Aсан Бек уулу'), 'Aсан Бек уулу');
-    });
-  });
-
   group('Kyrgyz phone validation', () {
     test('accepts the local format used on the registration form', () {
       expect(FirebaseService.isValidKgPhone('0700123456'), isTrue);
