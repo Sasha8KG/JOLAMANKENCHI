@@ -268,38 +268,72 @@ class WorkerApi {
   static Future<Map<String, dynamic>> closeDriverShift({
     required String driverUid,
     String? shiftDate,
-  }) => _request('/dispatcher/shifts/close', method: 'POST', body: {
-    'driver_uid': driverUid,
-    if (shiftDate != null) 'shift_date': shiftDate,
-  });
+  }) {
+    final uid = driverUid.trim();
+    final date = shiftDate?.trim();
+    if (uid.isEmpty || uid.length > 128) {
+      throw const WorkerApiException('Не указан корректный водитель для закрытия смены.');
+    }
+    if (date != null && !RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(date)) {
+      throw const WorkerApiException('Неверный формат даты смены.');
+    }
+    return _request('/dispatcher/shifts/close', method: 'POST', body: {
+      'driver_uid': uid,
+      if (date != null) 'shift_date': date,
+    });
+  }
 
   static Future<Map<String, dynamic>> approveDriver({
     required String uid,
     required bool approved,
-  }) =>
-      _request('/drivers/approve', method: 'POST', body: {
-        'uid': uid,
-        'approved': approved,
-      });
+  }) {
+    final normalizedUid = uid.trim();
+    if (normalizedUid.isEmpty || normalizedUid.length > 128) {
+      throw const WorkerApiException('Не указан корректный UID водителя.');
+    }
+    return _request('/drivers/approve', method: 'POST', body: {
+      'uid': normalizedUid,
+      'approved': approved,
+    });
+  }
 
   static Future<Map<String, dynamic>> reviewDriver({
     required String uid,
     required String decision,
     String reason = '',
-  }) => _request('/drivers/review', method: 'POST', body: {
-    'uid': uid,
-    'decision': decision,
-    'reason': reason,
-  });
+  }) {
+    final normalizedUid = uid.trim();
+    final normalizedDecision = decision.trim().toLowerCase();
+    final normalizedReason = reason.trim();
+    if (normalizedUid.isEmpty || normalizedUid.length > 128) {
+      throw const WorkerApiException('Не указан корректный UID водителя.');
+    }
+    if (!{'approved', 'rejected'}.contains(normalizedDecision)) {
+      throw const WorkerApiException('Неизвестное решение по заявке водителя.');
+    }
+    if (normalizedReason.length > 500) {
+      throw const WorkerApiException('Причина решения слишком длинная.');
+    }
+    return _request('/drivers/review', method: 'POST', body: {
+      'uid': normalizedUid,
+      'decision': normalizedDecision,
+      'reason': normalizedReason,
+    });
+  }
 
   static Future<Map<String, dynamic>> assignOrder({
     required String orderId,
     required String driverUid,
-  }) =>
-      _request('/orders/assign', method: 'POST', body: {
-        'order_id': orderId,
-        'driver_uid': driverUid,
-      });
+  }) {
+    final uid = driverUid.trim();
+    if (uid.isEmpty || uid.length > 128) {
+      throw const WorkerApiException('Не указан корректный UID водителя.');
+    }
+    return _request('/orders/assign', method: 'POST', body: {
+      'order_id': _validatedOrderId(orderId),
+      'driver_uid': uid,
+    });
+  }
 
   static Future<Map<String, dynamic>> registerDriver({
     required String name,
@@ -331,11 +365,20 @@ class WorkerApi {
     required String licenseUrl,
     required String driverPhotoUrl,
     required String carPhotoUrl,
-  }) => _request('/drivers/documents', method: 'POST', body: {
-    'license_url': licenseUrl,
-    'driver_photo_url': driverPhotoUrl,
-    'car_photo_url': carPhotoUrl,
-  });
+  }) {
+    final license = licenseUrl.trim();
+    final driverPhoto = driverPhotoUrl.trim();
+    final carPhoto = carPhotoUrl.trim();
+    if ([license, driverPhoto, carPhoto].any((value) =>
+        value.isEmpty || value.length > 2048 || value.contains('\n'))) {
+      throw const WorkerApiException('Не все документы водителя подготовлены корректно.');
+    }
+    return _request('/drivers/documents', method: 'POST', body: {
+      'license_url': license,
+      'driver_photo_url': driverPhoto,
+      'car_photo_url': carPhoto,
+    });
+  }
 
   static Future<Map<String, dynamic>> setDriverOnline({
     required bool online,
@@ -374,10 +417,7 @@ class WorkerApi {
   static Future<Map<String, dynamic>> openOrders() => _request('/orders/open');
 
   static Future<Map<String, dynamic>> orderStatus(String orderId) {
-    final id = orderId.trim();
-    if (id.isEmpty || id.length > 128) {
-      throw const WorkerApiException('Не удалось проверить заказ: неверный номер.');
-    }
+    final id = _validatedOrderId(orderId);
     return _request('/orders/status?id=${Uri.encodeQueryComponent(id)}');
   }
 
