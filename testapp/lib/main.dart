@@ -2176,24 +2176,33 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
     });
   }
 
+  String _serverOrderId(Map<String, dynamic> order) {
+    final id = (order['id'] ?? order['firebase_order_id'] ?? '').toString().trim();
+    return id.isNotEmpty && id.length <= 128 ? id : '';
+  }
+
+  List<Map<String, dynamic>> _normalizeServerOrders(dynamic value) {
+    if (value is! List) return <Map<String, dynamic>>[];
+    final seen = <String>{};
+    return value.whereType<Map>().map((item) => Map<String, dynamic>.from(item))
+        .where((order) {
+          final id = _serverOrderId(order);
+          if (id.isEmpty || !seen.add(id)) return false;
+          order['id'] = id;
+          return true;
+        }).toList();
+  }
+
   Future<void> _pollServerOrders() async {
     // Не допускаем наложения запросов, если сеть отвечает дольше интервала опроса.
     if (!mounted || _ordersPollInProgress) return;
     _ordersPollInProgress = true;
     try {
       final data = await WorkerApi.openOrders();
-      final open = (data['orders'] as List? ?? const [])
-          .whereType<Map>()
-          .map((item) => Map<String, dynamic>.from(item))
-          .toList();
-      final assigned = (data['assignedOrders'] as List? ?? const [])
-          .whereType<Map>()
-          .map((item) => Map<String, dynamic>.from(item))
-          .toList();
+      final open = _normalizeServerOrders(data['orders']);
+      final assigned = _normalizeServerOrders(data['assignedOrders']);
       if (!mounted) return;
-      final activeAssignedId = assigned.isEmpty
-          ? null
-          : (assigned.first['id'] ?? assigned.first['firebase_order_id'] ?? '').toString();
+      final activeAssignedId = assigned.isEmpty ? null : _serverOrderId(assigned.first);
       setState(() {
         _serverOpenOrders = open;
         _serverAssignedOrders = assigned;
@@ -2228,7 +2237,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
   }
 
   Future<void> _respondToServerOrder(Map<String, dynamic> order) async {
-    final id = (order['id'] ?? order['firebase_order_id'] ?? '').toString();
+    final id = _serverOrderId(order);
     if (id.isEmpty || _respondingOrderIds.contains(id)) return;
     setState(() => _respondingOrderIds.add(id));
     try {
@@ -2246,7 +2255,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
   }
 
   Future<void> _markAssignedOrderArrived(Map<String, dynamic> order) async {
-    final id = (order['id'] ?? order['firebase_order_id'] ?? '').toString();
+    final id = _serverOrderId(order);
     if (id.isEmpty || _orderActionIds.contains(id)) return;
     setState(() => _orderActionIds.add(id));
     try {
@@ -2263,7 +2272,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
   }
 
   Future<void> _cancelAssignedOrder(Map<String, dynamic> order) async {
-    final id = (order['id'] ?? order['firebase_order_id'] ?? '').toString();
+    final id = _serverOrderId(order);
     if (id.isEmpty || _orderActionIds.contains(id)) return;
     final confirm = await showDialog<bool>(
       context: context,
@@ -2307,10 +2316,24 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
     final driver = TaxiParkState.currentLoggedInDriver;
     if (driver == null || _serverAssignedOrders.isEmpty || _driverRouteLoading) return;
     final order = _serverAssignedOrders.first;
-    final id = (order['id'] ?? order['firebase_order_id'] ?? '').toString();
+    final id = _serverOrderId(order);
     final pickup = _orderPickup(order);
-    if (id.isEmpty || pickup == null) return;
-    final routeKey = '$id:${pickup.latitude.toStringAsFixed(5)},${pickup.longitude.toStringAsFixed(5)}:${driver.currentLocation.latitude.toStringAsFixed(3)},${driver.currentLocation.longitude.toStringAsFixed(3)}';
+    if (id.isEmpty) return;
+    if (pickup == null) {
+      if (mounted) setState(() {
+        _driverApproachRoute = null;
+        _driverRouteOrderId = id;
+        _driverRouteKey = null;
+        _driverRouteError = 'Не удалось определить точку подачи пассажира.';
+        _driverRouteRetryAfter = null;
+      });
+      return;
+    }
+    final driverPoint = driver.currentLocation;
+    if (!driverPoint.latitude.isFinite || !driverPoint.longitude.isFinite ||
+        driverPoint.latitude < -90 || driverPoint.latitude > 90 ||
+        driverPoint.longitude < -180 || driverPoint.longitude > 180) return;
+    final routeKey = '$id:${pickup.latitude.toStringAsFixed(5)},${pickup.longitude.toStringAsFixed(5)}:${driverPoint.latitude.toStringAsFixed(5)},${driverPoint.longitude.toStringAsFixed(5)}';
     if (_driverRouteKey == routeKey && _driverApproachRoute != null) return;
     if (_driverRouteKey == routeKey &&
         _driverRouteRetryAfter != null &&
@@ -2318,15 +2341,12 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
     _driverRouteKey = routeKey;
     _driverRouteLoading = true;
     try {
-      final route = await RouteService.drivingRoute(driver.currentLocation, pickup);
+      final route = await RouteService.drivingRoute(driverPoint, pickup);
       if (!mounted) return;
       if (TaxiParkState.currentLoggedInDriver?.id != driver.id) return;
       final latestAssignedId = _serverAssignedOrders.isEmpty
           ? ''
-          : (_serverAssignedOrders.first['id'] ??
-                  _serverAssignedOrders.first['firebase_order_id'] ??
-                  '')
-              .toString();
+          : _serverOrderId(_serverAssignedOrders.first);
       if (latestAssignedId != id) return;
       setState(() {
         _driverApproachRoute = route;
@@ -2339,10 +2359,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
       if (!mounted || TaxiParkState.currentLoggedInDriver?.id != driver.id) return;
       final latestAssignedId = _serverAssignedOrders.isEmpty
           ? ''
-          : (_serverAssignedOrders.first['id'] ??
-                  _serverAssignedOrders.first['firebase_order_id'] ??
-                  '')
-              .toString();
+          : _serverOrderId(_serverAssignedOrders.first);
       if (latestAssignedId != id) return;
       setState(() {
         _driverApproachRoute = null;
