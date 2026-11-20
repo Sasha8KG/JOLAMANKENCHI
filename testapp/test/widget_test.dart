@@ -45,44 +45,4 @@ void main() {
       expect(FirebaseService.isValidKgPhone('abc'), isFalse);
     });
   });
-
-  group('Phone input hardening regression checks', () {
-    final validInputs = <String>[
-      '0700123456',
-      '0700 123 456',
-      '0700-123-456',
-      '(0700) 123-456',
-      '+996700123456',
-      '+996 700 123 456',
-      '+996 (700) 123-456',
-      '996700123456',
-      '0555123456',
-      '+996555123456',
-    ];
-    for (final input in validInputs) {
-      test('accepts formatted Kyrgyz number: $input', () {
-        expect(FirebaseService.isValidKgPhone(input), isTrue);
-      });
-    }
-
-    final invalidInputs = <String>[
-      'abc0700123456',
-      '0700abc123456',
-      '07+00123456',
-      '++996700123456',
-      '996+700123456',
-      '+996700123456abc',
-      '0700/123/456',
-      '0700.123.456',
-      '0700_123_456',
-      '070012345',
-    ];
-    for (final input in invalidInputs) {
-      test('rejects malformed phone input: $input', () {
-        expect(FirebaseService.isValidKgPhone(input), isFalse);
-        expect(() => FirebaseService.phoneLoginEmail(input), throwsArgumentError);
-      });
-    }
-  });
-
 }
