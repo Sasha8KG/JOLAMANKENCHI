@@ -91,7 +91,7 @@ class RouteService {
         throw const FormatException('Дорожный маршрут не найден.');
       }
       final routes = decoded['routes'];
-      if (routes is! List || routes.isEmpty || routes.first is! Map) {
+      if (routes is! List || routes.isEmpty || routes.length > 5 || routes.first is! Map) {
         throw const FormatException('Дорожный маршрут не найден.');
       }
       final route = Map<String, dynamic>.from(routes.first as Map);
@@ -100,20 +100,28 @@ class RouteService {
         throw const FormatException('Маршрут получен без дорожных точек.');
       }
       final coordinatesList = geometryValue['coordinates'] as List;
-      if (coordinatesList.length > 10000) {
-        throw const FormatException('Маршрут содержит слишком много точек.');
+      if (coordinatesList.length < 2 || coordinatesList.length > 10000) {
+        throw const FormatException('Маршрут содержит недостаточно или слишком много точек.');
       }
       final points = <LatLng>[];
       for (final item in coordinatesList) {
-        if (item is! List || item.length < 2 ||
-            item[0] is! num || item[1] is! num) continue;
+        if (item is! List || item.length != 2 ||
+            item[0] is! num || item[1] is! num) {
+          throw const FormatException('Маршрут содержит повреждённую координату.');
+        }
         final longitude = (item[0] as num).toDouble();
         final latitude = (item[1] as num).toDouble();
         final point = LatLng(latitude, longitude);
-        if (_isValidPoint(point)) points.add(point);
+        if (!_isValidPoint(point)) {
+          throw const FormatException('Маршрут содержит координату вне допустимых границ.');
+        }
+        points.add(point);
       }
       if (points.length < 2) {
         throw const FormatException('Маршрут получен без корректных дорожных точек.');
+      }
+      if (points.length != coordinatesList.length) {
+        throw const FormatException('Не все точки маршрута удалось проверить.');
       }
       // A route with repeated identical coordinates cannot guide the driver.
       if (const Distance().as(LengthUnit.Meter, points.first, points.last) < 1) {
@@ -123,7 +131,8 @@ class RouteService {
       final duration = route['duration'];
       if (distance is! num || duration is! num ||
           !distance.toDouble().isFinite || !duration.toDouble().isFinite ||
-          distance < 0 || duration < 0) {
+          distance <= 0 || duration <= 0 ||
+          distance > 10000000 || duration > 604800) {
         throw const FormatException('Маршрутизатор вернул неверную длину или время пути.');
       }
       return RoadRoute(
