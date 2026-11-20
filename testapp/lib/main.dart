@@ -134,9 +134,7 @@ class TaxiParkState {
   ];
 
   static bool isValidKgPhone(String phone) {
-    final cleanPhone = phone.replaceAll(RegExp(r'\D'), '');
-    final phoneRegExp = RegExp(r'^0\d{9}$');
-    return phoneRegExp.hasMatch(cleanPhone);
+    return FirebaseService.isValidKgPhone(phone);
   }
 }
 
