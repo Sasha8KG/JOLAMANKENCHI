@@ -500,3 +500,13 @@ class WorkerApi {
     });
   }
 }
+
+class WorkerApiException implements Exception {
+  final String message;
+  final int? statusCode;
+
+  const WorkerApiException(this.message, {this.statusCode});
+
+  @override
+  String toString() => message;
+}
