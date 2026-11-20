@@ -215,6 +215,100 @@ class DriverModel {
   String get fullCarInfo => '$carBrand ($carColor, $plateNumber)';
 }
 
+class SessionGate extends StatefulWidget {
+  const SessionGate({super.key});
+
+  @override
+  State<SessionGate> createState() => _SessionGateState();
+}
+
+class _SessionGateState extends State<SessionGate> {
+  Widget? _destination;
+
+  @override
+  void initState() {
+    super.initState();
+    _restoreSavedSession();
+  }
+
+  Future<void> _restoreSavedSession() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      if (mounted) setState(() => _destination = const RoleSelectionScreen());
+      return;
+    }
+
+    try {
+      // Firebase keeps the authenticated account between app launches.
+      // Restore the matching taxi role from the secured Worker profile too.
+      final access = await WorkerApi.checkAuth();
+      if (access['dispatcher'] == true) {
+        if (mounted) setState(() => _destination = const DispatcherScreen());
+        return;
+      }
+
+      if (access['driver'] == true) {
+        final profile = await WorkerApi.driverProfile();
+        final raw = profile['driver'];
+        if (raw is Map) {
+          final data = Map<String, dynamic>.from(raw);
+          final approval = data['approved'];
+          final approved = approval == true ||
+              approval == 1 ||
+              approval.toString() == '1';
+
+          if (!approved) {
+            if (mounted) {
+              setState(() => _destination =
+                  DriverReviewStatusScreen(profile: data));
+            }
+            return;
+          }
+
+          TaxiParkState.currentLoggedInDriver = DriverModel(
+            id: (data['uid'] ?? user.uid).toString(),
+            name: (data['name'] ?? 'Водитель').toString(),
+            phone: (data['phone'] ?? '').toString(),
+            carBrand: (data['car_model'] ?? '').toString(),
+            carColor: '',
+            plateNumber: (data['car_number'] ?? '').toString(),
+            pinCode: '',
+            currentLocation: TaxiParkState.sulyuktaCenter,
+            isApproved: true,
+            isOnline: data['online'] == true,
+          );
+          if (mounted) {
+            setState(() => _destination = const DriverMapScreen());
+          }
+          return;
+        }
+      }
+    } catch (_) {
+      // Keep the Firebase session intact if the network/Worker is temporarily
+      // unavailable. The user can retry from the appropriate role entry screen.
+    }
+
+    if (mounted) setState(() => _destination = const RoleSelectionScreen());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _destination ??
+        const Scaffold(
+          body: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 14),
+                Text('Восстанавливаем сохранённый вход…'),
+              ],
+            ),
+          ),
+        );
+  }
+}
+
 class SulyuktaTaxiApp extends StatelessWidget {
   const SulyuktaTaxiApp({super.key});
 
@@ -281,7 +375,7 @@ class SulyuktaTaxiApp extends StatelessWidget {
           ),
         ),
       ),
-      home: const RoleSelectionScreen(),
+      home: const SessionGate(),
     );
   }
 }
