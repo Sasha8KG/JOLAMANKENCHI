@@ -13,7 +13,7 @@ class FirebaseService {
   static Stream<User?> get authStateChanges => auth.authStateChanges();
 
   static bool isValidKgPhone(String phone) {
-    final digits = phone.replaceAll(RegExp(r'\\D'), '');
+    final digits = phone.replaceAll('+', '').replaceAll(' ', '').replaceAll('-', '').replaceAll('(', '').replaceAll(')', '');
     return (digits.length == 10 && digits.startsWith('0')) ||
         (digits.length == 12 && digits.startsWith('996'));
   }
