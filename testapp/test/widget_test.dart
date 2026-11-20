@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:sulyukta_taxi/services/firebase_service.dart';
+import 'package:sulyukta_taxi/services/route_service.dart';
 
 void main() {
   group('Firebase phone login mapping', () {
@@ -188,6 +190,83 @@ void main() {
       test(item.label, () {
         expect(FirebaseService.isValidKgPhone(item.input), item.expected,
             reason: 'Input: ${item.input}');
+      });
+    }
+  });
+
+  group('Road route validation and labels', () {
+    const validPoint = LatLng(39.92764, 69.58843);
+
+    test('returns a zero-length route for identical points without network access', () async {
+      final route = await RouteService.drivingRoute(validPoint, validPoint);
+      expect(route.points, [validPoint, validPoint]);
+      expect(route.distanceMeters, 0);
+      expect(route.durationSeconds, 0);
+    });
+
+    test('returns a zero-length route for points less than one metre apart', () async {
+      final nearbyPoint = LatLng(39.9276401, 69.5884301);
+      final route = await RouteService.drivingRoute(validPoint, nearbyPoint);
+      expect(route.distanceMeters, 0);
+      expect(route.durationSeconds, 0);
+    });
+
+    final invalidPoints = <({String label, LatLng point})>[
+      (label: 'rejects latitude above 90 degrees', point: const LatLng(90.01, 0)),
+      (label: 'rejects latitude below -90 degrees', point: const LatLng(-90.01, 0)),
+      (label: 'rejects longitude above 180 degrees', point: const LatLng(0, 180.01)),
+      (label: 'rejects longitude below -180 degrees', point: const LatLng(0, -180.01)),
+      (label: 'rejects NaN latitude', point: LatLng(double.nan, 0)),
+      (label: 'rejects infinite longitude', point: LatLng(0, double.infinity)),
+    ];
+
+    for (final item in invalidPoints) {
+      test(item.label, () async {
+        expect(
+          () => RouteService.drivingRoute(validPoint, item.point),
+          throwsA(isA<FormatException>()),
+        );
+      });
+    }
+
+    final distanceCases = <({double meters, String expected})>[
+      (meters: 0, expected: '0 м'),
+      (meters: 125, expected: '125 м'),
+      (meters: 999, expected: '999 м'),
+      (meters: 1000, expected: '1.0 км'),
+      (meters: 1500, expected: '1.5 км'),
+      (meters: 12500, expected: '12.5 км'),
+    ];
+
+    for (final item in distanceCases) {
+      test('formats distance ${item.meters} metres', () {
+        final route = RoadRoute(
+          points: const [validPoint, validPoint],
+          distanceMeters: item.meters,
+          durationSeconds: 0,
+        );
+        expect(route.distanceLabel, item.expected);
+      });
+    }
+
+    final etaCases = <({double seconds, String expected})>[
+      (seconds: 0, expected: '0 мин'),
+      (seconds: 30, expected: '1 мин'),
+      (seconds: 59, expected: '1 мин'),
+      (seconds: 60, expected: '1 мин'),
+      (seconds: 1800, expected: '30 мин'),
+      (seconds: 3600, expected: '1 ч 0 мин'),
+      (seconds: 3660, expected: '1 ч 1 мин'),
+    ];
+
+    for (final item in etaCases) {
+      test('formats travel time ${item.seconds} seconds', () {
+        final route = RoadRoute(
+          points: const [validPoint, validPoint],
+          distanceMeters: 0,
+          durationSeconds: item.seconds,
+        );
+        expect(route.etaLabel, item.expected);
       });
     }
   });
