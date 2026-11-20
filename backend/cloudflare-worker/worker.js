@@ -80,6 +80,22 @@ async function createLiveKitToken(env, uid, name) {
 }
 
 function num(v) { const n = Number(v); return Number.isFinite(n) ? n : null; }
+
+// Kyrgyzstan business day: UTC+6, independent of the Cloudflare data-center timezone.
+function kgTodayDate() {
+  return new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+function kgDateBounds(dateText) {
+  const value = String(dateText || "");
+  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) throw new Error("Дата смены должна быть в формате ГГГГ-ММ-ДД");
+  const [year, month, day] = value.split("-").map(Number);
+  const check = new Date(Date.UTC(year, month - 1, day));
+  if (check.getUTCFullYear() !== year || check.getUTCMonth() + 1 !== month || check.getUTCDate() !== day) {
+    throw new Error("Указана неверная дата смены");
+  }
+  const start = Math.floor(Date.UTC(year, month - 1, day) / 1000) - 6 * 60 * 60;
+  return { start, end: start + 86400 };
+}
 function distanceKm(aLat, aLng, bLat, bLng) {
   const rad = x => x * Math.PI / 180;
   const dLat = rad(bLat - aLat), dLng = rad(bLng - aLng);
@@ -172,6 +188,41 @@ export default {
         updated_by TEXT,
         updated_at INTEGER NOT NULL DEFAULT (unixepoch())
       )`).run();
+      // Driver commission and immutable daily shift snapshots; existing trip_finances stays untouched.
+      await env.DB.prepare(`CREATE TABLE IF NOT EXISTS driver_commission_settings (
+        driver_uid TEXT PRIMARY KEY NOT NULL,
+        commission_percent INTEGER NOT NULL DEFAULT 50 CHECK (commission_percent BETWEEN 0 AND 100),
+        updated_by TEXT,
+        updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        FOREIGN KEY(driver_uid) REFERENCES drivers(uid)
+      )`).run();
+      await env.DB.prepare(`CREATE TABLE IF NOT EXISTS driver_shifts (
+        id TEXT PRIMARY KEY NOT NULL,
+        driver_uid TEXT NOT NULL,
+        shift_date TEXT NOT NULL,
+        trip_count INTEGER NOT NULL,
+        gross_earnings_som INTEGER NOT NULL,
+        driver_percent INTEGER NOT NULL CHECK (driver_percent BETWEEN 0 AND 100),
+        driver_share_som INTEGER NOT NULL,
+        park_share_som INTEGER NOT NULL,
+        closed_at INTEGER NOT NULL,
+        closed_by TEXT NOT NULL,
+        UNIQUE(driver_uid, shift_date),
+        FOREIGN KEY(driver_uid) REFERENCES drivers(uid)
+      )`).run();
+      await env.DB.prepare(`CREATE TABLE IF NOT EXISTS shift_finance_items (
+        shift_id TEXT NOT NULL,
+        order_id TEXT NOT NULL UNIQUE,
+        driver_uid TEXT NOT NULL,
+        fare_som INTEGER NOT NULL,
+        completed_at INTEGER NOT NULL,
+        PRIMARY KEY(shift_id, order_id),
+        FOREIGN KEY(shift_id) REFERENCES driver_shifts(id),
+        FOREIGN KEY(order_id) REFERENCES trip_finances(order_id)
+      )`).run();
+      // Existing drivers receive the legacy model's 50% default once; saved values are never overwritten.
+      await env.DB.prepare(`INSERT OR IGNORE INTO driver_commission_settings (driver_uid, commission_percent)
+        SELECT uid, 50 FROM drivers`).run();
       await env.DB.prepare(`CREATE TABLE IF NOT EXISTS radio_messages (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         sender_uid TEXT NOT NULL,
@@ -320,6 +371,73 @@ export default {
         return response({ status: "ok", tariffs: { city_fare_som: city, intercity_fare_som: intercity } });
       }
 
+      if (url.pathname === "/drivers/commission" && request.method === "POST") {
+        const auth = await requireDispatcher(request);
+        const b = await request.json();
+        const driverUid = String(b.driver_uid || "");
+        const percent = Number(b.commission_percent);
+        if (!driverUid || !Number.isSafeInteger(percent) || percent < 0 || percent > 100) {
+          return response({ status: "error", message: "Укажите водителя и процент от 0 до 100" }, 400);
+        }
+        const driver = await env.DB.prepare("SELECT uid FROM drivers WHERE uid=?").bind(driverUid).first();
+        if (!driver) return response({ status: "error", message: "Водитель не найден" }, 404);
+        await env.DB.prepare(`INSERT INTO driver_commission_settings (driver_uid,commission_percent,updated_by,updated_at)
+          VALUES (?,?,?,unixepoch())
+          ON CONFLICT(driver_uid) DO UPDATE SET commission_percent=excluded.commission_percent,
+          updated_by=excluded.updated_by, updated_at=unixepoch()`)
+          .bind(driverUid, percent, auth.user.localId).run();
+        return response({ status: "ok", driver_uid: driverUid, commission_percent: percent });
+      }
+
+      if (url.pathname === "/dispatcher/shifts/close" && request.method === "POST") {
+        const auth = await requireDispatcher(request);
+        const b = await request.json();
+        const driverUid = String(b.driver_uid || "");
+        const shiftDate = String(b.shift_date || kgTodayDate());
+        if (!driverUid) return response({ status: "error", message: "Не указан водитель" }, 400);
+        const { start, end } = kgDateBounds(shiftDate);
+        if (shiftDate > kgTodayDate()) return response({ status: "error", message: "Нельзя закрыть смену за будущую дату" }, 400);
+        const driver = await env.DB.prepare("SELECT uid,name FROM drivers WHERE uid=?").bind(driverUid).first();
+        if (!driver) return response({ status: "error", message: "Водитель не найден" }, 404);
+        const shiftId = crypto.randomUUID();
+        // D1 batch is transactional. A fresh random ID means a repeated close cannot copy items
+        // into an already closed shift, while UNIQUE(driver_uid, shift_date) prevents duplicates.
+        const results = await env.DB.batch([
+          env.DB.prepare(`INSERT INTO driver_shifts
+            (id,driver_uid,shift_date,trip_count,gross_earnings_som,driver_percent,driver_share_som,park_share_som,closed_at,closed_by)
+            SELECT ?, f.driver_uid, ?, COUNT(*), SUM(f.fare_som),
+              COALESCE(MAX(c.commission_percent),50),
+              CAST(ROUND(SUM(f.fare_som)*COALESCE(MAX(c.commission_percent),50)/100.0) AS INTEGER),
+              SUM(f.fare_som)-CAST(ROUND(SUM(f.fare_som)*COALESCE(MAX(c.commission_percent),50)/100.0) AS INTEGER),
+              unixepoch(), ?
+            FROM trip_finances f
+            LEFT JOIN driver_commission_settings c ON c.driver_uid=f.driver_uid
+            WHERE f.driver_uid=? AND f.completed_at>=? AND f.completed_at<?
+              AND NOT EXISTS (SELECT 1 FROM shift_finance_items si WHERE si.order_id=f.order_id)
+            GROUP BY f.driver_uid
+            ON CONFLICT(driver_uid,shift_date) DO NOTHING`)
+            .bind(shiftId, shiftDate, auth.user.localId, driverUid, start, end),
+          env.DB.prepare(`INSERT INTO shift_finance_items (shift_id,order_id,driver_uid,fare_som,completed_at)
+            SELECT ?, f.order_id, f.driver_uid, f.fare_som, f.completed_at
+            FROM trip_finances f
+            WHERE f.driver_uid=? AND f.completed_at>=? AND f.completed_at<?
+              AND EXISTS (SELECT 1 FROM driver_shifts ds WHERE ds.id=?)
+              AND NOT EXISTS (SELECT 1 FROM shift_finance_items si WHERE si.order_id=f.order_id)`)
+            .bind(shiftId, driverUid, start, end, shiftId)
+        ]);
+        const inserted = Number(results?.[0]?.meta?.changes || 0);
+        if (inserted !== 1) {
+          const existing = await env.DB.prepare("SELECT id FROM driver_shifts WHERE driver_uid=? AND shift_date=?")
+            .bind(driverUid, shiftDate).first();
+          return response({ status: "error", message: existing
+            ? "Смена этого водителя за выбранную дату уже закрыта"
+            : "Нет незакрытых завершённых поездок за выбранную дату" }, 409);
+        }
+        const shift = await env.DB.prepare(`SELECT ds.*, d.name AS driver_name
+          FROM driver_shifts ds JOIN drivers d ON d.uid=ds.driver_uid WHERE ds.id=?`).bind(shiftId).first();
+        return response({ status: "ok", closed: true, shift });
+      }
+
       // Secure dispatcher dashboard: only the fixed dispatcher Firebase UID can read fleet data.
       if (url.pathname === "/dispatcher/overview" && request.method === "GET") {
         await requireDispatcher(request);
@@ -335,13 +453,24 @@ export default {
           d.name AS driver_name, d.car_number AS driver_car_number
           FROM orders o LEFT JOIN drivers d ON d.uid=o.assigned_driver_uid
           ORDER BY o.created_at DESC LIMIT 100`).all();
+        const todayDate = kgTodayDate();
+        const todayBounds = kgDateBounds(todayDate);
         const today = await env.DB.prepare(`SELECT status, COUNT(*) AS count FROM orders
-          WHERE created_at >= unixepoch('now','start of day') GROUP BY status`).all();
-        const earnings = await env.DB.prepare(`SELECT f.driver_uid, d.name AS driver_name,
-          d.car_number AS car_number, COUNT(*) AS completed_trips, SUM(f.fare_som) AS earned_som
-          FROM trip_finances f LEFT JOIN drivers d ON d.uid=f.driver_uid
-          WHERE f.completed_at >= unixepoch('now','start of day')
-          GROUP BY f.driver_uid ORDER BY earned_som DESC`).all();
+          WHERE created_at>=? AND created_at<? GROUP BY status`).bind(todayBounds.start, todayBounds.end).all();
+        const earnings = await env.DB.prepare(`SELECT d.uid AS driver_uid, d.name AS driver_name,
+          d.car_number AS car_number, COALESCE(c.commission_percent,50) AS commission_percent,
+          COUNT(f.order_id) AS completed_trips, COALESCE(SUM(f.fare_som),0) AS earned_som,
+          CAST(ROUND(COALESCE(SUM(f.fare_som),0)*COALESCE(c.commission_percent,50)/100.0) AS INTEGER) AS driver_share_som,
+          COALESCE(SUM(f.fare_som),0)-CAST(ROUND(COALESCE(SUM(f.fare_som),0)*COALESCE(c.commission_percent,50)/100.0) AS INTEGER) AS park_share_som
+          FROM drivers d
+          LEFT JOIN driver_commission_settings c ON c.driver_uid=d.uid
+          LEFT JOIN trip_finances f ON f.driver_uid=d.uid AND f.completed_at>=? AND f.completed_at<?
+            AND NOT EXISTS (SELECT 1 FROM shift_finance_items si WHERE si.order_id=f.order_id)
+          GROUP BY d.uid ORDER BY earned_som DESC, d.name ASC`)
+          .bind(todayBounds.start, todayBounds.end).all();
+        const closedShifts = await env.DB.prepare(`SELECT ds.*, d.name AS driver_name, d.car_number
+          FROM driver_shifts ds JOIN drivers d ON d.uid=ds.driver_uid
+          ORDER BY ds.shift_date DESC, ds.closed_at DESC LIMIT 50`).all();
         // Normalize SQLite integer flags before JSON serialization so Flutter
         // receives stable booleans for approval and online state.
         const driverRows = (drivers.results || []).map(d => ({
@@ -350,7 +479,8 @@ export default {
           online: Number(d.online) === 1
         }));
         return response({ status: "ok", drivers: driverRows, orders: orders.results || [],
-          today: today.results || [], earnings: earnings.results || [] });
+          today: today.results || [], earnings: earnings.results || [],
+          closed_shifts: closedShifts.results || [], business_date: todayDate });
       }
 
       if (url.pathname === "/orders/assign" && request.method === "POST") {
