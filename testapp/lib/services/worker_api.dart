@@ -119,6 +119,22 @@ class WorkerApi {
     'intercity_fare_som': intercityFareSom,
   });
 
+  static Future<Map<String, dynamic>> setDriverCommission({
+    required String driverUid,
+    required int commissionPercent,
+  }) => _request('/drivers/commission', method: 'POST', body: {
+    'driver_uid': driverUid,
+    'commission_percent': commissionPercent,
+  });
+
+  static Future<Map<String, dynamic>> closeDriverShift({
+    required String driverUid,
+    String? shiftDate,
+  }) => _request('/dispatcher/shifts/close', method: 'POST', body: {
+    'driver_uid': driverUid,
+    if (shiftDate != null) 'shift_date': shiftDate,
+  });
+
   static Future<Map<String, dynamic>> approveDriver({
     required String uid,
     required bool approved,
