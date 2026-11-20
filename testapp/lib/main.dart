@@ -2060,41 +2060,128 @@ class _DriverReviewStatusScreenState extends State<DriverReviewStatusScreen> {
   bool _busy = false;
   final ImagePicker _picker = ImagePicker();
 
+  void _message(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
   Future<void> _pick(String kind) async {
-    final file = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 82, maxWidth: 1600);
-    if (file == null || !mounted) return;
-    setState(() {
-      if (kind == 'license') _license = file;
-      if (kind == 'driver') _driverPhoto = file;
-      if (kind == 'car') _carPhoto = file;
-    });
+    if (_busy || !mounted) return;
+    if (!{'license', 'driver', 'car'}.contains(kind)) return;
+    try {
+      final file = await _picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 82,
+        maxWidth: 1600,
+      );
+      if (!mounted || file == null) return;
+      final size = await file.length().timeout(const Duration(seconds: 15));
+      if (!mounted) return;
+      if (size <= 0 || size > 8 * 1024 * 1024) {
+        _message('Фото пустое или больше 8 МБ. Выберите фотографию меньшего размера.');
+        return;
+      }
+      setState(() {
+        if (kind == 'license') _license = file;
+        if (kind == 'driver') _driverPhoto = file;
+        if (kind == 'car') _carPhoto = file;
+      });
+    } catch (e) {
+      _message('Не удалось выбрать фотографию: $e');
+    }
   }
 
   Future<String> _upload(XFile file, String kind, String uid) async {
+    if (uid.trim().isEmpty ||
+        !{'license', 'driver_photo', 'car_photo'}.contains(kind)) {
+      throw const WorkerApiException('Не удалось определить документ водителя.');
+    }
+    final size = await file.length().timeout(const Duration(seconds: 15));
+    if (size <= 0 || size > 8 * 1024 * 1024) {
+      throw const WorkerApiException('Фото пустое или превышает 8 МБ. Выберите его заново.');
+    }
+    final bytes = await file.readAsBytes().timeout(const Duration(seconds: 30));
+    if (bytes.isEmpty || bytes.length != size || bytes.length > 8 * 1024 * 1024) {
+      throw const WorkerApiException('Не удалось прочитать фотографию полностью. Выберите её заново.');
+    }
     final ref = FirebaseStorage.instance.ref().child('drivers/$uid/$kind.jpg');
-    final task = await ref.putData(await file.readAsBytes(), SettableMetadata(
-      contentType: 'image/jpeg', customMetadata: {'ownerUid': uid},
-    ));
+    final task = await ref.putData(
+      bytes,
+      SettableMetadata(
+        contentType: 'image/jpeg',
+        customMetadata: {'ownerUid': uid},
+      ),
+    ).timeout(const Duration(seconds: 90));
     return task.ref.fullPath;
   }
 
-  Future<void> _resubmit() async {
-    if (_license == null || _driverPhoto == null || _carPhoto == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Выберите все три фотографии.')));
-      return;
-    }
+  Future<void> _logout() async {
+    if (_busy) return;
     setState(() => _busy = true);
     try {
-      final uid = FirebaseAuth.instance.currentUser!.uid;
-      final a = await _upload(_license!, 'license', uid);
-      final b = await _upload(_driverPhoto!, 'driver_photo', uid);
-      final c = await _upload(_carPhoto!, 'car_photo', uid);
-      await WorkerApi.saveDriverDocuments(licenseUrl: a, driverPhotoUrl: b, carPhotoUrl: c);
-      if (!mounted) return;
-      setState(() { _license = null; _driverPhoto = null; _carPhoto = null; });
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Документы отправлены повторно. Ожидайте новой проверки диспетчера.')));
+      await FirebaseService.signOut().timeout(const Duration(seconds: 20));
+      if (mounted) Navigator.popUntil(context, (route) => route.isFirst);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Не удалось отправить документы: $e')));
+      _message('Не удалось выйти из аккаунта: $e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _resubmit() async {
+    if (_busy) return;
+    if (_license == null || _driverPhoto == null || _carPhoto == null) {
+      _message('Выберите все три фотографии.');
+      return;
+    }
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null || user.uid.isEmpty) {
+      _message('Срок входа истёк. Войдите в аккаунт водителя и повторите отправку.');
+      return;
+    }
+    final files = [_license!, _driverPhoto!, _carPhoto!];
+    var totalBytes = 0;
+    try {
+      for (var i = 0; i < files.length; i++) {
+        final size = await files[i].length().timeout(const Duration(seconds: 15));
+        if (!mounted) return;
+        if (size <= 0 || size > 8 * 1024 * 1024) {
+          _message('Фото номер ${i + 1} пустое или превышает 8 МБ. Замените его.');
+          return;
+        }
+        totalBytes += size;
+      }
+      if (totalBytes > 18 * 1024 * 1024) {
+        _message('Общий размер трёх фотографий превышает 18 МБ. Уменьшите их.');
+        return;
+      }
+      setState(() => _busy = true);
+      final uid = user.uid;
+      final licensePath = await _upload(_license!, 'license', uid);
+      if (!mounted) return;
+      final driverPath = await _upload(_driverPhoto!, 'driver_photo', uid);
+      if (!mounted) return;
+      final carPath = await _upload(_carPhoto!, 'car_photo', uid);
+      if (!mounted) return;
+      if (FirebaseAuth.instance.currentUser?.uid != uid) {
+        throw const WorkerApiException('Аккаунт изменился во время отправки. Войдите снова.');
+      }
+      await WorkerApi.saveDriverDocuments(
+        licenseUrl: licensePath,
+        driverPhotoUrl: driverPath,
+        carPhotoUrl: carPath,
+      );
+      if (!mounted) return;
+      setState(() {
+        _license = null;
+        _driverPhoto = null;
+        _carPhoto = null;
+      });
+      _message('Документы отправлены повторно. Ожидайте новой проверки диспетчера.');
+    } catch (e) {
+      _message('Не удалось отправить документы: $e');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -2112,7 +2199,7 @@ class _DriverReviewStatusScreenState extends State<DriverReviewStatusScreen> {
     final rejected = status == 'rejected';
     return Scaffold(
       appBar: AppBar(title: const Text('Проверка анкеты'), backgroundColor: Colors.amber,
-        actions: [IconButton(onPressed: () async { await FirebaseService.signOut(); if (context.mounted) Navigator.popUntil(context, (r) => r.isFirst); }, icon: const Icon(Icons.logout), tooltip: 'Выйти')]),
+        actions: [IconButton(onPressed: _busy ? null : _logout, icon: const Icon(Icons.logout), tooltip: 'Выйти')]),
       body: Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 520), child: ListView(padding: const EdgeInsets.all(20), children: [
         const Icon(Icons.fact_check_outlined, size: 64, color: Colors.amber),
         Text(widget.profile['name']?.toString() ?? 'Водитель', textAlign: TextAlign.center, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
