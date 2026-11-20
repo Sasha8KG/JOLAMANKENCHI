@@ -52,6 +52,7 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
   }
 
   Future<void> _pick(String kind) async {
+    if (_busy || !mounted) return;
     try {
       final file = await _picker.pickImage(
         source: ImageSource.gallery,
@@ -70,14 +71,18 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
   }
 
   Future<String> _upload(XFile file, String uid, String kind) async {
+    final bytes = await file.readAsBytes();
+    if (bytes.isEmpty || bytes.length > 8 * 1024 * 1024) {
+      throw const WorkerApiException('Фотография изменилась или превышает 8 МБ. Выберите её заново.');
+    }
     final ref = FirebaseStorage.instance.ref().child('drivers/$uid/$kind.jpg');
     final task = await ref.putData(
-      await file.readAsBytes(),
+      bytes,
       SettableMetadata(
         contentType: 'image/jpeg',
         customMetadata: {'ownerUid': uid},
       ),
-    );
+    ).timeout(const Duration(seconds: 90));
     return task.ref.fullPath;
   }
 
@@ -87,7 +92,7 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
     final files = [_license!, _driverPhoto!, _carPhoto!];
     var totalBytes = 0;
     for (var i = 0; i < files.length; i++) {
-      final size = await files[i].length();
+      final size = await files[i].length().timeout(const Duration(seconds: 15));
       if (!mounted) return false;
       if (size <= 0 || size > maxPhotoBytes) {
         _message('Фото ' + (i + 1).toString() + ' пустое или больше 8 МБ. Выберите фотографию меньшего размера.');
@@ -109,14 +114,16 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
       return;
     }
 
-    if (!await _validatePhotoSizes()) return;
-    if (!mounted) return;
+    // Блокируем повторное нажатие уже на время предварительной проверки файлов.
     setState(() {
       _busy = true;
-      _stage = 'Проверяем аккаунт…';
+      _stage = 'Проверяем размер фотографий…';
     });
 
     try {
+      if (!await _validatePhotoSizes()) return;
+      if (!mounted) return;
+      _setStage('Проверяем аккаунт…');
       final phone = _phone.text.trim();
       final password = _password.text;
 
@@ -144,8 +151,6 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
         carNumber: _plate.text.trim(),
       );
       if (!mounted) return;
-
-      if (!mounted) return;
       _setStage('Загружаем водительское удостоверение…');
       final licensePath = await _upload(_license!, uid, 'license');
       if (!mounted) return;
@@ -168,6 +173,10 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
       Navigator.of(context).pop(true);
     } on FirebaseAuthException catch (e) {
       _message(_firebaseMessage(e));
+    } on FirebaseException catch (e) {
+      _message(e.code == 'unauthorized' || e.code == 'unauthenticated'
+          ? 'Firebase не разрешил загрузку документов. Повторите вход и отправку.'
+          : 'Ошибка хранилища фотографий (${e.code}). Проверьте интернет и повторите попытку.');
     } on WorkerApiException catch (e) {
       // Не удаляем созданный Firebase-аккаунт и не выходим из него:
       // следующая попытка сможет продолжить анкету на том же номере.
@@ -244,8 +253,9 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
                   textCapitalization: TextCapitalization.words,
                   decoration: const InputDecoration(labelText: 'ФИО водителя'),
                   maxLength: 80,
-                  validator: (v) => v == null || v.trim().length < 2
-                      ? 'Укажите ФИО полностью (не менее 2 символов)'
+                  validator: (v) => v == null || v.trim().length < 2 ||
+                          v.trim().length > 80
+                      ? 'Укажите ФИО (от 2 до 80 символов)'
                       : v.trim().length > 80 ? 'Слишком длинное ФИО' : null,
                 ),
                 const SizedBox(height: 10),
@@ -255,7 +265,7 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
                   keyboardType: TextInputType.phone,
                   decoration: const InputDecoration(labelText: 'Телефон 0XXXXXXXXX'),
                   validator: (v) {
-                    return FirebaseService.isValidKgPhone(v ?? '')
+                    return FirebaseService.isValidKgPhone((v ?? '').trim())
                         ? null
                         : 'Введите номер Кыргызстана: 0700123456 или +996700123456';
                   },
@@ -265,8 +275,11 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
                   controller: _password,
                   enabled: !_busy,
                   obscureText: true,
-                  decoration: const InputDecoration(labelText: 'Пароль (минимум 6 символов)'),
-                  validator: (v) => v == null || v.length < 6 ? 'Минимум 6 символов' : null,
+                  maxLength: 64,
+                  decoration: const InputDecoration(labelText: 'Пароль (6–64 символа)'),
+                  validator: (v) => v == null || v.length < 6
+                      ? 'Минимум 6 символов'
+                      : v.length > 64 ? 'Не более 64 символов' : null,
                 ),
                 const SizedBox(height: 10),
                 TextFormField(
