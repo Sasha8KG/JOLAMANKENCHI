@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -11,7 +12,8 @@ class WorkerApi {
 
   static const String baseUrl =
       'https://jol-aman-kenchi-server.seshankulov2.workers.dev';
-  static const Duration _timeout = Duration(seconds: 20);\n  static const int _maxResponseBytes = 2 * 1024 * 1024;
+  static const Duration _timeout = Duration(seconds: 20);
+  static const int _maxResponseBytes = 2 * 1024 * 1024;
 
   static Future<String> _token() async {
     final user = FirebaseAuth.instance.currentUser;
