@@ -87,7 +87,7 @@ function kgTodayDate() {
 }
 function kgDateBounds(dateText) {
   const value = String(dateText || "");
-  if (!/^\d{4}-\\d{2}-\\d{2}$/.test(value)) throw new Error("Дата смены должна быть в формате ГГГГ-ММ-ДД");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error("Дата смены должна быть в формате ГГГГ-ММ-ДД");
   const [year, month, day] = value.split("-").map(Number);
   const check = new Date(Date.UTC(year, month - 1, day));
   if (check.getUTCFullYear() !== year || check.getUTCMonth() + 1 !== month || check.getUTCDate() !== day) {
@@ -735,7 +735,7 @@ export default {
       return response({ status: "error", message: "Адрес не найден" }, 404);
     } catch (error) {
       const message = error && error.message ? error.message : String(error);
-      const code = /права диспетчера|рация доступна только/.test(message) ? 403 : /голосовая рация ещё не настроена/.test(message) ? 503 : /не одобрен|выйдите на линию/.test(message) ? 403 : 401;
+      const code = /права диспетчера|рация доступна только/.test(message) ? 403 : /голосовая рация ещё не настроена/.test(message) ? 503 : /не одобрен|выйдите на линию/.test(message) ? 403 : /дата смены|неверная дата/.test(message) ? 400 : 401;
       return response({ status: "error", message }, code);
     }
   }
