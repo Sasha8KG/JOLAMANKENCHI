@@ -22,10 +22,11 @@ class WorkerApi {
       throw const WorkerApiException('Сначала войдите в аккаунт Firebase.');
     }
     final token = await user.getIdToken().timeout(_timeout);
-    if (token == null || token.isEmpty) {
+    final normalizedToken = token?.trim();
+    if (normalizedToken == null || normalizedToken.isEmpty) {
       throw const WorkerApiException('Не удалось получить токен Firebase.');
     }
-    return token;
+    return normalizedToken;
   }
 
   static Future<Map<String, dynamic>> _request(
@@ -34,29 +35,44 @@ class WorkerApi {
     Map<String, dynamic>? body,
     bool authenticated = true,
   }) async {
+    final normalizedMethod = method.trim().toUpperCase();
+    if (!['GET', 'POST'].contains(normalizedMethod)) {
+      throw const WorkerApiException('Недопустимый тип запроса к серверу.');
+    }
+    if (!path.startsWith('/') || path.startsWith('//') || path.contains('://')) {
+      throw const WorkerApiException('Недопустимый адрес запроса к серверу.');
+    }
+    final requestBytes = body == null ? null : utf8.encode(jsonEncode(body));
+    if (requestBytes != null && requestBytes.length > _maxRequestBytes) {
+      throw const WorkerApiException(
+        'Отправляемые данные слишком большие. Уменьшите вложения и повторите попытку.',
+      );
+    }
+    // Resolve authentication before opening a socket, so a slow token refresh
+    // does not leave an unused HTTP connection waiting.
+    final authToken = authenticated ? await _token() : null;
     final client = HttpClient()..connectionTimeout = _timeout;
     try {
       final uri = Uri.parse('$baseUrl$path');
-      final request = await client.openUrl(method, uri).timeout(_timeout);
+      if (uri.scheme != 'https' || uri.host != 'jol-aman-kenchi-server.seshankulov2.workers.dev') {
+        throw const WorkerApiException('Неверный защищённый адрес сервера.');
+      }
+      final request = await client.openUrl(normalizedMethod, uri).timeout(_timeout);
       request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+      request.headers.set(HttpHeaders.cacheControlHeader, 'no-store');
       if (body != null) {
         request.headers.contentType = ContentType.json;
       }
       if (authenticated) {
         request.headers.set(
           HttpHeaders.authorizationHeader,
-          'Bearer ${await _token()}',
+          'Bearer $authToken',
         );
       }
       // HttpClientRequest headers become immutable after the first body byte
       // is added. Set every header before writing the JSON payload.
-      if (body != null) {
-        final requestBytes = utf8.encode(jsonEncode(body));
-        if (requestBytes.length > _maxRequestBytes) {
-          throw const WorkerApiException(
-            'Отправляемые данные слишком большие. Уменьшите вложения и повторите попытку.',
-          );
-        }
+      if (requestBytes != null) {
+        request.contentLength = requestBytes.length;
         request.add(requestBytes);
       }
       final response = await request.close().timeout(_timeout);
@@ -83,6 +99,9 @@ class WorkerApi {
       ).timeout(_timeout);
 
       final isSuccess = response.statusCode >= 200 && response.statusCode < 300;
+      if (isSuccess && (response.statusCode == 204 || response.statusCode == 205)) {
+        return <String, dynamic>{};
+      }
       String responseText;
       try {
         responseText = utf8.decode(
@@ -122,9 +141,16 @@ class WorkerApi {
           : <String, dynamic>{'data': decoded};
       if (!isSuccess) {
         throw WorkerApiException(
-          (data['message'] ?? data['error'] ??
-                  'Ошибка сервера HTTP ${response.statusCode}')
-              .toString(),
+          ((data['message'] ?? data['error'] ??
+                      'Ошибка сервера HTTP ${response.statusCode}')
+                  .toString()
+                  .trim())
+              .substring(0, ((data['message'] ?? data['error'] ??
+                          'Ошибка сервера HTTP ${response.statusCode}')
+                      .toString()
+                      .trim()
+                      .length)
+                  .clamp(0, 500)),
           statusCode: response.statusCode,
         );
       }
@@ -270,8 +296,13 @@ class WorkerApi {
 
   static Future<Map<String, dynamic>> openOrders() => _request('/orders/open');
 
-  static Future<Map<String, dynamic>> orderStatus(String orderId) =>
-      _request('/orders/status?id=${Uri.encodeQueryComponent(orderId)}');
+  static Future<Map<String, dynamic>> orderStatus(String orderId) {
+    final id = orderId.trim();
+    if (id.isEmpty || id.length > 128) {
+      throw const WorkerApiException('Не удалось проверить заказ: неверный номер.');
+    }
+    return _request('/orders/status?id=${Uri.encodeQueryComponent(id)}');
+  }
 
   static Future<Map<String, dynamic>> respondToOrder(String orderId) =>
       _request('/orders/respond',
