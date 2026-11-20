@@ -1804,6 +1804,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
   String? _driverRouteOrderId;
   String? _driverRouteError;
   String? _driverRouteKey;
+  DateTime? _driverRouteRetryAfter;
 
   @override
   void initState() {
@@ -1917,17 +1918,33 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
     final pickup = _orderPickup(order);
     if (id.isEmpty || pickup == null) return;
     final routeKey = '$id:${driver.currentLocation.latitude.toStringAsFixed(3)},${driver.currentLocation.longitude.toStringAsFixed(3)}';
-    if (_driverRouteKey == routeKey) return;
+    if (_driverRouteKey == routeKey && _driverApproachRoute != null) return;
+    if (_driverRouteKey == routeKey &&
+        _driverRouteRetryAfter != null &&
+        DateTime.now().isBefore(_driverRouteRetryAfter!)) return;
     _driverRouteKey = routeKey;
     _driverRouteLoading = true;
     try {
       final route = await RouteService.drivingRoute(driver.currentLocation, pickup);
       if (!mounted) return;
-      setState(() { _driverApproachRoute = route; _driverRouteOrderId = id; _driverRouteError = null; });
+      setState(() {
+        _driverApproachRoute = route;
+        _driverRouteOrderId = id;
+        _driverRouteError = null;
+        _driverRouteRetryAfter = null;
+      });
       _focusDriverMapOnRoute(driver.currentLocation, pickup);
     } catch (e) {
       if (!mounted) return;
-      setState(() { _driverApproachRoute = null; _driverRouteOrderId = id; _driverRouteError = e.toString(); });
+      setState(() {
+        _driverApproachRoute = null;
+        _driverRouteOrderId = id;
+        _driverRouteError = e.toString();
+        _driverRouteRetryAfter = DateTime.now().add(const Duration(seconds: 30));
+      });
+      // Even if the public road-routing service is temporarily unavailable,
+      // keep both the driver's position and the passenger pickup visible.
+      _focusDriverMapOnRoute(driver.currentLocation, pickup);
     } finally {
       _driverRouteLoading = false;
     }
