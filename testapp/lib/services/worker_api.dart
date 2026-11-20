@@ -14,13 +14,14 @@ class WorkerApi {
       'https://jol-aman-kenchi-server.seshankulov2.workers.dev';
   static const Duration _timeout = Duration(seconds: 20);
   static const int _maxResponseBytes = 2 * 1024 * 1024;
+  static const int _maxRequestBytes = 2 * 1024 * 1024;
 
   static Future<String> _token() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       throw const WorkerApiException('Сначала войдите в аккаунт Firebase.');
     }
-    final token = await user.getIdToken();
+    final token = await user.getIdToken().timeout(_timeout);
     if (token == null || token.isEmpty) {
       throw const WorkerApiException('Не удалось получить токен Firebase.');
     }
@@ -50,7 +51,13 @@ class WorkerApi {
       // HttpClientRequest headers become immutable after the first body byte
       // is added. Set every header before writing the JSON payload.
       if (body != null) {
-        request.add(utf8.encode(jsonEncode(body)));
+        final requestBytes = utf8.encode(jsonEncode(body));
+        if (requestBytes.length > _maxRequestBytes) {
+          throw const WorkerApiException(
+            'Отправляемые данные слишком большие. Уменьшите вложения и повторите попытку.',
+          );
+        }
+        request.add(requestBytes);
       }
       final response = await request.close().timeout(_timeout);
 
@@ -75,8 +82,19 @@ class WorkerApi {
         },
       ).timeout(_timeout);
 
-      final responseText = utf8.decode(responseBytes.takeBytes(), allowMalformed: false);
       final isSuccess = response.statusCode >= 200 && response.statusCode < 300;
+      String responseText;
+      try {
+        responseText = utf8.decode(
+          responseBytes.takeBytes(),
+          allowMalformed: false,
+        );
+      } on FormatException {
+        throw WorkerApiException(
+          'Сервер передал данные в неверной кодировке (HTTP ${response.statusCode}).',
+          statusCode: isSuccess ? null : response.statusCode,
+        );
+      }
       if (responseText.trim().isEmpty) {
         if (!isSuccess) {
           throw WorkerApiException(
@@ -92,7 +110,9 @@ class WorkerApi {
         decoded = jsonDecode(responseText);
       } on FormatException {
         throw WorkerApiException(
-          'Сервер вернул непонятный ответ (HTTP ${response.statusCode}).',
+          isSuccess
+              ? 'Сервер вернул непонятный ответ (HTTP ${response.statusCode}).'
+              : 'Сервер вернул некорректную ошибку (HTTP ${response.statusCode}).',
           statusCode: isSuccess ? null : response.statusCode,
         );
       }
@@ -112,6 +132,10 @@ class WorkerApi {
     } on SocketException {
       throw const WorkerApiException(
         'Нет соединения с интернетом. Проверьте сеть и повторите попытку.',
+      );
+    } on HandshakeException {
+      throw const WorkerApiException(
+        'Не удалось установить защищённое соединение. Проверьте дату, время и интернет на телефоне.',
       );
     } on TimeoutException {
       throw const WorkerApiException(
