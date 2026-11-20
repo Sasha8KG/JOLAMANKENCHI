@@ -1226,8 +1226,9 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
         orderId.isEmpty ||
         order.status != 'accepted') return;
     final key = '$orderId:$driverId:${driverPoint.latitude.toStringAsFixed(3)},${driverPoint.longitude.toStringAsFixed(3)}';
-    if (_routeLoading || _lastRouteKey == key) return;
-    if (_routeRetryAfter != null && DateTime.now().isBefore(_routeRetryAfter!)) return;
+    if (_routeLoading) return;
+    if (_lastRouteKey == key &&
+        (_routeRetryAfter == null || DateTime.now().isBefore(_routeRetryAfter!))) return;
     _lastRouteKey = key;
     if (mounted) setState(() { _routeLoading = true; _routeError = null; });
     try {
