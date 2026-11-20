@@ -16,6 +16,17 @@ class WorkerApi {
   static const int _maxResponseBytes = 2 * 1024 * 1024;
   static const int _maxRequestBytes = 2 * 1024 * 1024;
 
+  static bool _hasControlCharacters(String value) =>
+      RegExp(r'[\\u0000-\\u001F\\u007F]').hasMatch(value);
+
+  static String _validatedUid(String value) {
+    final uid = value.trim();
+    if (uid.isEmpty || uid.length > 128 || _hasControlCharacters(uid)) {
+      throw const WorkerApiException('Не указан корректный UID пользователя.');
+    }
+    return uid;
+  }
+
   static Future<String> _token() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
@@ -68,12 +79,14 @@ class WorkerApi {
     final client = HttpClient()..connectionTimeout = _timeout;
     try {
       final uri = Uri.parse('$baseUrl$path');
-      if (uri.scheme != 'https' || uri.host != 'jol-aman-kenchi-server.seshankulov2.workers.dev') {
+      if (uri.scheme != 'https' || uri.host != 'jol-aman-kenchi-server.seshankulov2.workers.dev' ||
+          uri.userInfo.isNotEmpty || uri.port != 443) {
         throw const WorkerApiException('Неверный защищённый адрес сервера.');
       }
       final request = await client.openUrl(normalizedMethod, uri).timeout(_timeout);
       request.headers.set(HttpHeaders.acceptHeader, 'application/json');
       request.headers.set(HttpHeaders.cacheControlHeader, 'no-store');
+      request.headers.set(HttpHeaders.pragmaHeader, 'no-cache');
       if (body != null) {
         request.headers.contentType = ContentType.json;
       }
@@ -150,6 +163,12 @@ class WorkerApi {
         );
       }
 
+      if (decoded == null) {
+        throw WorkerApiException(
+          'Сервер вернул пустые данные (HTTP ${response.statusCode}).',
+          statusCode: isSuccess ? null : response.statusCode,
+        );
+      }
       final data = decoded is Map<String, dynamic>
           ? decoded
           : <String, dynamic>{'data': decoded};
@@ -190,7 +209,7 @@ class WorkerApi {
 
   static Future<Map<String, dynamic>> sendRadioMessage(String message) {
     final normalized = message.trim();
-    if (normalized.isEmpty || normalized.length > 500) {
+    if (normalized.isEmpty || normalized.length > 500 || _hasControlCharacters(normalized)) {
       throw const WorkerApiException(
         'Сообщение должно содержать от 1 до 500 символов.',
       );
@@ -252,10 +271,7 @@ class WorkerApi {
     required String driverUid,
     required int commissionPercent,
   }) {
-    final uid = driverUid.trim();
-    if (uid.isEmpty || uid.length > 128) {
-      throw const WorkerApiException('Не указан корректный водитель.');
-    }
+    final uid = _validatedUid(driverUid);
     if (commissionPercent < 0 || commissionPercent > 100) {
       throw const WorkerApiException('Процент водителя должен быть от 0 до 100.');
     }
@@ -269,13 +285,14 @@ class WorkerApi {
     required String driverUid,
     String? shiftDate,
   }) {
-    final uid = driverUid.trim();
+    final uid = _validatedUid(driverUid);
     final date = shiftDate?.trim();
-    if (uid.isEmpty || uid.length > 128) {
-      throw const WorkerApiException('Не указан корректный водитель для закрытия смены.');
-    }
-    if (date != null && !RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(date)) {
-      throw const WorkerApiException('Неверный формат даты смены.');
+    if (date != null) {
+      final parsedDate = DateTime.tryParse(date);
+      if (!RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(date) || parsedDate == null ||
+          parsedDate.toIso8601String().substring(0, 10) != date) {
+        throw const WorkerApiException('Укажите существующую дату смены в формате ГГГГ-ММ-ДД.');
+      }
     }
     return _request('/dispatcher/shifts/close', method: 'POST', body: {
       'driver_uid': uid,
@@ -287,10 +304,7 @@ class WorkerApi {
     required String uid,
     required bool approved,
   }) {
-    final normalizedUid = uid.trim();
-    if (normalizedUid.isEmpty || normalizedUid.length > 128) {
-      throw const WorkerApiException('Не указан корректный UID водителя.');
-    }
+    final normalizedUid = _validatedUid(uid);
     return _request('/drivers/approve', method: 'POST', body: {
       'uid': normalizedUid,
       'approved': approved,
@@ -311,7 +325,7 @@ class WorkerApi {
     if (!{'approved', 'rejected'}.contains(normalizedDecision)) {
       throw const WorkerApiException('Неизвестное решение по заявке водителя.');
     }
-    if (normalizedReason.length > 500) {
+    if (normalizedReason.length > 500 || _hasControlCharacters(normalizedReason)) {
       throw const WorkerApiException('Причина решения слишком длинная.');
     }
     return _request('/drivers/review', method: 'POST', body: {
@@ -325,10 +339,7 @@ class WorkerApi {
     required String orderId,
     required String driverUid,
   }) {
-    final uid = driverUid.trim();
-    if (uid.isEmpty || uid.length > 128) {
-      throw const WorkerApiException('Не указан корректный UID водителя.');
-    }
+    final uid = _validatedUid(driverUid);
     return _request('/orders/assign', method: 'POST', body: {
       'order_id': _validatedOrderId(orderId),
       'driver_uid': uid,
@@ -345,10 +356,10 @@ class WorkerApi {
     final cleanPhone = phone.trim();
     final cleanCarModel = carModel.trim();
     final cleanCarNumber = carNumber.trim();
-    if (cleanName.isEmpty || cleanName.length > 100 ||
-        cleanPhone.isEmpty || cleanPhone.length > 24 ||
-        cleanCarModel.isEmpty || cleanCarModel.length > 80 ||
-        cleanCarNumber.isEmpty || cleanCarNumber.length > 24) {
+    if (cleanName.isEmpty || cleanName.length > 100 || _hasControlCharacters(cleanName) ||
+        !RegExp(r'^(?:0\d{9}|\+996\d{9}|996\d{9})$').hasMatch(cleanPhone) ||
+        cleanCarModel.isEmpty || cleanCarModel.length > 80 || _hasControlCharacters(cleanCarModel) ||
+        cleanCarNumber.isEmpty || cleanCarNumber.length > 24 || _hasControlCharacters(cleanCarNumber)) {
       throw const WorkerApiException(
         'Проверьте имя, телефон, марку и номер автомобиля.',
       );
@@ -370,7 +381,7 @@ class WorkerApi {
     final driverPhoto = driverPhotoUrl.trim();
     final carPhoto = carPhotoUrl.trim();
     if ([license, driverPhoto, carPhoto].any((value) =>
-        value.isEmpty || value.length > 2048 || value.contains('\n'))) {
+        value.isEmpty || value.length > 2048 || _hasControlCharacters(value))) {
       throw const WorkerApiException('Не все документы водителя подготовлены корректно.');
     }
     return _request('/drivers/documents', method: 'POST', body: {
@@ -406,13 +417,21 @@ class WorkerApi {
 
   static Future<Map<String, dynamic>> publishOrder(
     Map<String, dynamic> order,
-  ) =>
-      _request('/orders/publish', method: 'POST', body: order);
+  ) {
+    if (order.isEmpty) {
+      throw const WorkerApiException('В заказе отсутствуют данные.');
+    }
+    return _request('/orders/publish', method: 'POST', body: order);
+  }
 
   static Future<Map<String, dynamic>> syncOrders(
     List<Map<String, dynamic>> orders,
-  ) =>
-      _request('/orders/sync', method: 'POST', body: {'orders': orders});
+  ) {
+    if (orders.length > 500) {
+      throw const WorkerApiException('Слишком много заказов для синхронизации.');
+    }
+    return _request('/orders/sync', method: 'POST', body: {'orders': orders});
+  }
 
   static Future<Map<String, dynamic>> openOrders() => _request('/orders/open');
 
@@ -428,7 +447,7 @@ class WorkerApi {
 
   static String _validatedOrderId(String orderId) {
     final id = orderId.trim();
-    if (id.isEmpty || id.length > 128) {
+    if (id.isEmpty || id.length > 128 || _hasControlCharacters(id) || id.contains('/')) {
       throw const WorkerApiException('Не удалось выполнить действие: неверный номер заказа.');
     }
     return id;
