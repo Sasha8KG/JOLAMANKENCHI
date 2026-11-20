@@ -1986,6 +1986,8 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
   bool _ordersPollInProgress = false;
   bool _locationUpdateInProgress = false;
   bool _locationStreamErrorShown = false;
+  bool _locationTrackingStarting = false;
+  Timer? _locationRetryTimer;
   List<Map<String, dynamic>> _serverOpenOrders = [];
   List<Map<String, dynamic>> _serverAssignedOrders = [];
   final Set<String> _respondingOrderIds = <String>{};
@@ -2218,13 +2220,24 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
     }
   }
 
+  void _scheduleLocationRetry() {
+    if (!mounted || _locationRetryTimer?.isActive == true) return;
+    _locationRetryTimer = Timer(const Duration(seconds: 20), () {
+      _locationRetryTimer = null;
+      if (mounted) unawaited(_startLocationTracking());
+    });
+  }
+
   Future<void> _startLocationTracking() async {
     final driver = TaxiParkState.currentLoggedInDriver;
-    if (driver == null) return;
+    if (driver == null || !mounted || _locationTrackingStarting ||
+        _positionSubscription != null) return;
+    _locationTrackingStarting = true;
     try {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
         _showLocationMessage('Включите геолокацию на телефоне, чтобы выйти на линию.');
+        _scheduleLocationRetry();
         return;
       }
       var permission = await Geolocator.checkPermission();
@@ -2275,12 +2288,22 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
         }
         unawaited(_publishDriverLocation(driver));
       }, onError: (Object error) {
-        if (!mounted || _locationStreamErrorShown) return;
-        _locationStreamErrorShown = true;
-        _showLocationMessage('Временно потеряно обновление геолокации. Проверяем соединение с GPS.');
+        if (!mounted) return;
+        _positionSubscription?.cancel();
+        _positionSubscription = null;
+        if (!_locationStreamErrorShown) {
+          _locationStreamErrorShown = true;
+          _showLocationMessage('Временно потеряно обновление геолокации. Повторно подключаем GPS.');
+        }
+        // Stop advertising an old position as live while GPS is unavailable.
+        unawaited(WorkerApi.setDriverOnline(online: false).then<void>((_) {}).catchError((_) {}));
+        _scheduleLocationRetry();
       });
     } catch (e) {
       _showLocationMessage('Не удалось включить геолокацию: $e');
+      _scheduleLocationRetry();
+    } finally {
+      _locationTrackingStarting = false;
     }
   }
 
@@ -2293,6 +2316,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
   void dispose() {
     _positionSubscription?.cancel();
     _heartbeatTimer?.cancel();
+    _locationRetryTimer?.cancel();
     _ordersPollTimer?.cancel();
     // Mark the driver offline when leaving the live driver screen.
     unawaited(WorkerApi.setDriverOnline(online: false).then<void>((_) {}).catchError((_) {}));
