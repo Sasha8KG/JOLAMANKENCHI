@@ -2343,6 +2343,8 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
   List<Map<String, dynamic>> _orders = [];
   List<Map<String, dynamic>> _today = [];
   List<Map<String, dynamic>> _earnings = [];
+  List<Map<String, dynamic>> _closedShifts = [];
+  String _businessDate = '';
   int _cityFareSom = 0;
   int _intercityFareSom = 0;
   bool _working = false;
@@ -2378,6 +2380,9 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
             .whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
         _earnings = (data['earnings'] as List? ?? [])
             .whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+        _closedShifts = (data['closed_shifts'] as List? ?? [])
+            .whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+        _businessDate = (data['business_date'] ?? '').toString();
         _loading = false;
       });
     } catch (e) {
@@ -2609,6 +2614,84 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
     );
   }
 
+  Future<void> _editDriverCommission(Map<String, dynamic> driver) async {
+    final uid = (driver['driver_uid'] ?? '').toString();
+    if (uid.isEmpty) return;
+    final current = (driver['commission_percent'] as num?)?.toInt() ?? 50;
+    final controller = TextEditingController(text: current.toString());
+    final percent = await showDialog<int>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Процент водителя · ${driver['driver_name'] ?? 'Водитель'}'),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            labelText: 'Доля водителя, %',
+            helperText: 'Например, 20 означает: 20% водителю и 80% таксопарку.',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Отмена')),
+          ElevatedButton(onPressed: () {
+            final value = int.tryParse(controller.text.trim());
+            if (value == null || value < 0 || value > 100) return;
+            Navigator.pop(ctx, value);
+          }, child: const Text('Сохранить')),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (percent == null) return;
+    setState(() => _working = true);
+    try {
+      await WorkerApi.setDriverCommission(driverUid: uid, commissionPercent: percent);
+      await _load(showLoading: false);
+      if (mounted) _notice('Установлено: $percent% водителю, ${100 - percent}% таксопарку.');
+    } catch (e) {
+      if (mounted) _notice(e.toString());
+    } finally {
+      if (mounted) setState(() => _working = false);
+    }
+  }
+
+  Future<void> _closeDriverShift(Map<String, dynamic> driver) async {
+    final uid = (driver['driver_uid'] ?? '').toString();
+    final name = (driver['driver_name'] ?? 'Водитель').toString();
+    final earned = (driver['earned_som'] as num?)?.toInt() ?? 0;
+    if (uid.isEmpty || earned <= 0) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Закрыть смену водителя?'),
+        content: Text('Водитель: $name\\nЗаработок за день: $earned сом\\nПроцент водителя: ${driver['commission_percent'] ?? 50}%\\n\\nПосле закрытия сумма и процент сохранятся в истории. Повторно закрыть эту смену будет нельзя.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Закрыть смену')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    setState(() => _working = true);
+    try {
+      final result = await WorkerApi.closeDriverShift(driverUid: uid);
+      final shift = Map<String, dynamic>.from(result['shift'] as Map? ?? {});
+      await _load(showLoading: false);
+      if (mounted) {
+        _notice('Смена закрыта. Водителю: ${shift['driver_share_som'] ?? 0} сом; таксопарку: ${shift['park_share_som'] ?? 0} сом.');
+      }
+    } catch (e) {
+      if (mounted) _notice(e.toString());
+      await _load(showLoading: false);
+    } finally {
+      if (mounted) setState(() => _working = false);
+    }
+  }
+
+  int _sumField(List<Map<String, dynamic>> rows, String field) =>
+      rows.fold<int>(0, (sum, row) => sum + ((row[field] as num?)?.toInt() ?? 0));
+
   void _notice(String message) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
@@ -2626,6 +2709,10 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
     final pending = _drivers.where((d) => (d['review_status'] ?? 'pending') == 'pending' && (d['license_url'] ?? '').toString().isNotEmpty).toList();
     final rejected = _drivers.where((d) => d['review_status'] == 'rejected').toList();
     final activeOrders = _orders.where((o) => o['status'] == 'new').toList();
+    final closedToday = _closedShifts.where((row) => row['shift_date'] == _businessDate).toList();
+    final todayGross = _sumField(_earnings, 'earned_som') + _sumField(closedToday, 'gross_earnings_som');
+    final todayDriverShare = _sumField(_earnings, 'driver_share_som') + _sumField(closedToday, 'driver_share_som');
+    final todayParkShare = _sumField(_earnings, 'park_share_som') + _sumField(closedToday, 'park_share_som');
     return Scaffold(
       backgroundColor: const Color(0xFFF6F2E9),
       appBar: AppBar(
@@ -2745,18 +2832,57 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
                         onPressed: _working ? null : () => _completeTrip(o),
                         icon: const Icon(Icons.check_circle), label: const Text('ЗАВЕРШИТЬ И ЗАПИСАТЬ ОПЛАТУ'))),
                     ])))),
+                _sectionTitle('Финансовый итог за сегодня · $_businessDate', Icons.account_balance_wallet_outlined),
+                Card(child: Padding(padding: const EdgeInsets.all(14), child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('Общий заработок: $todayGross сом', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+                    const SizedBox(height: 5),
+                    Text('Водителям: $todayDriverShare сом'),
+                    Text('Таксопарку: $todayParkShare сом'),
+                    const SizedBox(height: 5),
+                    const Text('Итог включает ещё не закрытые поездки и уже закрытые смены за местный день Кыргызстана (UTC+6).', style: TextStyle(fontSize: 11, color: Colors.black54)),
+                  ],
+                ))),
                 _sectionTitle('Заработок водителей за сегодня', Icons.account_balance_wallet_outlined),
-                if (_earnings.isEmpty) const Text('Завершённых поездок с записанной оплатой сегодня пока нет.'),
-                ..._earnings.map((row) => Card(child: ListTile(
-                  leading: const CircleAvatar(child: Icon(Icons.local_taxi)),
+                if (_earnings.isEmpty) const Text('В базе пока нет водителей.'),
+                ..._earnings.map((row) {
+                  final earned = (row['earned_som'] as num?)?.toInt() ?? 0;
+                  final trips = (row['completed_trips'] as num?)?.toInt() ?? 0;
+                  final percent = (row['commission_percent'] as num?)?.toInt() ?? 50;
+                  final driverShare = (row['driver_share_som'] as num?)?.toInt() ?? 0;
+                  final parkShare = (row['park_share_som'] as num?)?.toInt() ?? 0;
+                  return Card(child: Padding(padding: const EdgeInsets.all(12), child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text((row['driver_name'] ?? 'Водитель').toString(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      Text('Авто: ${row['car_number'] ?? '—'} · Поездок: $trips'),
+                      Text('Общий заработок: $earned сом'),
+                      Text('Доля водителя: $percent% · $driverShare сом'),
+                      Text('Доля таксопарка: ${100 - percent}% · $parkShare сом'),
+                      const SizedBox(height: 8),
+                      Wrap(spacing: 8, runSpacing: 8, children: [
+                        OutlinedButton.icon(
+                          onPressed: _working ? null : () => _editDriverCommission(row),
+                          icon: const Icon(Icons.percent), label: const Text('Изменить процент')),
+                        if (earned > 0) ElevatedButton.icon(
+                          onPressed: _working ? null : () => _closeDriverShift(row),
+                          icon: const Icon(Icons.lock_clock), label: const Text('Закрыть смену')),
+                      ]),
+                    ],
+                  )));
+                }),
+                _sectionTitle('История закрытых смен', Icons.history),
+                if (_closedShifts.isEmpty) const Text('Закрытых смен пока нет.'),
+                ..._closedShifts.take(15).map((row) => Card(child: ListTile(
+                  leading: const Icon(Icons.verified, color: Colors.green),
                   title: Text((row['driver_name'] ?? 'Водитель').toString()),
-                  subtitle: Text('Авто: ${row['car_number'] ?? '—'} · Поездок: ${row['completed_trips'] ?? 0}'),
-                  trailing: Text('${row['earned_som'] ?? 0} сом', style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text('Дата: ${row['shift_date']} · Поездок: ${row['trip_count']} · Процент водителя: ${row['driver_percent']}%'),
+                  trailing: Text('${row['gross_earnings_som']} сом\\nВодителю: ${row['driver_share_som']} сом',
+                    textAlign: TextAlign.end, style: const TextStyle(fontWeight: FontWeight.bold)),
                 ))),
                 _sectionTitle('Статусы заказов за сегодня', Icons.analytics_outlined),
                 ..._today.map((row) => ListTile(dense: true, title: Text((row['status'] ?? '—').toString()), trailing: Text('${row['count'] ?? 0}'))),
                 const SizedBox(height: 20),
-                const Text('Оплата в отчёте — фактическая сумма, которую диспетчер вручную записал при завершении поездки. Это сумма поездки, а не автоматически рассчитанная комиссия водителя.', style: TextStyle(color: Colors.black54)),
+                const Text('Сумма поездки записывается при её завершении. При закрытии смены процент фиксируется в истории: указанная доля принадлежит водителю, остаток — таксопарку.', style: TextStyle(color: Colors.black54)),
               ],
             )),
       floatingActionButton: _working ? const FloatingActionButton(onPressed: null, child: CircularProgressIndicator()) : null,
