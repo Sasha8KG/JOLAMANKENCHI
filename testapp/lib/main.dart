@@ -2445,6 +2445,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
         DateTime.now().isBefore(_driverRouteRetryAfter!)) return;
     _driverRouteKey = routeKey;
     _driverRouteLoading = true;
+    var refreshAfterRoute = false;
     try {
       final route = await RouteService.drivingRoute(driverPoint, pickup);
       if (!mounted) return;
@@ -2453,30 +2454,45 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
           ? ''
           : _serverOrderId(_serverAssignedOrders.first);
       if (latestAssignedId != id) return;
+      final latestPoint = TaxiParkState.currentLoggedInDriver!.currentLocation;
+      final latestRouteKey =
+          '$id:${pickup.latitude.toStringAsFixed(5)},${pickup.longitude.toStringAsFixed(5)}:${latestPoint.latitude.toStringAsFixed(3)},${latestPoint.longitude.toStringAsFixed(3)}';
+      if (latestRouteKey != routeKey) {
+        refreshAfterRoute = true;
+        return;
+      }
       setState(() {
         _driverApproachRoute = route;
         _driverRouteOrderId = id;
         _driverRouteError = null;
         _driverRouteRetryAfter = null;
       });
-      _focusDriverMapOnRoute(driver.currentLocation, pickup);
+      _focusDriverMapOnRoute(latestPoint, pickup);
     } catch (e) {
       if (!mounted || TaxiParkState.currentLoggedInDriver?.id != driver.id) return;
       final latestAssignedId = _serverAssignedOrders.isEmpty
           ? ''
           : _serverOrderId(_serverAssignedOrders.first);
       if (latestAssignedId != id) return;
+      final latestPoint = TaxiParkState.currentLoggedInDriver!.currentLocation;
+      final latestRouteKey =
+          '$id:${pickup.latitude.toStringAsFixed(5)},${pickup.longitude.toStringAsFixed(5)}:${latestPoint.latitude.toStringAsFixed(3)},${latestPoint.longitude.toStringAsFixed(3)}';
+      if (latestRouteKey != routeKey) {
+        refreshAfterRoute = true;
+        return;
+      }
       setState(() {
         _driverApproachRoute = null;
         _driverRouteOrderId = id;
         _driverRouteError = e.toString();
         _driverRouteRetryAfter = DateTime.now().add(const Duration(seconds: 30));
       });
-      // Even if the public road-routing service is temporarily unavailable,
-      // keep both the driver's position and the passenger pickup visible.
-      _focusDriverMapOnRoute(driver.currentLocation, pickup);
+      _focusDriverMapOnRoute(latestPoint, pickup);
     } finally {
       _driverRouteLoading = false;
+      if (refreshAfterRoute && mounted) {
+        unawaited(_loadDriverApproachRoute());
+      }
     }
   }
 
