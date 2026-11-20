@@ -1917,6 +1917,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
   List<Map<String, dynamic>> _serverOpenOrders = [];
   List<Map<String, dynamic>> _serverAssignedOrders = [];
   final Set<String> _respondingOrderIds = <String>{};
+  final Set<String> _orderActionIds = <String>{};
   RoadRoute? _driverApproachRoute;
   bool _driverRouteLoading = false;
   String? _driverRouteOrderId;
@@ -1987,20 +1988,24 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
 
   Future<void> _markAssignedOrderArrived(Map<String, dynamic> order) async {
     final id = (order['id'] ?? order['firebase_order_id'] ?? '').toString();
-    if (id.isEmpty) return;
+    if (id.isEmpty || _orderActionIds.contains(id)) return;
+    setState(() => _orderActionIds.add(id));
     try {
       await WorkerApi.markOrderArrived(id);
       if (mounted) _showLocationMessage('Отмечено: вы прибыли к пассажиру.');
-      await _pollServerOrders();
     } on WorkerApiException catch (e) {
       if (mounted) _showLocationMessage(e.message);
-      await _pollServerOrders();
+    } catch (_) {
+      if (mounted) _showLocationMessage('Не удалось отметить прибытие из-за ошибки сети. Повторите попытку.');
+    } finally {
+      if (mounted) setState(() => _orderActionIds.remove(id));
+      if (mounted) await _pollServerOrders();
     }
   }
 
   Future<void> _cancelAssignedOrder(Map<String, dynamic> order) async {
     final id = (order['id'] ?? order['firebase_order_id'] ?? '').toString();
-    if (id.isEmpty) return;
+    if (id.isEmpty || _orderActionIds.contains(id)) return;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -2012,7 +2017,8 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
         ],
       ),
     );
-    if (confirm != true || !mounted) return;
+    if (confirm != true || !mounted || _orderActionIds.contains(id)) return;
+    setState(() => _orderActionIds.add(id));
     try {
       final result = await WorkerApi.cancelOrder(orderId: id, role: 'driver');
       if (mounted) {
@@ -2020,10 +2026,13 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
           content: Text((result['message'] ?? 'Вы отказались от заказа.').toString()),
         ));
       }
-      await _pollServerOrders();
     } on WorkerApiException catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
-      await _pollServerOrders();
+    } catch (_) {
+      if (mounted) _showLocationMessage('Не удалось отказаться от заказа из-за ошибки сети. Проверьте связь и обновите список.');
+    } finally {
+      if (mounted) setState(() => _orderActionIds.remove(id));
+      if (mounted) await _pollServerOrders();
     }
   }
 
@@ -2299,12 +2308,12 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 TextButton.icon(
-                                  onPressed: () => _markAssignedOrderArrived(item),
+                                  onPressed: _orderActionIds.contains((item['id'] ?? item['firebase_order_id'] ?? '').toString()) ? null : () => _markAssignedOrderArrived(item),
                                   icon: const Icon(Icons.check_circle, color: Colors.green),
                                   label: const Text('Я ПРИБЫЛ', style: TextStyle(color: Colors.green)),
                                 ),
                                 TextButton.icon(
-                                  onPressed: () => _cancelAssignedOrder(item),
+                                  onPressed: _orderActionIds.contains((item['id'] ?? item['firebase_order_id'] ?? '').toString()) ? null : () => _cancelAssignedOrder(item),
                                   icon: const Icon(Icons.close, color: Colors.red),
                                   label: const Text('ОТКАЗ', style: TextStyle(color: Colors.red)),
                                 ),
