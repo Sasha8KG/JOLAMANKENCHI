@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -41,7 +43,7 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
   }
 
   String _cleanText(String value) =>
-      value.trim().replaceAll(RegExp(r'\\s+'), ' ');
+      value.trim().replaceAll(RegExp(r'\s+'), ' ');
 
   void _ensureActiveAccount(String uid) {
     final activeUid = FirebaseAuth.instance.currentUser?.uid;
@@ -130,7 +132,7 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
       final size = await files[i].length().timeout(const Duration(seconds: 15));
       if (!mounted) return false;
       if (size <= 0 || size > maxPhotoBytes) {
-        _message('Фото ' + (i + 1).toString() + ' пустое или больше 8 МБ. Выберите фотографию меньшего размера.');
+        _message('Фото ${i + 1} пустое или больше 8 МБ. Выберите фотографию меньшего размера.');
         return false;
       }
       totalBytes += size;
