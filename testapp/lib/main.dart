@@ -1113,6 +1113,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
   bool _routeLoading = false;
   String? _routeError;
   String? _lastRouteKey;
+  DateTime? _routeRetryAfter;
   final MapController _clientMapController = MapController();
 
   @override
@@ -1226,6 +1227,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
         order.status != 'accepted') return;
     final key = '$orderId:$driverId:${driverPoint.latitude.toStringAsFixed(3)},${driverPoint.longitude.toStringAsFixed(3)}';
     if (_routeLoading || _lastRouteKey == key) return;
+    if (_routeRetryAfter != null && DateTime.now().isBefore(_routeRetryAfter!)) return;
     _lastRouteKey = key;
     if (mounted) setState(() { _routeLoading = true; _routeError = null; });
     try {
@@ -1235,14 +1237,21 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
       if (latestOrder?.id != orderId ||
           latestOrder?.assignedDriver?.id != driverId ||
           !['accepted', 'arrived'].contains(latestOrder?.status)) return;
-      setState(() => _approachRoute = route);
+      setState(() {
+        _approachRoute = route;
+        _routeRetryAfter = null;
+      });
     } catch (e) {
       if (!mounted) return;
       final latestOrder = TaxiParkState.activeOrder;
       if (latestOrder?.id != orderId ||
           latestOrder?.assignedDriver?.id != driverId ||
           !['accepted', 'arrived'].contains(latestOrder?.status)) return;
-      setState(() { _approachRoute = null; _routeError = e.toString(); });
+      setState(() {
+        _approachRoute = null;
+        _routeError = e.toString();
+        _routeRetryAfter = DateTime.now().add(const Duration(seconds: 30));
+      });
     } finally {
       if (mounted) setState(() => _routeLoading = false);
     }
