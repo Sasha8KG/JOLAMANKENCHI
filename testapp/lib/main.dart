@@ -2220,6 +2220,12 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
     }
   }
 
+  void _stopLocationHeartbeat() {
+    // A heartbeat is valid only while a live GPS stream is active.
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
+  }
+
   void _scheduleLocationRetry() {
     if (!mounted || _locationRetryTimer?.isActive == true) return;
     _locationRetryTimer = Timer(const Duration(seconds: 20), () {
@@ -2261,9 +2267,11 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
       await _publishDriverLocation(driver);
       if (!mounted) return;
 
-      // Refresh the server heartbeat even when the car is standing still.
+      // Avoid duplicate timers if tracking is restarted after a GPS interruption.
+      _stopLocationHeartbeat();
+      // Refresh the server heartbeat only while the GPS stream remains active.
       _heartbeatTimer = Timer.periodic(const Duration(seconds: 30), (_) {
-        if (!mounted) return;
+        if (!mounted || _positionSubscription == null) return;
         unawaited(_publishDriverLocation(driver));
       });
       _positionSubscription = Geolocator.getPositionStream(
@@ -2291,6 +2299,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
         if (!mounted) return;
         _positionSubscription?.cancel();
         _positionSubscription = null;
+        _stopLocationHeartbeat();
         if (!_locationStreamErrorShown) {
           _locationStreamErrorShown = true;
           _showLocationMessage('Временно потеряно обновление геолокации. Повторно подключаем GPS.');
@@ -2300,6 +2309,9 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
         _scheduleLocationRetry();
       });
     } catch (e) {
+      // Do not leave the driver advertised as available after GPS startup failed.
+      _stopLocationHeartbeat();
+      unawaited(WorkerApi.setDriverOnline(online: false).then<void>((_) {}).catchError((_) {}));
       _showLocationMessage('Не удалось включить геолокацию: $e');
       _scheduleLocationRetry();
     } finally {
