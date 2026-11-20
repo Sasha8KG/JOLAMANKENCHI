@@ -12,19 +12,63 @@ class FirebaseService {
 
   static Stream<User?> get authStateChanges => auth.authStateChanges();
 
-  /// Accepts Kyrgyz numbers in local (0700123456) or international
-  /// (+996700123456) form. Spaces, brackets and hyphens are ignored.
-  static bool isValidKgPhone(String phone) {
-    final digits = phone.replaceAll(RegExp(r'\D'), '');
-    return (digits.length == 10 && digits.startsWith('0')) ||
-        (digits.length == 12 && digits.startsWith('996'));
+  static String _phoneDigits(String phone) {
+    final digits = phone.trim().replaceAll(RegExp(r'\\D'), '');
+    if (digits.length == 10 && digits.startsWith('0')) return digits;
+    if (digits.length == 12 && digits.startsWith('996')) return digits;
+    return '';
   }
 
+  static String _normalizeWhitespace(String value) =>
+      value.trim().replaceAll(RegExp(r'\\s+'), ' ');
+
+  static String _validatedUid(String uid) {
+    final value = uid.trim();
+    if (value.isEmpty ||
+        value.length > 128 ||
+        value.contains('/') ||
+        value.contains('\\\\') ||
+        RegExp(r'[\\x00-\\x1F\\x7F]').hasMatch(value)) {
+      throw ArgumentError.value(uid, 'uid', 'Некорректный UID пользователя.');
+    }
+    return value;
+  }
+
+  static String _validatedPassword(String password) {
+    if (password.isEmpty || password.length > 4096) {
+      throw ArgumentError.value(password, 'password', 'Введите корректный пароль.');
+    }
+    return password;
+  }
+
+  static String _validatedEmail(String email) {
+    final value = email.trim();
+    if (value.isEmpty ||
+        value.length > 254 ||
+        RegExp(r'[\\s\\x00-\\x1F\\x7F]').hasMatch(value) ||
+        !value.contains('@')) {
+      throw ArgumentError.value(email, 'email', 'Введите корректный адрес электронной почты.');
+    }
+    return value;
+  }
+
+  /// Accepts Kyrgyz numbers in local (0700123456) or international
+  /// (+996700123456) form. Spaces, brackets and hyphens are ignored.
+  static bool isValidKgPhone(String phone) => _phoneDigits(phone).isNotEmpty;
+
   static String phoneLoginEmail(String phone) {
-    var digits = phone.replaceAll(RegExp(r'\D'), '');
-    if (digits.startsWith('0')) digits = '996${digits.substring(1)}';
-    if (!digits.startsWith('996')) digits = '996$digits';
-    return 'kg${digits}@jolamankenchi.app';
+    final digits = _phoneDigits(phone);
+    if (digits.isEmpty) {
+      throw ArgumentError.value(
+        phone,
+        'phone',
+        'Введите номер Кыргызстана, например 0700123456.',
+      );
+    }
+    final international = digits.startsWith('0')
+        ? '996${digits.substring(1)}'
+        : digits;
+    return 'kg${international}@jolamankenchi.app';
   }
 
   static Future<UserCredential> signIn({
@@ -32,8 +76,8 @@ class FirebaseService {
     required String password,
   }) {
     return auth.signInWithEmailAndPassword(
-      email: email.trim(),
-      password: password,
+      email: _validatedEmail(email),
+      password: _validatedPassword(password),
     );
   }
 
@@ -49,7 +93,7 @@ class FirebaseService {
   }) =>
       auth.createUserWithEmailAndPassword(
         email: phoneLoginEmail(phone),
-        password: password,
+        password: _validatedPassword(password),
       );
 
   static Future<UserCredential> register({
@@ -57,8 +101,8 @@ class FirebaseService {
     required String password,
   }) {
     return auth.createUserWithEmailAndPassword(
-      email: email.trim(),
-      password: password,
+      email: _validatedEmail(email),
+      password: _validatedPassword(password),
     );
   }
 
@@ -71,12 +115,36 @@ class FirebaseService {
     required String name,
     String phone = '',
   }) async {
-    await db.collection('appUsers').doc(uid).set({
-      'uid': uid,
-      'email': email.trim(),
-      'role': role,
-      'name': name.trim(),
-      'phone': phone.trim(),
+    final normalizedUid = _validatedUid(uid);
+    final normalizedEmail = _validatedEmail(email);
+    final normalizedRole = role.trim().toLowerCase();
+    final normalizedName = _normalizeWhitespace(name);
+    final normalizedPhone = phone.trim();
+
+    if (normalizedRole.isEmpty ||
+        normalizedRole.length > 32 ||
+        RegExp(r'[\\x00-\\x1F\\x7F]').hasMatch(normalizedRole)) {
+      throw ArgumentError.value(role, 'role', 'Некорректная роль пользователя.');
+    }
+    if (normalizedName.isEmpty ||
+        normalizedName.length > 80 ||
+        RegExp(r'[\\x00-\\x1F\\x7F]').hasMatch(normalizedName)) {
+      throw ArgumentError.value(name, 'name', 'Проверьте имя пользователя.');
+    }
+    if (normalizedPhone.isNotEmpty && !isValidKgPhone(normalizedPhone)) {
+      throw ArgumentError.value(
+        phone,
+        'phone',
+        'Введите номер Кыргызстана, например 0700123456.',
+      );
+    }
+
+    await db.collection('appUsers').doc(normalizedUid).set({
+      'uid': normalizedUid,
+      'email': normalizedEmail,
+      'role': normalizedRole,
+      'name': normalizedName,
+      'phone': normalizedPhone,
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }
