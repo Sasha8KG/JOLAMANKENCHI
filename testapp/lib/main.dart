@@ -224,6 +224,9 @@ class SessionGate extends StatefulWidget {
 
 class _SessionGateState extends State<SessionGate> {
   Widget? _destination;
+  bool _restoreInProgress = false;
+  String? _restoreError;
+  int _restoreAttempt = 0;
 
   @override
   void initState() {
@@ -232,16 +235,51 @@ class _SessionGateState extends State<SessionGate> {
   }
 
   Future<void> _restoreSavedSession() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      if (mounted) setState(() => _destination = const RoleSelectionScreen());
-      return;
+    if (_restoreInProgress || !mounted) return;
+    _restoreInProgress = true;
+    if (mounted) {
+      setState(() {
+        _restoreError = null;
+        _destination = null;
+      });
     }
 
     try {
-      // Firebase keeps the authenticated account between app launches.
-      // Restore the matching taxi role from the secured Worker profile too.
-      final access = await WorkerApi.checkAuth();
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        if (mounted) {
+          setState(() => _destination = const RoleSelectionScreen());
+        }
+        return;
+      }
+
+      // Retry temporary network failures without discarding Firebase auth.
+      Map<String, dynamic>? access;
+      Object? lastError;
+      for (var attempt = 0; attempt < 3; attempt++) {
+        try {
+          access = await WorkerApi.checkAuth();
+          lastError = null;
+          break;
+        } catch (error) {
+          lastError = error;
+          if (attempt < 2) {
+            await Future<void>.delayed(Duration(seconds: attempt + 1));
+            if (!mounted) return;
+            user = FirebaseAuth.instance.currentUser;
+            if (user == null) {
+              if (mounted) {
+                setState(() => _destination = const RoleSelectionScreen());
+              }
+              return;
+            }
+          }
+        }
+      }
+      if (lastError != null || access == null) {
+        throw lastError ?? StateError('Не удалось проверить авторизацию');
+      }
+
       if (access['dispatcher'] == true) {
         if (mounted) setState(() => _destination = const DispatcherScreen());
         return;
@@ -255,6 +293,7 @@ class _SessionGateState extends State<SessionGate> {
           final approval = data['approved'];
           final approved = approval == true ||
               approval == 1 ||
+              approval.toString().toLowerCase() == 'true' ||
               approval.toString() == '1';
 
           if (!approved) {
@@ -266,7 +305,7 @@ class _SessionGateState extends State<SessionGate> {
           }
 
           TaxiParkState.currentLoggedInDriver = DriverModel(
-            id: (data['uid'] ?? user.uid).toString(),
+            id: (data['uid'] ?? user!.uid).toString(),
             name: (data['name'] ?? 'Водитель').toString(),
             phone: (data['phone'] ?? '').toString(),
             carBrand: (data['car_model'] ?? '').toString(),
@@ -275,22 +314,25 @@ class _SessionGateState extends State<SessionGate> {
             pinCode: '',
             currentLocation: TaxiParkState.sulyuktaCenter,
             isApproved: true,
-            isOnline: data['online'] == true,
+            isOnline: data['online'] == true ||
+                data['online'] == 1 ||
+                data['online'].toString().toLowerCase() == 'true',
           );
           if (mounted) {
             setState(() => _destination = const DriverMapScreen());
           }
           return;
         }
+        throw const FormatException('Профиль водителя получен в неверном формате');
       }
-      // Any authenticated account that is neither dispatcher nor driver
-      // is a passenger account. Rebuild its lightweight in-memory profile so
-      // the passenger returns directly to the booking map after app restart.
-      final loginEmail = (user.email ?? '').toLowerCase();
+
+      // Restore passenger profile for accounts without a driver/dispatcher role.
+      final loginEmail = (user!.email ?? '').trim().toLowerCase();
       var passengerPhone = user.phoneNumber ?? '';
-      if (loginEmail.startsWith('kg996') &&
-          loginEmail.endsWith('@jolamankenchi.app')) {
-        final nationalNumber = loginEmail.substring(5, loginEmail.length - '@jolamankenchi.app'.length);
+      const emailSuffix = '@jolamankenchi.app';
+      if (loginEmail.startsWith('kg996') && loginEmail.endsWith(emailSuffix)) {
+        final nationalNumber =
+            loginEmail.substring(5, loginEmail.length - emailSuffix.length);
         passengerPhone = '0$nationalNumber';
       }
       TaxiParkState.currentLoggedInClient = ClientModel(
@@ -304,31 +346,65 @@ class _SessionGateState extends State<SessionGate> {
       if (mounted) {
         setState(() => _destination = const ClientMapScreen());
       }
-      return;
-
-    } catch (_) {
-      // Keep the Firebase session intact if the network/Worker is temporarily
-      // unavailable. The user can retry from the appropriate role entry screen.
+    } catch (error) {
+      // A temporary Worker/network error must not send an authenticated user
+      // back to registration or clear the saved Firebase session.
+      if (mounted) {
+        setState(() {
+          _restoreError =
+              'Не удалось восстановить вход. Проверьте интернет и повторите попытку.';
+          _destination = null;
+        });
+      }
+    } finally {
+      _restoreInProgress = false;
     }
-
-    if (mounted) setState(() => _destination = const RoleSelectionScreen());
   }
 
   @override
   Widget build(BuildContext context) {
-    return _destination ??
-        const Scaffold(
-          body: Center(
+    if (_destination != null) return _destination!;
+    if (_restoreError != null) {
+      return Scaffold(
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                CircularProgressIndicator(),
-                SizedBox(height: 14),
-                Text('Восстанавливаем сохранённый вход…'),
+                const Icon(Icons.cloud_off, size: 46, color: Colors.orange),
+                const SizedBox(height: 14),
+                const Text(
+                  'Не удалось восстановить сохранённый вход',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 8),
+                Text(_restoreError!, textAlign: TextAlign.center),
+                const SizedBox(height: 18),
+                FilledButton.icon(
+                  onPressed: _restoreInProgress ? null : _restoreSavedSession,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Повторить'),
+                ),
               ],
             ),
           ),
-        );
+        ),
+      );
+    }
+    return const Scaffold(
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 14),
+            Text('Восстанавливаем сохранённый вход…'),
+          ],
+        ),
+      ),
+    );
   }
 }
 
