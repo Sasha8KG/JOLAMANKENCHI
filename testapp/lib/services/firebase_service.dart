@@ -15,13 +15,13 @@ class FirebaseService {
   /// Accepts Kyrgyz numbers in local (0700123456) or international
   /// (+996700123456) form. Spaces, brackets and hyphens are ignored.
   static bool isValidKgPhone(String phone) {
-    final digits = phone.replaceAll(RegExp(r'\\D'), '');
+    final digits = phone.replaceAll(RegExp(r'\D'), '');
     return (digits.length == 10 && digits.startsWith('0')) ||
         (digits.length == 12 && digits.startsWith('996'));
   }
 
   static String phoneLoginEmail(String phone) {
-    var digits = phone.replaceAll(RegExp(r'\\D'), '');
+    var digits = phone.replaceAll(RegExp(r'\D'), '');
     if (digits.startsWith('0')) digits = '996${digits.substring(1)}';
     if (!digits.startsWith('996')) digits = '996$digits';
     return 'kg${digits}@jolamankenchi.app';
