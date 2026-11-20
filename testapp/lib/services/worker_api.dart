@@ -401,7 +401,7 @@ class WorkerApi {
             value.length > 500 || _hasControlCharacters(value) ||
             value.contains('..') || value.contains('?') ||
             value.contains('#') || value.contains('\\'))) {
-      throw const WorkerApiException('Не все документы водителя подготовлены корректно.');      throw const WorkerApiException('Не все документы водителя подготовлены корректно.');
+      throw const WorkerApiException('Не все документы водителя подготовлены корректно.');
     }
     return _request('/drivers/documents', method: 'POST', body: {
       'license_url': license,
@@ -441,7 +441,7 @@ class WorkerApi {
       throw const WorkerApiException('В заказе отсутствуют данные.');
     }
     final orderId = _validatedOrderId((order['id'] ?? '').toString());
-    final pickup =    final pickup = (order['pickup'] ?? '').toString().trim();
+    final pickup = (order['pickup'] ?? '').toString().trim();
     if (pickup.isEmpty || pickup.length > 200 || _hasControlCharacters(pickup)) {
       throw const WorkerApiException('Укажите корректное место подачи автомобиля.');
     }
@@ -462,7 +462,7 @@ class WorkerApi {
       ..['id'] = orderId
       ..['pickup'] = pickup
       ..['destination'] = destination;
-    return _request('/orders/publish', method: 'POST', body: normalizedOrder);    return _request('/orders/publish', method: 'POST', body: order);
+    return _request('/orders/publish', method: 'POST', body: normalizedOrder);
   }
 
   static Future<Map<String, dynamic>> syncOrders(
