@@ -512,8 +512,21 @@ export default {
       if (url.pathname === "/drivers/online" && request.method === "POST") {
         const auth = await requireApprovedDriver(request, env);
         const b = await request.json();
+        if (typeof b.online !== "boolean") {
+          return response({ status: "error", message: "Укажите, выходит ли водитель на линию" }, 400);
+        }
+        const hasLatitude = b.latitude !== undefined && b.latitude !== null;
+        const hasLongitude = b.longitude !== undefined && b.longitude !== null;
+        if (hasLatitude !== hasLongitude || (b.online && (!hasLatitude || !hasLongitude))) {
+          return response({ status: "error", message: "Для выхода на линию необходимы обе координаты GPS" }, 400);
+        }
+        if ((hasLatitude && (typeof b.latitude !== "number" || !Number.isFinite(b.latitude) || b.latitude < -90 || b.latitude > 90)) ||
+            (hasLongitude && (typeof b.longitude !== "number" || !Number.isFinite(b.longitude) || b.longitude < -180 || b.longitude > 180))) {
+          return response({ status: "error", message: "Получены неверные координаты GPS" }, 400);
+        }
         const online = b.online ? 1 : 0;
-        const lat = num(b.latitude), lng = num(b.longitude);
+        const lat = hasLatitude ? b.latitude : null;
+        const lng = hasLongitude ? b.longitude : null;
         await env.DB.prepare(`UPDATE drivers SET online=?, latitude=COALESCE(?,latitude), longitude=COALESCE(?,longitude),
           location_updated_at=CASE WHEN ? IS NOT NULL AND ? IS NOT NULL THEN unixepoch() ELSE location_updated_at END,
           updated_at=unixepoch() WHERE uid=?`)
