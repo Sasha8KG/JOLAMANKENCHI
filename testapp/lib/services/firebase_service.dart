@@ -12,23 +12,19 @@ class FirebaseService {
 
   static Stream<User?> get authStateChanges => auth.authStateChanges();
 
-  static String _phoneDigits(String phone) {
-    final digits = phone.trim().replaceAll(RegExp(r'\\D'), '');
-    if (digits.length == 10 && digits.startsWith('0')) return digits;
-    if (digits.length == 12 && digits.startsWith('996')) return digits;
-    return '';
-  }
+  static bool _hasControlCharacters(String value) =>
+      value.codeUnits.any((unit) => unit < 32 || unit == 127);
 
-  static String _normalizeWhitespace(String value) =>
-      value.trim().replaceAll(RegExp(r'\\s+'), ' ');
+  static String _phoneDigits(String phone) =>
+      phone.trim().replaceAll(RegExp('[^0-9]'), '');
 
   static String _validatedUid(String uid) {
     final value = uid.trim();
     if (value.isEmpty ||
         value.length > 128 ||
         value.contains('/') ||
-        value.contains('\\\\') ||
-        RegExp(r'[\\x00-\\x1F\\x7F]').hasMatch(value)) {
+        value.codeUnits.contains(92) ||
+        _hasControlCharacters(value)) {
       throw ArgumentError.value(uid, 'uid', 'Некорректный UID пользователя.');
     }
     return value;
@@ -45,29 +41,37 @@ class FirebaseService {
     final value = email.trim();
     if (value.isEmpty ||
         value.length > 254 ||
-        RegExp(r'[\\s\\x00-\\x1F\\x7F]').hasMatch(value) ||
+        value.codeUnits.any((unit) => unit <= 32 || unit == 127) ||
         !value.contains('@')) {
-      throw ArgumentError.value(email, 'email', 'Введите корректный адрес электронной почты.');
+      throw ArgumentError.value(
+        email,
+        'email',
+        'Введите корректный адрес электронной почты.',
+      );
     }
     return value;
   }
 
   /// Accepts Kyrgyz numbers in local (0700123456) or international
   /// (+996700123456) form. Spaces, brackets and hyphens are ignored.
-  static bool isValidKgPhone(String phone) => _phoneDigits(phone).isNotEmpty;
+  static bool isValidKgPhone(String phone) {
+    final digits = _phoneDigits(phone);
+    return (digits.length == 10 && digits.startsWith('0')) ||
+        (digits.length == 12 && digits.startsWith('996'));
+  }
 
   static String phoneLoginEmail(String phone) {
     final digits = _phoneDigits(phone);
-    if (digits.isEmpty) {
+    final isLocal = digits.length == 10 && digits.startsWith('0');
+    final isInternational = digits.length == 12 && digits.startsWith('996');
+    if (!isLocal && !isInternational) {
       throw ArgumentError.value(
         phone,
         'phone',
         'Введите номер Кыргызстана, например 0700123456.',
       );
     }
-    final international = digits.startsWith('0')
-        ? '996${digits.substring(1)}'
-        : digits;
+    final international = isLocal ? '996${digits.substring(1)}' : digits;
     return 'kg${international}@jolamankenchi.app';
   }
 
@@ -118,17 +122,17 @@ class FirebaseService {
     final normalizedUid = _validatedUid(uid);
     final normalizedEmail = _validatedEmail(email);
     final normalizedRole = role.trim().toLowerCase();
-    final normalizedName = _normalizeWhitespace(name);
+    final normalizedName = name.trim().replaceAll(RegExp('[[:space:]]+'), ' ');
     final normalizedPhone = phone.trim();
 
     if (normalizedRole.isEmpty ||
         normalizedRole.length > 32 ||
-        RegExp(r'[\\x00-\\x1F\\x7F]').hasMatch(normalizedRole)) {
+        _hasControlCharacters(normalizedRole)) {
       throw ArgumentError.value(role, 'role', 'Некорректная роль пользователя.');
     }
     if (normalizedName.isEmpty ||
         normalizedName.length > 80 ||
-        RegExp(r'[\\x00-\\x1F\\x7F]').hasMatch(normalizedName)) {
+        _hasControlCharacters(normalizedName)) {
       throw ArgumentError.value(name, 'name', 'Проверьте имя пользователя.');
     }
     if (normalizedPhone.isNotEmpty && !isValidKgPhone(normalizedPhone)) {
