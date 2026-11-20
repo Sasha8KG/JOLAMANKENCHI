@@ -430,7 +430,7 @@ class SulyuktaTaxiApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'ЖОЛ АМАН КЕНЧИ такси',
+      title: '«ЖОЛ АМАН КЕНЧИ» такси',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
