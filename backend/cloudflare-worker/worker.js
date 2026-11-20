@@ -519,10 +519,31 @@ export default {
       if (url.pathname === "/orders/publish" && request.method === "POST") {
         const auth = await verifyFirebaseUser(request);
         const b = await request.json();
-        if (!b.id) return response({ status: "error", message: "Не указан ID заявки" }, 400);
-        if (b.customerUid && b.customerUid !== auth.user.localId) return response({ status: "error", message: "UID клиента не совпадает" }, 403);
-        await syncOrder(env, { ...b, customerUid: auth.user.localId, status: "new" });
-        return response({ status: "ok", published: true });
+        const orderId = String(b.id || "").trim();
+        if (!/^[A-Za-z0-9_-]{1,128}$/.test(orderId)) {
+          return response({ status: "error", message: "Укажите корректный номер заявки" }, 400);
+        }
+        if (b.customerUid && b.customerUid !== auth.user.localId) {
+          return response({ status: "error", message: "UID клиента не совпадает" }, 403);
+        }
+        // Publishing is idempotent: a retry must never reset an assigned or completed order.
+        await env.DB.prepare(`INSERT INTO orders
+          (id, firebase_order_id, customer_uid, pickup_address, pickup_lat, pickup_lng, destination_address, destination_lat, destination_lng, passenger_count, payment_method, tariff_type, comment, status, assigned_driver_uid)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'new', NULL)
+          ON CONFLICT DO NOTHING`)
+          .bind(orderId, orderId, auth.user.localId, b.pickup || "", num(b.pickupLat), num(b.pickupLng),
+            b.destination || b.dest || "", num(b.destinationLat), num(b.destinationLng),
+            Number(b.people || 1), b.payment || "", b.tariff || "", b.comment || "").run();
+        const existing = await env.DB.prepare(
+          "SELECT customer_uid FROM orders WHERE firebase_order_id=?"
+        ).bind(orderId).first();
+        if (!existing) {
+          return response({ status: "error", message: "Не удалось сохранить заявку с таким номером" }, 409);
+        }
+        if (existing.customer_uid !== auth.user.localId) {
+          return response({ status: "error", message: "Заявка с таким номером уже принадлежит другому клиенту" }, 403);
+        }
+        return response({ status: "ok", published: true, already_published: true });
       }
 
       if (url.pathname === "/orders/sync" && request.method === "POST") {
