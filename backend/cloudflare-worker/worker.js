@@ -648,13 +648,16 @@ export default {
       }
 
       if (url.pathname === "/orders/cancel" && request.method === "POST") {
-        const auth = await verifyFirebaseUser(request);
         const b = await request.json();
         const orderId = String(b.order_id || "");
         const role = String(b.role || "");
         if (!orderId || !["customer", "driver"].includes(role)) {
           return response({ status: "error", message: "Не указан заказ или сторона отказа" }, 400);
         }
+        // Re-check dispatcher approval for driver-side cancellation; offline drivers may still refuse an assigned trip.
+        const auth = role === "driver"
+          ? await requireApprovedDriver(request, env)
+          : await verifyFirebaseUser(request);
         const order = await env.DB.prepare("SELECT * FROM orders WHERE id=?").bind(orderId).first();
         if (!order) return response({ status: "error", message: "Заказ не найден" }, 404);
         if (role === "customer") {
