@@ -1216,17 +1216,28 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
 
   Future<void> _loadApproachRoute(LatLng driverPoint) async {
     // Refresh the road route after roughly 100 m of movement, not every GPS tick.
-    final orderId = TaxiParkState.activeOrder?.id ?? 'no-order';
-    final key = '$orderId:${driverPoint.latitude.toStringAsFixed(3)},${driverPoint.longitude.toStringAsFixed(3)}';
+    final order = TaxiParkState.activeOrder;
+    final driverId = order?.assignedDriver?.id;
+    final orderId = order?.id ?? '';
+    if (order == null || driverId == null || orderId.isEmpty) return;
+    final key = '$orderId:$driverId:${driverPoint.latitude.toStringAsFixed(3)},${driverPoint.longitude.toStringAsFixed(3)}';
     if (_routeLoading || _lastRouteKey == key) return;
     _lastRouteKey = key;
     if (mounted) setState(() { _routeLoading = true; _routeError = null; });
     try {
       final route = await RouteService.drivingRoute(driverPoint, _pickupPoint);
       if (!mounted) return;
+      final latestOrder = TaxiParkState.activeOrder;
+      if (latestOrder?.id != orderId ||
+          latestOrder?.assignedDriver?.id != driverId ||
+          !['accepted', 'arrived'].contains(latestOrder?.status)) return;
       setState(() => _approachRoute = route);
     } catch (e) {
       if (!mounted) return;
+      final latestOrder = TaxiParkState.activeOrder;
+      if (latestOrder?.id != orderId ||
+          latestOrder?.assignedDriver?.id != driverId ||
+          !['accepted', 'arrived'].contains(latestOrder?.status)) return;
       setState(() { _approachRoute = null; _routeError = e.toString(); });
     } finally {
       if (mounted) setState(() => _routeLoading = false);
@@ -1243,8 +1254,16 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
         if (status == 'new') {
           order.status = 'searching';
           order.assignedDriver = null;
+          _approachRoute = null;
+          _lastRouteKey = null;
+          _routeError = null;
         } else if (status == 'driver_assigned' || status == 'arrived') {
           order.status = status == 'arrived' ? 'arrived' : 'accepted';
+          if (status == 'arrived') {
+            _approachRoute = null;
+            _lastRouteKey = null;
+            _routeError = null;
+          }
           final raw = data['driver'];
           if (raw is Map) {
             final lat = double.tryParse((raw['latitude'] ?? '').toString()) ?? order.pickupPoint.latitude;
@@ -1268,9 +1287,17 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
           // Continue polling while the taxi is driving so its live GPS marker moves.
         } else if (status == 'completed') {
           order.status = 'completed';
+          order.assignedDriver = null;
+          _approachRoute = null;
+          _lastRouteKey = null;
+          _routeError = null;
           _orderStatusTimer?.cancel();
         } else if (status == 'cancelled_by_customer') {
           order.status = 'cancelled';
+          order.assignedDriver = null;
+          _approachRoute = null;
+          _lastRouteKey = null;
+          _routeError = null;
           _orderStatusTimer?.cancel();
         }
       });
@@ -1301,7 +1328,13 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
     try {
       await WorkerApi.cancelOrder(orderId: order.id, role: 'customer');
       _orderStatusTimer?.cancel();
-      if (mounted) setState(() => order.status = 'cancelled');
+      if (mounted) setState(() {
+        order.status = 'cancelled';
+        order.assignedDriver = null;
+        _approachRoute = null;
+        _lastRouteKey = null;
+        _routeError = null;
+      });
     } on WorkerApiException catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
     }
@@ -1311,6 +1344,10 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
     _orderStatusTimer?.cancel();
     setState(() {
       TaxiParkState.activeOrder = null;
+      _approachRoute = null;
+      _lastRouteKey = null;
+      _routeError = null;
+      _routeLoading = false;
     });
   }
 
