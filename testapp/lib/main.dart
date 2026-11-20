@@ -1950,12 +1950,30 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
           .map((item) => Map<String, dynamic>.from(item))
           .toList();
       if (!mounted) return;
+      final activeAssignedId = assigned.isEmpty
+          ? null
+          : (assigned.first['id'] ?? assigned.first['firebase_order_id'] ?? '').toString();
       setState(() {
         _serverOpenOrders = open;
         _serverAssignedOrders = assigned;
+        // Never leave the previous passenger's route on the map after an
+        // assignment changes or is cancelled.
+        if (activeAssignedId != _driverRouteOrderId) {
+          _driverApproachRoute = null;
+          _driverRouteOrderId = null;
+          _driverRouteKey = null;
+          _driverRouteError = null;
+          _driverRouteRetryAfter = null;
+        }
+        if (assigned.isEmpty) {
+          _driverApproachRoute = null;
+          _driverRouteOrderId = null;
+          _driverRouteKey = null;
+          _driverRouteError = null;
+          _driverRouteRetryAfter = null;
+        }
       });
       if (assigned.isNotEmpty) unawaited(_loadDriverApproachRoute());
-      else if (_driverApproachRoute != null || _driverRouteKey != null) setState(() { _driverApproachRoute = null; _driverRouteOrderId = null; _driverRouteKey = null; });
     } on WorkerApiException catch (e) {
       // Пока водитель не одобрен или не вышел на линию, список заказов недоступен.
       if (e.statusCode != 403 && mounted) {
@@ -2060,6 +2078,13 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
     try {
       final route = await RouteService.drivingRoute(driver.currentLocation, pickup);
       if (!mounted) return;
+      final latestAssignedId = _serverAssignedOrders.isEmpty
+          ? ''
+          : (_serverAssignedOrders.first['id'] ??
+                  _serverAssignedOrders.first['firebase_order_id'] ??
+                  '')
+              .toString();
+      if (latestAssignedId != id) return;
       setState(() {
         _driverApproachRoute = route;
         _driverRouteOrderId = id;
@@ -2069,6 +2094,13 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
       _focusDriverMapOnRoute(driver.currentLocation, pickup);
     } catch (e) {
       if (!mounted) return;
+      final latestAssignedId = _serverAssignedOrders.isEmpty
+          ? ''
+          : (_serverAssignedOrders.first['id'] ??
+                  _serverAssignedOrders.first['firebase_order_id'] ??
+                  '')
+              .toString();
+      if (latestAssignedId != id) return;
       setState(() {
         _driverApproachRoute = null;
         _driverRouteOrderId = id;
@@ -2257,7 +2289,13 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
                   urlTemplate: 'https://tile.openstreetmap.de/{z}/{x}/{y}.png',
                   userAgentPackageName: 'com.jolamankenchi.taxi',
                 ),
-                if (_driverApproachRoute != null)
+                if (_driverApproachRoute != null &&
+                    _serverAssignedOrders.isNotEmpty &&
+                    _driverRouteOrderId ==
+                        (_serverAssignedOrders.first['id'] ??
+                                _serverAssignedOrders.first['firebase_order_id'] ??
+                                '')
+                            .toString())
                   PolylineLayer(polylines: [Polyline(points: _driverApproachRoute!.points, color: Colors.green, strokeWidth: 5)]),
                 MarkerLayer(
                   markers: [
