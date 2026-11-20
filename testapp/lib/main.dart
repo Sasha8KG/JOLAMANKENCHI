@@ -2438,7 +2438,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
     if (!driverPoint.latitude.isFinite || !driverPoint.longitude.isFinite ||
         driverPoint.latitude < -90 || driverPoint.latitude > 90 ||
         driverPoint.longitude < -180 || driverPoint.longitude > 180) return;
-    final routeKey = '$id:${pickup.latitude.toStringAsFixed(5)},${pickup.longitude.toStringAsFixed(5)}:${driverPoint.latitude.toStringAsFixed(5)},${driverPoint.longitude.toStringAsFixed(5)}';
+    final routeKey = '$id:${pickup.latitude.toStringAsFixed(5)},${pickup.longitude.toStringAsFixed(5)}:${driverPoint.latitude.toStringAsFixed(3)},${driverPoint.longitude.toStringAsFixed(3)}';
     if (_driverRouteKey == routeKey && _driverApproachRoute != null) return;
     if (_driverRouteKey == routeKey &&
         _driverRouteRetryAfter != null &&
