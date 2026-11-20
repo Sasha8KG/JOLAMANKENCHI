@@ -39,10 +39,24 @@ class WorkerApi {
     if (!['GET', 'POST'].contains(normalizedMethod)) {
       throw const WorkerApiException('Недопустимый тип запроса к серверу.');
     }
-    if (!path.startsWith('/') || path.startsWith('//') || path.contains('://')) {
+    if (!path.startsWith('/') ||
+        path.startsWith('//') ||
+        path.contains('://') ||
+        path.contains('#') ||
+        path.contains('\\') ||
+        RegExp(r'[\u0000-\u001F\u007F]').hasMatch(path)) {
       throw const WorkerApiException('Недопустимый адрес запроса к серверу.');
     }
-    final requestBytes = body == null ? null : utf8.encode(jsonEncode(body));
+    Uint8List? requestBytes;
+    if (body != null) {
+      try {
+        requestBytes = Uint8List.fromList(utf8.encode(jsonEncode(body)));
+      } catch (_) {
+        throw const WorkerApiException(
+          'Не удалось подготовить данные для отправки на сервер.',
+        );
+      }
+    }
     if (requestBytes != null && requestBytes.length > _maxRequestBytes) {
       throw const WorkerApiException(
         'Отправляемые данные слишком большие. Уменьшите вложения и повторите попытку.',
@@ -174,15 +188,33 @@ class WorkerApi {
 
   static Future<Map<String, dynamic>> radioMessages() => _request('/radio/messages');
 
-  static Future<Map<String, dynamic>> sendRadioMessage(String message) =>
-      _request('/radio/messages', method: 'POST', body: {'message': message});
+  static Future<Map<String, dynamic>> sendRadioMessage(String message) {
+    final normalized = message.trim();
+    if (normalized.isEmpty || normalized.length > 500) {
+      throw const WorkerApiException(
+        'Сообщение должно содержать от 1 до 500 символов.',
+      );
+    }
+    return _request('/radio/messages', method: 'POST', body: {
+      'message': normalized,
+    });
+  }
 
   static Future<Map<String, dynamic>> radioToken() =>
       _request('/radio/token', method: 'POST', body: const {});
 
-  static Future<Map<String, dynamic>> radioFloor({required String action}) =>
-      _request('/radio/ptt', method: action == 'status' ? 'GET' : 'POST',
-        body: action == 'status' ? null : {'action': action});
+  static Future<Map<String, dynamic>> radioFloor({required String action}) {
+    final normalized = action.trim().toLowerCase();
+    const allowedActions = {'status', 'acquire', 'refresh', 'release'};
+    if (!allowedActions.contains(normalized)) {
+      throw const WorkerApiException('Недопустимая команда голосовой рации.');
+    }
+    return _request(
+      '/radio/ptt',
+      method: normalized == 'status' ? 'GET' : 'POST',
+      body: normalized == 'status' ? null : {'action': normalized},
+    );
+  }
 
   static Future<Map<String, dynamic>> health() =>
       _request('/health', authenticated: false);
@@ -201,18 +233,37 @@ class WorkerApi {
   static Future<Map<String, dynamic>> saveTariffs({
     required int cityFareSom,
     required int intercityFareSom,
-  }) => _request('/tariffs', method: 'POST', body: {
-    'city_fare_som': cityFareSom,
-    'intercity_fare_som': intercityFareSom,
-  });
+  }) {
+    if (cityFareSom < 1 ||
+        cityFareSom > 1000000 ||
+        intercityFareSom < 1 ||
+        intercityFareSom > 1000000) {
+      throw const WorkerApiException(
+        'Тариф должен быть от 1 до 1 000 000 сом.',
+      );
+    }
+    return _request('/tariffs', method: 'POST', body: {
+      'city_fare_som': cityFareSom,
+      'intercity_fare_som': intercityFareSom,
+    });
+  }
 
   static Future<Map<String, dynamic>> setDriverCommission({
     required String driverUid,
     required int commissionPercent,
-  }) => _request('/drivers/commission', method: 'POST', body: {
-    'driver_uid': driverUid,
-    'commission_percent': commissionPercent,
-  });
+  }) {
+    final uid = driverUid.trim();
+    if (uid.isEmpty || uid.length > 128) {
+      throw const WorkerApiException('Не указан корректный водитель.');
+    }
+    if (commissionPercent < 0 || commissionPercent > 100) {
+      throw const WorkerApiException('Процент водителя должен быть от 0 до 100.');
+    }
+    return _request('/drivers/commission', method: 'POST', body: {
+      'driver_uid': uid,
+      'commission_percent': commissionPercent,
+    });
+  }
 
   static Future<Map<String, dynamic>> closeDriverShift({
     required String driverUid,
@@ -255,13 +306,26 @@ class WorkerApi {
     required String phone,
     required String carModel,
     required String carNumber,
-  }) =>
-      _request('/drivers/register', method: 'POST', body: {
-        'name': name.trim(),
-        'phone': phone.trim(),
-        'car_model': carModel.trim(),
-        'car_number': carNumber.trim(),
-      });
+  }) {
+    final cleanName = name.trim();
+    final cleanPhone = phone.trim();
+    final cleanCarModel = carModel.trim();
+    final cleanCarNumber = carNumber.trim();
+    if (cleanName.isEmpty || cleanName.length > 100 ||
+        cleanPhone.isEmpty || cleanPhone.length > 24 ||
+        cleanCarModel.isEmpty || cleanCarModel.length > 80 ||
+        cleanCarNumber.isEmpty || cleanCarNumber.length > 24) {
+      throw const WorkerApiException(
+        'Проверьте имя, телефон, марку и номер автомобиля.',
+      );
+    }
+    return _request('/drivers/register', method: 'POST', body: {
+      'name': cleanName,
+      'phone': cleanPhone,
+      'car_model': cleanCarModel,
+      'car_number': cleanCarNumber,
+    });
+  }
 
   static Future<Map<String, dynamic>> saveDriverDocuments({
     required String licenseUrl,
@@ -277,12 +341,25 @@ class WorkerApi {
     required bool online,
     double? latitude,
     double? longitude,
-  }) =>
-      _request('/drivers/online', method: 'POST', body: {
-        'online': online,
-        if (latitude != null) 'latitude': latitude,
-        if (longitude != null) 'longitude': longitude,
-      });
+  }) {
+    if ((latitude == null) != (longitude == null)) {
+      throw const WorkerApiException('Для GPS нужны обе координаты.');
+    }
+    if (latitude != null && longitude != null &&
+        (!latitude.isFinite ||
+            !longitude.isFinite ||
+            latitude < -90 ||
+            latitude > 90 ||
+            longitude < -180 ||
+            longitude > 180)) {
+      throw const WorkerApiException('Получены неверные координаты GPS.');
+    }
+    return _request('/drivers/online', method: 'POST', body: {
+      'online': online,
+      if (latitude != null) 'latitude': latitude,
+      if (longitude != null) 'longitude': longitude,
+    });
+  }
 
   static Future<Map<String, dynamic>> publishOrder(
     Map<String, dynamic> order,
@@ -305,29 +382,49 @@ class WorkerApi {
   }
 
   static Future<Map<String, dynamic>> respondToOrder(String orderId) =>
-      _request('/orders/respond',
-          method: 'POST', body: {'order_id': orderId});
+      _request('/orders/respond', method: 'POST', body: {
+        'order_id': _validatedOrderId(orderId),
+      });
+
+  static String _validatedOrderId(String orderId) {
+    final id = orderId.trim();
+    if (id.isEmpty || id.length > 128) {
+      throw const WorkerApiException('Не удалось выполнить действие: неверный номер заказа.');
+    }
+    return id;
+  }
 
   static Future<Map<String, dynamic>> cancelOrder({
     required String orderId,
     required String role,
-  }) =>
-      _request('/orders/cancel', method: 'POST', body: {
-        'order_id': orderId,
-        'role': role,
-      });
+  }) {
+    final normalizedRole = role.trim().toLowerCase();
+    if (!{'customer', 'driver'}.contains(normalizedRole)) {
+      throw const WorkerApiException('Недопустимая роль для отмены заказа.');
+    }
+    return _request('/orders/cancel', method: 'POST', body: {
+      'order_id': _validatedOrderId(orderId),
+      'role': normalizedRole,
+    });
+  }
 
   static Future<Map<String, dynamic>> markOrderArrived(String orderId) =>
-      _request('/orders/arrived', method: 'POST', body: {'order_id': orderId});
+      _request('/orders/arrived', method: 'POST', body: {
+        'order_id': _validatedOrderId(orderId),
+      });
 
   static Future<Map<String, dynamic>> completeOrder({
     required String orderId,
     required int fareSom,
-  }) =>
-      _request('/orders/complete', method: 'POST', body: {
-        'order_id': orderId,
-        'fare_som': fareSom,
-      });
+  }) {
+    if (fareSom < 1 || fareSom > 1000000) {
+      throw const WorkerApiException('Стоимость поездки должна быть от 1 до 1 000 000 сом.');
+    }
+    return _request('/orders/complete', method: 'POST', body: {
+      'order_id': _validatedOrderId(orderId),
+      'fare_som': fareSom,
+    });
+  }
 }
 
 class WorkerApiException implements Exception {
