@@ -30,6 +30,7 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
   XFile? _driverPhoto;
   XFile? _carPhoto;
   bool _busy = false;
+  bool _obscurePassword = true;
   String? _stage;
 
   @override
@@ -44,6 +45,9 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
 
   String _cleanText(String value) =>
       value.trim().replaceAll(RegExp(r'\s+'), ' ');
+
+  bool _hasControlCharacters(String value) =>
+      value.codeUnits.any((unit) => unit < 32 || unit == 127);
 
   void _ensureActiveAccount(String uid) {
     final activeUid = FirebaseAuth.instance.currentUser?.uid;
@@ -88,8 +92,10 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
         if (kind == 'driver') _driverPhoto = file;
         if (kind == 'car') _carPhoto = file;
       });
-    } catch (e) {
-      _message('Не удалось открыть фотографии: $e');
+    } on TimeoutException {
+      _message('Фотография загружается слишком долго. Проверьте память телефона и повторите выбор.');
+    } catch (_) {
+      _message('Не удалось открыть фотографии. Проверьте разрешение на доступ к галерее.');
     }
   }
 
@@ -232,8 +238,8 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
       // Не удаляем созданный Firebase-аккаунт и не выходим из него:
       // следующая попытка сможет продолжить анкету на том же номере.
       _message('Не удалось завершить отправку анкеты: ${e.message}');
-    } catch (e) {
-      _message('Ошибка регистрации: $e');
+    } catch (_) {
+      _message('Не удалось завершить регистрацию. Проверьте интернет и повторите попытку.');
     } finally {
       if (mounted) setState(() {
         _busy = false;
@@ -254,8 +260,12 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
         return 'Нет связи с Firebase. Проверьте интернет и повторите попытку.';
       case 'too-many-requests':
         return 'Слишком много попыток. Попробуйте позже.';
+      case 'email-already-in-use':
+        return 'Этот номер уже зарегистрирован. Войдите с ранее созданным паролем.';
+      case 'invalid-email':
+        return 'Не удалось подготовить номер телефона для входа. Проверьте его формат.';
       default:
-        return 'Ошибка Firebase: ${e.message ?? e.code}';
+        return 'Не удалось выполнить вход в Firebase. Проверьте данные и повторите попытку.';
     }
   }
 
@@ -267,10 +277,17 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
           color: file == null ? Colors.grey : Colors.green,
         ),
         title: Text(title),
-        subtitle: Text(file == null ? 'Фотография не выбрана' : 'Фотография выбрана'),
-        trailing: TextButton(
-          onPressed: _busy ? null : () => _pick(kind),
-          child: Text(file == null ? 'Выбрать' : 'Заменить'),
+        subtitle: Text(
+          file == null ? 'Фотография не выбрана' : file.name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        trailing: Tooltip(
+          message: file == null ? 'Выбрать фотографию' : 'Заменить фотографию',
+          child: TextButton(
+            onPressed: _busy ? null : () => _pick(kind),
+            child: Text(file == null ? 'Выбрать' : 'Заменить'),
+          ),
         ),
       ),
     );
@@ -289,6 +306,7 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
           constraints: const BoxConstraints(maxWidth: 540),
           child: Form(
             key: _formKey,
+            autovalidateMode: AutovalidateMode.onUserInteraction,
             child: ListView(
               padding: EdgeInsets.fromLTRB(
                 18, 18, 18, 18 + MediaQuery.of(context).viewInsets.bottom,
@@ -305,12 +323,14 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
                   controller: _name,
                   enabled: !_busy,
                   textCapitalization: TextCapitalization.words,
+                  textInputAction: TextInputAction.next,
+                  autofillHints: const [AutofillHints.name],
                   decoration: const InputDecoration(labelText: 'ФИО водителя'),
                   maxLength: 80,
                   validator: (v) {
                     final value = _cleanText(v ?? '');
-                    return value.length < 2 || value.length > 80
-                        ? 'Укажите ФИО (от 2 до 80 символов)'
+                    return _hasControlCharacters(value) || value.length < 2 || value.length > 80
+                        ? 'Укажите ФИО без служебных символов (2–80 символов)'
                         : null;
                   },
                 ),
@@ -319,6 +339,10 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
                   controller: _phone,
                   enabled: !_busy,
                   keyboardType: TextInputType.phone,
+                  textInputAction: TextInputAction.next,
+                  autofillHints: const [AutofillHints.telephoneNumber],
+                  enableSuggestions: false,
+                  autocorrect: false,
                   maxLength: 16,
                   decoration: const InputDecoration(labelText: 'Телефон 0XXXXXXXXX'),
                   validator: (v) {
@@ -331,9 +355,22 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
                 TextFormField(
                   controller: _password,
                   enabled: !_busy,
-                  obscureText: true,
+                  obscureText: _obscurePassword,
+                  enableSuggestions: false,
+                  autocorrect: false,
+                  autofillHints: const [AutofillHints.newPassword],
+                  textInputAction: TextInputAction.next,
                   maxLength: 64,
-                  decoration: const InputDecoration(labelText: 'Пароль (6–64 символа)'),
+                  decoration: InputDecoration(
+                    labelText: 'Пароль (6–64 символа)',
+                    suffixIcon: IconButton(
+                      tooltip: _obscurePassword ? 'Показать пароль' : 'Скрыть пароль',
+                      onPressed: _busy
+                          ? null
+                          : () => setState(() => _obscurePassword = !_obscurePassword),
+                      icon: Icon(_obscurePassword ? Icons.visibility : Icons.visibility_off),
+                    ),
+                  ),
                   validator: (v) => v == null || v.trim().isEmpty || v.length < 6
                       ? 'Минимум 6 символов, не только пробелы'
                       : v.length > 64 ? 'Не более 64 символов' : null,
@@ -343,11 +380,14 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
                   controller: _car,
                   enabled: !_busy,
                   decoration: const InputDecoration(labelText: 'Марка и модель автомобиля'),
+                  textInputAction: TextInputAction.next,
+                  textCapitalization: TextCapitalization.words,
+                  autocorrect: false,
                   maxLength: 60,
                   validator: (v) {
                     final value = _cleanText(v ?? '');
-                    return value.length < 2
-                        ? 'Укажите марку и модель автомобиля'
+                    return _hasControlCharacters(value) || value.length < 2
+                        ? 'Укажите марку и модель без служебных символов'
                         : value.length > 60 ? 'Слишком длинное название автомобиля' : null;
                   },
                 ),
@@ -358,10 +398,13 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
                   decoration: const InputDecoration(labelText: 'Государственный номер'),
                   maxLength: 20,
                   textCapitalization: TextCapitalization.characters,
+                  textInputAction: TextInputAction.done,
+                  autocorrect: false,
+                  enableSuggestions: false,
                   validator: (v) {
                     final value = _cleanText(v ?? '');
-                    return value.length < 2
-                        ? 'Укажите государственный номер автомобиля'
+                    return _hasControlCharacters(value) || value.length < 2
+                        ? 'Укажите государственный номер без служебных символов'
                         : value.length > 20 ? 'Слишком длинный номер автомобиля' : null;
                   },
                 ),
@@ -378,14 +421,21 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
                 ),
                 const SizedBox(height: 18),
                 if (_busy) ...[
-                  const LinearProgressIndicator(),
+                  const Semantics(
+                    label: 'Идёт отправка анкеты водителя',
+                    liveRegion: true,
+                    child: LinearProgressIndicator(),
+                  ),
                   const SizedBox(height: 8),
-                  Text(_stage ?? 'Подождите…', textAlign: TextAlign.center),
+                  Semantics(
+                    liveRegion: true,
+                    child: Text(_stage ?? 'Подождите…', textAlign: TextAlign.center),
+                  ),
                   const SizedBox(height: 12),
                 ],
                 ElevatedButton.icon(
                   onPressed: _busy ? null : _submit,
-                  icon: const Icon(Icons.send),
+                  icon: Icon(_busy ? Icons.hourglass_top : Icons.send),
                   label: Text(_busy ? 'ОТПРАВКА…' : 'ОТПРАВИТЬ АНКЕТУ'),
                 ),
               ],
