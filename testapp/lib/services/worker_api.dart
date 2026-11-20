@@ -11,7 +11,7 @@ class WorkerApi {
 
   static const String baseUrl =
       'https://jol-aman-kenchi-server.seshankulov2.workers.dev';
-  static const Duration _timeout = Duration(seconds: 20);
+  static const Duration _timeout = Duration(seconds: 20);\n  static const int _maxResponseBytes = 2 * 1024 * 1024;
 
   static Future<String> _token() async {
     final user = FirebaseAuth.instance.currentUser;
@@ -51,19 +51,54 @@ class WorkerApi {
         request.add(utf8.encode(jsonEncode(body)));
       }
       final response = await request.close().timeout(_timeout);
-      final text = await response.transform(utf8.decoder).join();
-      Map<String, dynamic> data;
-      try {
-        final decoded = jsonDecode(text);
-        data = decoded is Map<String, dynamic>
-            ? decoded
-            : <String, dynamic>{'data': decoded};
-      } catch (_) {
-        throw WorkerApiException(
-          'Сервер вернул непонятный ответ (HTTP ${response.statusCode}).',
+
+      // Reject unexpectedly large responses before allocating memory.
+      if (response.contentLength > _maxResponseBytes) {
+        throw const WorkerApiException(
+          'Ответ сервера слишком большой. Повторите попытку позже.',
         );
       }
-      if (response.statusCode < 200 || response.statusCode >= 300) {
+
+      // Read with both an inactivity/overall timeout and a hard size limit.
+      final responseBytes = await response.fold<BytesBuilder>(
+        BytesBuilder(copy: false),
+        (builder, chunk) {
+          if (builder.length + chunk.length > _maxResponseBytes) {
+            throw const WorkerApiException(
+              'Ответ сервера слишком большой. Повторите попытку позже.',
+            );
+          }
+          builder.add(chunk);
+          return builder;
+        },
+      ).timeout(_timeout);
+
+      final responseText = utf8.decode(responseBytes.takeBytes(), allowMalformed: false);
+      final isSuccess = response.statusCode >= 200 && response.statusCode < 300;
+      if (responseText.trim().isEmpty) {
+        if (!isSuccess) {
+          throw WorkerApiException(
+            'Сервер вернул пустой ответ (HTTP ${response.statusCode}).',
+            statusCode: response.statusCode,
+          );
+        }
+        return <String, dynamic>{};
+      }
+
+      dynamic decoded;
+      try {
+        decoded = jsonDecode(responseText);
+      } on FormatException {
+        throw WorkerApiException(
+          'Сервер вернул непонятный ответ (HTTP ${response.statusCode}).',
+          statusCode: isSuccess ? null : response.statusCode,
+        );
+      }
+
+      final data = decoded is Map<String, dynamic>
+          ? decoded
+          : <String, dynamic>{'data': decoded};
+      if (!isSuccess) {
         throw WorkerApiException(
           (data['message'] ?? data['error'] ??
                   'Ошибка сервера HTTP ${response.statusCode}')
