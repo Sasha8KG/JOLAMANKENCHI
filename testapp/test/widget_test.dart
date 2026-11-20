@@ -45,7 +45,7 @@ void main() {
       expect(FirebaseService.isValidKgPhone('abc'), isFalse);
     });
   });
-}
+
 
   group('Strict Kyrgyz phone input validation', () {
     test('accepts local numbers with ordinary separators', () {
@@ -85,9 +85,9 @@ void main() {
     });
 
     test('rejects control characters and whitespace injection', () {
-      expect(FirebaseService.isValidKgPhone('0700\\n123456'), isFalse);
-      expect(FirebaseService.isValidKgPhone('0700\\t123456'), isFalse);
-      expect(FirebaseService.isValidKgPhone('0700\\r123456'), isFalse);
+      expect(FirebaseService.isValidKgPhone('0700\n123456'), isFalse);
+      expect(FirebaseService.isValidKgPhone('0700\t123456'), isFalse);
+      expect(FirebaseService.isValidKgPhone('0700\r123456'), isFalse);
     });
 
     test('rejects incorrect lengths and country prefixes', () {
@@ -116,3 +116,4 @@ void main() {
       );
     });
   });
+}
