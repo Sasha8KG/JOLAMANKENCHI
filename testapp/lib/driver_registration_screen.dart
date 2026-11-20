@@ -40,13 +40,27 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
     super.dispose();
   }
 
+  String _cleanText(String value) =>
+      value.trim().replaceAll(RegExp(r'\\s+'), ' ');
+
+  void _ensureActiveAccount(String uid) {
+    final activeUid = FirebaseAuth.instance.currentUser?.uid;
+    if (activeUid == null || activeUid != uid) {
+      throw const WorkerApiException(
+        'Аккаунт изменился во время отправки. Войдите снова и повторите попытку.',
+      );
+    }
+  }
+
   void _setStage(String value) {
     if (mounted) setState(() => _stage = value);
   }
 
   void _message(String value) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
       SnackBar(content: Text(value), duration: const Duration(seconds: 5)),
     );
   }
@@ -58,8 +72,15 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
         source: ImageSource.gallery,
         imageQuality: 78,
         maxWidth: 1400,
+        maxHeight: 1400,
       );
       if (!mounted || file == null) return;
+      final pickedSize = await file.length().timeout(const Duration(seconds: 15));
+      if (!mounted) return;
+      if (pickedSize <= 0 || pickedSize > 8 * 1024 * 1024) {
+        _message('Фото пустое или превышает 8 МБ. Выберите фотографию меньшего размера.');
+        return;
+      }
       setState(() {
         if (kind == 'license') _license = file;
         if (kind == 'driver') _driverPhoto = file;
@@ -71,8 +92,17 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
   }
 
   Future<String> _upload(XFile file, String uid, String kind) async {
-    final bytes = await file.readAsBytes();
-    if (bytes.isEmpty || bytes.length > 8 * 1024 * 1024) {
+    _ensureActiveAccount(uid);
+    const allowedKinds = {'license', 'driver_photo', 'car_photo'};
+    if (!allowedKinds.contains(kind)) {
+      throw const WorkerApiException('Неизвестный тип документа водителя.');
+    }
+    final expectedSize = await file.length().timeout(const Duration(seconds: 15));
+    if (expectedSize <= 0 || expectedSize > 8 * 1024 * 1024) {
+      throw const WorkerApiException('Фотография пустая или превышает 8 МБ. Выберите её заново.');
+    }
+    final bytes = await file.readAsBytes().timeout(const Duration(seconds: 30));
+    if (bytes.isEmpty || bytes.length != expectedSize || bytes.length > 8 * 1024 * 1024) {
       throw const WorkerApiException('Фотография изменилась или превышает 8 МБ. Выберите её заново.');
     }
     final ref = FirebaseStorage.instance.ref().child('drivers/$uid/$kind.jpg');
@@ -80,10 +110,15 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
       bytes,
       SettableMetadata(
         contentType: 'image/jpeg',
-        customMetadata: {'ownerUid': uid},
+        customMetadata: {'ownerUid': uid, 'documentType': kind},
       ),
     ).timeout(const Duration(seconds: 90));
-    return task.ref.fullPath;
+    _ensureActiveAccount(uid);
+    final uploadedPath = task.ref.fullPath;
+    if (uploadedPath != 'drivers/$uid/$kind.jpg') {
+      throw const WorkerApiException('Хранилище вернуло неверный путь документа.');
+    }
+    return uploadedPath;
   }
 
   Future<bool> _validatePhotoSizes() async {
@@ -126,6 +161,12 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
       _setStage('Проверяем аккаунт…');
       final phone = _phone.text.trim();
       final password = _password.text;
+      final driverName = _cleanText(_name.text);
+      final carModel = _cleanText(_car.text);
+      final carNumber = _cleanText(_plate.text).toUpperCase();
+      if (password.trim().isEmpty) {
+        throw const WorkerApiException('Пароль не должен состоять только из пробелов.');
+      }
 
       // Если прошлый запуск успел создать Firebase-аккаунт, но не завершил
       // анкету, повторный запуск войдёт в него и продолжит регистрацию.
@@ -142,23 +183,29 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
         throw const WorkerApiException('Firebase не вернул активный аккаунт. Повторите попытку.');
       }
       final uid = user.uid;
+      _ensureActiveAccount(uid);
 
       _setStage('Сохраняем анкету водителя…');
       await WorkerApi.registerDriver(
-        name: _name.text.trim(),
+        name: driverName,
         phone: phone,
-        carModel: _car.text.trim(),
-        carNumber: _plate.text.trim(),
+        carModel: carModel,
+        carNumber: carNumber,
       );
       if (!mounted) return;
+      _ensureActiveAccount(uid);
       _setStage('Загружаем водительское удостоверение…');
       final licensePath = await _upload(_license!, uid, 'license');
       if (!mounted) return;
+      _ensureActiveAccount(uid);
       _setStage('Загружаем фото водителя…');
       final driverPath = await _upload(_driverPhoto!, uid, 'driver_photo');
       if (!mounted) return;
+      _ensureActiveAccount(uid);
       _setStage('Загружаем фото автомобиля…');
       final carPath = await _upload(_carPhoto!, uid, 'car_photo');
+      if (!mounted) return;
+      _ensureActiveAccount(uid);
 
       if (!mounted) return;
       _setStage('Отправляем документы диспетчеру…');
@@ -168,9 +215,11 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
         carPhotoUrl: carPath,
       );
 
-      await FirebaseService.signOut();
+      await FirebaseService.signOut().timeout(const Duration(seconds: 20));
       if (!mounted) return;
       Navigator.of(context).pop(true);
+    } on TimeoutException {
+      _message('Операция заняла слишком много времени. Проверьте интернет и повторите отправку.');
     } on FirebaseAuthException catch (e) {
       _message(_firebaseMessage(e));
     } on FirebaseException catch (e) {
@@ -233,12 +282,15 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
         backgroundColor: Colors.amber,
       ),
       body: Center(
-        child: ConstrainedBox(
+        child: SafeArea(
+          child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 540),
           child: Form(
             key: _formKey,
             child: ListView(
-              padding: const EdgeInsets.all(18),
+              padding: EdgeInsets.fromLTRB(
+                18, 18, 18, 18 + MediaQuery.of(context).viewInsets.bottom,
+              ),
               children: [
                 const Icon(Icons.local_taxi, size: 58, color: Colors.amber),
                 const Text(
@@ -253,16 +305,19 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
                   textCapitalization: TextCapitalization.words,
                   decoration: const InputDecoration(labelText: 'ФИО водителя'),
                   maxLength: 80,
-                  validator: (v) => v == null || v.trim().length < 2 ||
-                          v.trim().length > 80
-                      ? 'Укажите ФИО (от 2 до 80 символов)'
-                      : v.trim().length > 80 ? 'Слишком длинное ФИО' : null,
+                  validator: (v) {
+                    final value = _cleanText(v ?? '');
+                    return value.length < 2 || value.length > 80
+                        ? 'Укажите ФИО (от 2 до 80 символов)'
+                        : null;
+                  },
                 ),
                 const SizedBox(height: 10),
                 TextFormField(
                   controller: _phone,
                   enabled: !_busy,
                   keyboardType: TextInputType.phone,
+                  maxLength: 16,
                   decoration: const InputDecoration(labelText: 'Телефон 0XXXXXXXXX'),
                   validator: (v) {
                     return FirebaseService.isValidKgPhone((v ?? '').trim())
@@ -277,8 +332,8 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
                   obscureText: true,
                   maxLength: 64,
                   decoration: const InputDecoration(labelText: 'Пароль (6–64 символа)'),
-                  validator: (v) => v == null || v.length < 6
-                      ? 'Минимум 6 символов'
+                  validator: (v) => v == null || v.trim().isEmpty || v.length < 6
+                      ? 'Минимум 6 символов, не только пробелы'
                       : v.length > 64 ? 'Не более 64 символов' : null,
                 ),
                 const SizedBox(height: 10),
@@ -287,9 +342,12 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
                   enabled: !_busy,
                   decoration: const InputDecoration(labelText: 'Марка и модель автомобиля'),
                   maxLength: 60,
-                  validator: (v) => v == null || v.trim().length < 2
-                      ? 'Укажите марку и модель автомобиля'
-                      : v.trim().length > 60 ? 'Слишком длинное название автомобиля' : null,
+                  validator: (v) {
+                    final value = _cleanText(v ?? '');
+                    return value.length < 2
+                        ? 'Укажите марку и модель автомобиля'
+                        : value.length > 60 ? 'Слишком длинное название автомобиля' : null;
+                  },
                 ),
                 const SizedBox(height: 10),
                 TextFormField(
@@ -297,9 +355,13 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
                   enabled: !_busy,
                   decoration: const InputDecoration(labelText: 'Государственный номер'),
                   maxLength: 20,
-                  validator: (v) => v == null || v.trim().length < 2
-                      ? 'Укажите государственный номер автомобиля'
-                      : v.trim().length > 20 ? 'Слишком длинный номер автомобиля' : null,
+                  textCapitalization: TextCapitalization.characters,
+                  validator: (v) {
+                    final value = _cleanText(v ?? '');
+                    return value.length < 2
+                        ? 'Укажите государственный номер автомобиля'
+                        : value.length > 20 ? 'Слишком длинный номер автомобиля' : null;
+                  },
                 ),
                 const SizedBox(height: 18),
                 const Text('Фотографии для проверки диспетчером',
@@ -326,6 +388,7 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
                 ),
               ],
             ),
+          ),
           ),
         ),
       ),
