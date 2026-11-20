@@ -226,7 +226,6 @@ class _SessionGateState extends State<SessionGate> {
   Widget? _destination;
   bool _restoreInProgress = false;
   String? _restoreError;
-  int _restoreAttempt = 0;
 
   @override
   void initState() {
