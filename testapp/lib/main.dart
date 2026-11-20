@@ -247,29 +247,6 @@ class _SessionGateState extends State<SessionGate> {
         return;
       }
 
-      // Any authenticated account that is neither dispatcher nor driver
-      // is a passenger account. Rebuild its lightweight in-memory profile so
-      // the passenger returns directly to the booking map after app restart.
-      final loginEmail = (user.email ?? '').toLowerCase();
-      var passengerPhone = user.phoneNumber ?? '';
-      if (loginEmail.startsWith('kg996') &&
-          loginEmail.endsWith('@jolamankenchi.app')) {
-        final nationalNumber = loginEmail.substring(5, loginEmail.length - '@jolamankenchi.app'.length);
-        passengerPhone = '0$nationalNumber';
-      }
-      TaxiParkState.currentLoggedInClient = ClientModel(
-        id: user.uid,
-        name: (user.displayName ?? '').trim().isEmpty
-            ? 'Клиент'
-            : user.displayName!.trim(),
-        phone: passengerPhone,
-        pinCode: '',
-      );
-      if (mounted) {
-        setState(() => _destination = const ClientMapScreen());
-      }
-      return;
-
       if (access['driver'] == true) {
         final profile = await WorkerApi.driverProfile();
         final raw = profile['driver'];
@@ -306,6 +283,29 @@ class _SessionGateState extends State<SessionGate> {
           return;
         }
       }
+      // Any authenticated account that is neither dispatcher nor driver
+      // is a passenger account. Rebuild its lightweight in-memory profile so
+      // the passenger returns directly to the booking map after app restart.
+      final loginEmail = (user.email ?? '').toLowerCase();
+      var passengerPhone = user.phoneNumber ?? '';
+      if (loginEmail.startsWith('kg996') &&
+          loginEmail.endsWith('@jolamankenchi.app')) {
+        final nationalNumber = loginEmail.substring(5, loginEmail.length - '@jolamankenchi.app'.length);
+        passengerPhone = '0$nationalNumber';
+      }
+      TaxiParkState.currentLoggedInClient = ClientModel(
+        id: user.uid,
+        name: (user.displayName ?? '').trim().isEmpty
+            ? 'Клиент'
+            : user.displayName!.trim(),
+        phone: passengerPhone,
+        pinCode: '',
+      );
+      if (mounted) {
+        setState(() => _destination = const ClientMapScreen());
+      }
+      return;
+
     } catch (_) {
       // Keep the Firebase session intact if the network/Worker is temporarily
       // unavailable. The user can retry from the appropriate role entry screen.
