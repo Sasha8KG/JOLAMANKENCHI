@@ -40,6 +40,10 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
     super.dispose();
   }
 
+  void _setStage(String value) {
+    if (mounted) setState(() => _stage = value);
+  }
+
   void _message(String value) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -77,6 +81,27 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
     return task.ref.fullPath;
   }
 
+  Future<bool> _validatePhotoSizes() async {
+    const maxPhotoBytes = 8 * 1024 * 1024;
+    const maxTotalBytes = 18 * 1024 * 1024;
+    final files = [_license!, _driverPhoto!, _carPhoto!];
+    var totalBytes = 0;
+    for (var i = 0; i < files.length; i++) {
+      final size = await files[i].length();
+      if (!mounted) return false;
+      if (size <= 0 || size > maxPhotoBytes) {
+        _message('Фото ' + (i + 1).toString() + ' пустое или больше 8 МБ. Выберите фотографию меньшего размера.');
+        return false;
+      }
+      totalBytes += size;
+    }
+    if (totalBytes > maxTotalBytes) {
+      _message('Общий размер трёх фотографий превышает 18 МБ. Уменьшите фотографии.');
+      return false;
+    }
+    return true;
+  }
+
   Future<void> _submit() async {
     if (_busy || !_formKey.currentState!.validate()) return;
     if (_license == null || _driverPhoto == null || _carPhoto == null) {
@@ -84,6 +109,8 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
       return;
     }
 
+    if (!await _validatePhotoSizes()) return;
+    if (!mounted) return;
     setState(() {
       _busy = true;
       _stage = 'Проверяем аккаунт…';
@@ -102,26 +129,34 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
         await FirebaseService.signInWithPhone(phone: phone, password: password);
       }
 
+      if (!mounted) return;
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
         throw const WorkerApiException('Firebase не вернул активный аккаунт. Повторите попытку.');
       }
       final uid = user.uid;
 
-      setState(() => _stage = 'Сохраняем анкету водителя…');
+      _setStage('Сохраняем анкету водителя…');
       await WorkerApi.registerDriver(
-        name: _name.text,
+        name: _name.text.trim(),
         phone: phone,
-        carModel: _car.text,
-        carNumber: _plate.text,
+        carModel: _car.text.trim(),
+        carNumber: _plate.text.trim(),
       );
+      if (!mounted) return;
 
-      setState(() => _stage = 'Загружаем документы и фотографии…');
+      if (!mounted) return;
+      _setStage('Загружаем водительское удостоверение…');
       final licensePath = await _upload(_license!, uid, 'license');
+      if (!mounted) return;
+      _setStage('Загружаем фото водителя…');
       final driverPath = await _upload(_driverPhoto!, uid, 'driver_photo');
+      if (!mounted) return;
+      _setStage('Загружаем фото автомобиля…');
       final carPath = await _upload(_carPhoto!, uid, 'car_photo');
 
-      setState(() => _stage = 'Отправляем документы диспетчеру…');
+      if (!mounted) return;
+      _setStage('Отправляем документы диспетчеру…');
       await WorkerApi.saveDriverDocuments(
         licenseUrl: licensePath,
         driverPhotoUrl: driverPath,
@@ -208,7 +243,10 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
                   enabled: !_busy,
                   textCapitalization: TextCapitalization.words,
                   decoration: const InputDecoration(labelText: 'ФИО водителя'),
-                  validator: (v) => v == null || v.trim().isEmpty ? 'Укажите ФИО' : null,
+                  maxLength: 80,
+                  validator: (v) => v == null || v.trim().length < 2
+                      ? 'Укажите ФИО полностью (не менее 2 символов)'
+                      : v.trim().length > 80 ? 'Слишком длинное ФИО' : null,
                 ),
                 const SizedBox(height: 10),
                 TextFormField(
@@ -235,14 +273,20 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
                   controller: _car,
                   enabled: !_busy,
                   decoration: const InputDecoration(labelText: 'Марка и модель автомобиля'),
-                  validator: (v) => v == null || v.trim().isEmpty ? 'Укажите автомобиль' : null,
+                  maxLength: 60,
+                  validator: (v) => v == null || v.trim().length < 2
+                      ? 'Укажите марку и модель автомобиля'
+                      : v.trim().length > 60 ? 'Слишком длинное название автомобиля' : null,
                 ),
                 const SizedBox(height: 10),
                 TextFormField(
                   controller: _plate,
                   enabled: !_busy,
                   decoration: const InputDecoration(labelText: 'Государственный номер'),
-                  validator: (v) => v == null || v.trim().isEmpty ? 'Укажите номер автомобиля' : null,
+                  maxLength: 20,
+                  validator: (v) => v == null || v.trim().length < 2
+                      ? 'Укажите государственный номер автомобиля'
+                      : v.trim().length > 20 ? 'Слишком длинный номер автомобиля' : null,
                 ),
                 const SizedBox(height: 18),
                 const Text('Фотографии для проверки диспетчером',
