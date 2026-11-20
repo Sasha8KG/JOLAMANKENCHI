@@ -227,6 +227,12 @@ class _SessionGateState extends State<SessionGate> {
   bool _restoreInProgress = false;
   String? _restoreError;
 
+  bool _isEnabled(dynamic value) {
+    if (value == true || value == 1) return true;
+    final normalized = value?.toString().trim().toLowerCase();
+    return normalized == 'true' || normalized == '1';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -236,6 +242,8 @@ class _SessionGateState extends State<SessionGate> {
   Future<void> _restoreSavedSession() async {
     if (_restoreInProgress || !mounted) return;
     _restoreInProgress = true;
+    TaxiParkState.currentLoggedInClient = null;
+    TaxiParkState.currentLoggedInDriver = null;
     if (mounted) {
       setState(() {
         _restoreError = null;
@@ -252,6 +260,7 @@ class _SessionGateState extends State<SessionGate> {
         return;
       }
 
+      final restoringUid = user.uid;
       // Retry temporary network failures without discarding Firebase auth.
       Map<String, dynamic>? access;
       Object? lastError;
@@ -278,22 +287,32 @@ class _SessionGateState extends State<SessionGate> {
       if (lastError != null || access == null) {
         throw lastError ?? StateError('Не удалось проверить авторизацию');
       }
+      if (!mounted) return;
+      final activeUser = FirebaseAuth.instance.currentUser;
+      if (activeUser == null || activeUser.uid != restoringUid) {
+        if (mounted) {
+          setState(() => _destination = const RoleSelectionScreen());
+        }
+        return;
+      }
+      user = activeUser;
 
-      if (access['dispatcher'] == true) {
+      if (_isEnabled(access['dispatcher'])) {
         if (mounted) setState(() => _destination = const DispatcherScreen());
         return;
       }
 
-      if (access['driver'] == true) {
+      if (_isEnabled(access['driver'])) {
         final profile = await WorkerApi.driverProfile();
+        if (!mounted) return;
         final raw = profile['driver'];
         if (raw is Map) {
           final data = Map<String, dynamic>.from(raw);
-          final approval = data['approved'];
-          final approved = approval == true ||
-              approval == 1 ||
-              approval.toString().toLowerCase() == 'true' ||
-              approval.toString() == '1';
+          final profileUid = (data['uid'] ?? '').toString().trim();
+          if (profileUid.isNotEmpty && profileUid != restoringUid) {
+            throw const FormatException('Профиль водителя не совпадает с текущим аккаунтом');
+          }
+          final approved = _isEnabled(data['approved']);
 
           if (!approved) {
             if (mounted) {
@@ -304,7 +323,7 @@ class _SessionGateState extends State<SessionGate> {
           }
 
           TaxiParkState.currentLoggedInDriver = DriverModel(
-            id: (data['uid'] ?? user!.uid).toString(),
+            id: (data['uid'] ?? restoringUid).toString(),
             name: (data['name'] ?? 'Водитель').toString(),
             phone: (data['phone'] ?? '').toString(),
             carBrand: (data['car_model'] ?? '').toString(),
@@ -313,9 +332,7 @@ class _SessionGateState extends State<SessionGate> {
             pinCode: '',
             currentLocation: TaxiParkState.sulyuktaCenter,
             isApproved: true,
-            isOnline: data['online'] == true ||
-                data['online'] == 1 ||
-                data['online'].toString().toLowerCase() == 'true',
+            isOnline: _isEnabled(data['online']),
           );
           if (mounted) {
             setState(() => _destination = const DriverMapScreen());
@@ -326,8 +343,8 @@ class _SessionGateState extends State<SessionGate> {
       }
 
       // Restore passenger profile for accounts without a driver/dispatcher role.
-      final loginEmail = (user!.email ?? '').trim().toLowerCase();
-      var passengerPhone = user.phoneNumber ?? '';
+      final loginEmail = (user.email ?? '').trim().toLowerCase();
+      var passengerPhone = (user.phoneNumber ?? '').trim();
       const emailSuffix = '@jolamankenchi.app';
       if (loginEmail.startsWith('kg996') && loginEmail.endsWith(emailSuffix)) {
         final nationalNumber =
@@ -335,7 +352,7 @@ class _SessionGateState extends State<SessionGate> {
         passengerPhone = '0$nationalNumber';
       }
       TaxiParkState.currentLoggedInClient = ClientModel(
-        id: user.uid,
+        id: restoringUid,
         name: (user.displayName ?? '').trim().isEmpty
             ? 'Клиент'
             : user.displayName!.trim(),
