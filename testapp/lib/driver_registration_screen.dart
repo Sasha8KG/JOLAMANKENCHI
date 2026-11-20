@@ -217,10 +217,9 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
                   keyboardType: TextInputType.phone,
                   decoration: const InputDecoration(labelText: 'Телефон 0XXXXXXXXX'),
                   validator: (v) {
-                    final digits = (v ?? '').replaceAll(RegExp(r'\\D'), '');
-                    return RegExp(r'^0\\d{9}$').hasMatch(digits)
+                    return FirebaseService.isValidKgPhone(v ?? '')
                         ? null
-                        : 'Введите номер Кыргызстана, например 0700123456';
+                        : 'Введите номер Кыргызстана: 0700123456 или +996700123456';
                   },
                 ),
                 const SizedBox(height: 10),
