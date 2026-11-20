@@ -1418,6 +1418,12 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
     }
   }
 
+  double? _readValidCoordinate(dynamic value, {required double min, required double max}) {
+    final parsed = double.tryParse((value ?? '').toString());
+    if (parsed == null || !parsed.isFinite || parsed < min || parsed > max) return null;
+    return parsed;
+  }
+
   Future<void> _refreshOrderStatus(String orderId) async {
     // Timer ticks must not create overlapping requests on a slow mobile network.
     if (_orderStatusRequestInProgress) return;
@@ -1426,7 +1432,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
       final data = await WorkerApi.orderStatus(orderId);
       final order = TaxiParkState.activeOrder;
       if (!mounted || order == null || order.id != orderId) return;
-      final status = (data['status'] ?? 'new').toString();
+      final status = (data['status'] ?? 'new').toString().trim().toLowerCase();
       setState(() {
         if (status == 'new') {
           order.status = 'searching';
@@ -1434,6 +1440,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
           _approachRoute = null;
           _lastRouteKey = null;
           _routeError = null;
+          _routeRetryAfter = null;
         } else if (status == 'driver_assigned' || status == 'arrived') {
           order.status = status == 'arrived' ? 'arrived' : 'accepted';
           if (status == 'arrived') {
@@ -1443,10 +1450,12 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
           }
           final raw = data['driver'];
           if (raw is Map) {
-            final lat = double.tryParse((raw['latitude'] ?? '').toString()) ?? order.pickupPoint.latitude;
-            final lng = double.tryParse((raw['longitude'] ?? '').toString()) ?? order.pickupPoint.longitude;
-            order.assignedDriver = DriverModel(
-              id: (raw['uid'] ?? '').toString(),
+            final uid = (raw['uid'] ?? '').toString().trim();
+            final lat = _readValidCoordinate(raw['latitude'], min: -90, max: 90);
+            final lng = _readValidCoordinate(raw['longitude'], min: -180, max: 180);
+            if (uid.isNotEmpty && lat != null && lng != null) {
+              order.assignedDriver = DriverModel(
+              id: uid,
               name: (raw['name'] ?? 'Водитель').toString(),
               phone: (raw['phone'] ?? '').toString(),
               carBrand: (raw['car_model'] ?? 'Автомобиль').toString(),
@@ -1459,7 +1468,8 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
                   : DateTime.tryParse((raw['location_updated_at'] ?? '').toString()),
               isApproved: true,
               isOnline: true,
-            );
+              );
+            }
           }
           // Continue polling while the taxi is driving so its live GPS marker moves.
         } else if (status == 'completed') {
@@ -1468,6 +1478,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
           _approachRoute = null;
           _lastRouteKey = null;
           _routeError = null;
+          _routeRetryAfter = null;
           _orderStatusTimer?.cancel();
         } else if (status == 'cancelled_by_customer') {
           order.status = 'cancelled';
@@ -1475,6 +1486,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
           _approachRoute = null;
           _lastRouteKey = null;
           _routeError = null;
+          _routeRetryAfter = null;
           _orderStatusTimer?.cancel();
         }
       });
@@ -1716,6 +1728,9 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
                       const SizedBox(height: 6),
                       TextField(
                         controller: _destinationController,
+                        maxLength: 200,
+                        textCapitalization: TextCapitalization.sentences,
+                        textInputAction: TextInputAction.done,
                         decoration: const InputDecoration(
                             labelText: 'Куда едем? (Центр, Рынок, Раззаков...)',
                             border: OutlineInputBorder()),
@@ -1767,9 +1782,9 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
               style: TextStyle(fontSize: 12, color: Colors.black54)),
           const SizedBox(height: 8),
           OutlinedButton.icon(
-            onPressed: _cancelClientOrder,
+            onPressed: _cancellingOrder ? null : _cancelClientOrder,
             icon: const Icon(Icons.close),
-            label: const Text('ОТМЕНИТЬ ЗАКАЗ'),
+            label: Text(_cancellingOrder ? 'ОТМЕНЯЕМ...' : 'ОТМЕНИТЬ ЗАКАЗ'),
             style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
           ),
         ],
@@ -1790,9 +1805,9 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
               style: TextStyle(fontSize: 11, color: Colors.black54)),
           const SizedBox(height: 8),
           OutlinedButton.icon(
-            onPressed: _cancelClientOrder,
+            onPressed: _cancellingOrder ? null : _cancelClientOrder,
             icon: const Icon(Icons.close),
-            label: const Text('ОТМЕНИТЬ ЗАКАЗ ДО ПРИЕЗДА'),
+            label: Text(_cancellingOrder ? 'ОТМЕНЯЕМ...' : 'ОТМЕНИТЬ ЗАКАЗ ДО ПРИЕЗДА'),
             style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
           ),
         ],
