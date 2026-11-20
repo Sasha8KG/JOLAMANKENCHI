@@ -10,6 +10,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:livekit_client/livekit_client.dart' hide ConnectionState;
 import 'services/firebase_service.dart';
+import 'driver_registration_screen.dart';
 import 'services/worker_api.dart';
 import 'services/route_service.dart';
 
@@ -1535,11 +1536,21 @@ class _DriverEntryScreenState extends State<DriverEntryScreen> {
     setState(() => _busy = true);
     try {
       await FirebaseService.signInWithPhone(phone: phone, password: password);
+
+      // First distinguish a missing driver profile from a temporary server
+      // failure. Do not sign the user out merely because the API is offline.
+      final access = await WorkerApi.checkAuth();
+      if (access['driver'] != true) {
+        await FirebaseService.signOut();
+        _showMessage('Для этого номера анкета водителя не найдена. Подайте заявку или проверьте другой номер.');
+        return;
+      }
+
       final profile = await WorkerApi.driverProfile();
       final data = profile['driver'];
       if (data == null) {
         await FirebaseService.signOut();
-        _showMessage('Анкета водителя не найдена. Сначала пройдите регистрацию.');
+        _showMessage('Анкета водителя не найдена. Подайте заявку на регистрацию.');
         return;
       }
       if (data['approved'] != true) {
@@ -1549,6 +1560,7 @@ class _DriverEntryScreenState extends State<DriverEntryScreen> {
         ));
         return;
       }
+
       final driver = DriverModel(
         id: (data['uid'] ?? FirebaseService.auth.currentUser!.uid).toString(),
         name: (data['name'] ?? 'Водитель').toString(),
@@ -1568,8 +1580,7 @@ class _DriverEntryScreenState extends State<DriverEntryScreen> {
         MaterialPageRoute(builder: (_) => const DriverMapScreen()),
       );
     } on WorkerApiException catch (e) {
-      await FirebaseService.signOut();
-      _showMessage(e.message);
+      _showMessage('Не удалось связаться с сервером таксопарка: ${e.message} Проверьте интернет и повторите вход.');
     } on FirebaseAuthException catch (e) {
       _showMessage(_authError(e));
     } catch (e) {
@@ -1613,142 +1624,12 @@ class _DriverEntryScreenState extends State<DriverEntryScreen> {
   }
 
   Future<void> _showDriverRegistration() async {
-    final name = TextEditingController();
-    final phone = TextEditingController(text: _phoneController.text.trim());
-    final password = TextEditingController();
-    final car = TextEditingController();
-    final plate = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-    final picker = ImagePicker();
-    XFile? licenseImage;
-    XFile? driverImage;
-    XFile? carImage;
-
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (dialogContext, setDialogState) => AlertDialog(
-        title: const Text('Заявка водителя'),
-        content: SizedBox(
-          width: 420,
-          child: Form(
-            key: formKey,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextFormField(
-                    controller: name,
-                    decoration: const InputDecoration(labelText: 'ФИО водителя'),
-                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Укажите ФИО' : null,
-                  ),
-                  TextFormField(
-                    controller: phone,
-                    keyboardType: TextInputType.phone,
-                    decoration: const InputDecoration(labelText: 'Телефон 0XXXXXXXXX'),
-                    validator: (v) => v == null || !TaxiParkState.isValidKgPhone(v) ? 'Проверьте номер телефона' : null,
-                  ),
-                  TextFormField(
-                    controller: password,
-                    obscureText: true,
-                    decoration: const InputDecoration(labelText: 'Пароль (минимум 6 символов)'),
-                    validator: (v) => v == null || v.length < 6 ? 'Минимум 6 символов' : null,
-                  ),
-                  TextFormField(
-                    controller: car,
-                    decoration: const InputDecoration(labelText: 'Марка и модель автомобиля'),
-                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Укажите автомобиль' : null,
-                  ),
-                  TextFormField(
-                    controller: plate,
-                    decoration: const InputDecoration(labelText: 'Государственный номер'),
-                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Укажите номер автомобиля' : null,
-                  ),
-                  const SizedBox(height: 12),
-                  const Align(alignment: Alignment.centerLeft, child: Text('Фотографии для проверки диспетчером', style: TextStyle(fontWeight: FontWeight.bold))),
-                  const SizedBox(height: 6),
-                  _documentPickRow('Водительское удостоверение', licenseImage, () async {
-                    final file = await picker.pickImage(source: ImageSource.gallery, imageQuality: 82, maxWidth: 1600);
-                    if (file != null) setDialogState(() => licenseImage = file);
-                  }),
-                  _documentPickRow('Фото водителя', driverImage, () async {
-                    final file = await picker.pickImage(source: ImageSource.gallery, imageQuality: 82, maxWidth: 1600);
-                    if (file != null) setDialogState(() => driverImage = file);
-                  }),
-                  _documentPickRow('Фото автомобиля', carImage, () async {
-                    final file = await picker.pickImage(source: ImageSource.gallery, imageQuality: 82, maxWidth: 1600);
-                    if (file != null) setDialogState(() => carImage = file);
-                  }),
-                  const SizedBox(height: 6),
-                  const Text('Нужны все три фотографии. Они сохраняются в закрытом хранилище Firebase и доступны владельцу аккаунта и диспетчеру.', style: TextStyle(fontSize: 12, color: Colors.black54)),
-                ],
-              ),
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Отмена'),
-          ),
-          ElevatedButton(
-            onPressed: _busy ? null : () async {
-              if (!formKey.currentState!.validate()) return;
-              if (licenseImage == null || driverImage == null || carImage == null) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Добавьте фото удостоверения, водителя и автомобиля.')));
-                return;
-              }
-              Navigator.pop(dialogContext);
-              setState(() => _busy = true);
-              try {
-                await FirebaseService.registerWithPhone(
-                  phone: phone.text.trim(),
-                  password: password.text,
-                );
-                await WorkerApi.registerDriver(
-                  name: name.text,
-                  phone: phone.text,
-                  carModel: car.text,
-                  carNumber: plate.text,
-                );
-                final uid = FirebaseAuth.instance.currentUser!.uid;
-                final licenseUrl = await _uploadDriverDocument(licenseImage!, uid, 'license');
-                final driverPhotoUrl = await _uploadDriverDocument(driverImage!, uid, 'driver_photo');
-                final carPhotoUrl = await _uploadDriverDocument(carImage!, uid, 'car_photo');
-                await WorkerApi.saveDriverDocuments(
-                  licenseUrl: licenseUrl,
-                  driverPhotoUrl: driverPhotoUrl,
-                  carPhotoUrl: carPhotoUrl,
-                );
-                await FirebaseService.signOut();
-                _showMessage('Анкета и три фотографии отправлены. Дождитесь проверки диспетчера.');
-              } on FirebaseAuthException catch (e) {
-                _showMessage(_authError(e));
-              } on WorkerApiException catch (e) {
-                await FirebaseService.signOut();
-                _showMessage('Аккаунт создан, но анкета не дошла до сервера: ${e.message}');
-              } catch (e) {
-                _showMessage('Ошибка регистрации: $e');
-              } finally {
-                if (mounted) setState(() => _busy = false);
-              }
-            },
-            child: const Text('Отправить анкету'),
-          ),
-        ],
-      ),
-      ),
+    final submitted = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => const DriverRegistrationScreen()),
     );
-    // showDialog завершает Future в момент закрытия окна, но TextFormField
-    // может ещё оставаться подключённым к контроллерам во время анимации.
-    // Освобождаем контроллеры после завершения обратного перехода маршрута.
-    Future<void>.delayed(const Duration(milliseconds: 350), () {
-      name.dispose();
-      phone.dispose();
-      password.dispose();
-      car.dispose();
-      plate.dispose();
-    });
+    if (submitted == true && mounted) {
+      _showMessage('Анкета и фотографии отправлены. Дождитесь проверки диспетчера.');
+    }
   }
 
   @override
