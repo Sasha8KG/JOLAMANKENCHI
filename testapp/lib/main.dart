@@ -1409,6 +1409,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
         (_routeRetryAfter == null || DateTime.now().isBefore(_routeRetryAfter!))) return;
     _lastRouteKey = key;
     if (mounted) setState(() { _routeLoading = true; _routeError = null; });
+    var refreshAfterRoute = false;
     try {
       final route = await RouteService.drivingRoute(driverPoint, _pickupPoint);
       if (!mounted) return;
@@ -1416,6 +1417,13 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
       if (latestOrder?.id != orderId ||
           latestOrder?.assignedDriver?.id != driverId ||
           !['accepted', 'arrived'].contains(latestOrder?.status)) return;
+      final latestPoint = latestOrder!.assignedDriver!.currentLocation;
+      final latestKey = '$orderId:$driverId:${latestPoint.latitude.toStringAsFixed(3)},${latestPoint.longitude.toStringAsFixed(3)}';
+      if (latestKey != key) {
+        // GPS moved while routing was in flight: never show a route from an old position.
+        refreshAfterRoute = latestOrder.status == 'accepted';
+        return;
+      }
       setState(() {
         _approachRoute = route;
         _routeRetryAfter = null;
@@ -1426,16 +1434,33 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
       if (latestOrder?.id != orderId ||
           latestOrder?.assignedDriver?.id != driverId ||
           !['accepted', 'arrived'].contains(latestOrder?.status)) return;
+      final latestPoint = latestOrder!.assignedDriver!.currentLocation;
+      final latestKey = '$orderId:$driverId:${latestPoint.latitude.toStringAsFixed(3)},${latestPoint.longitude.toStringAsFixed(3)}';
+      if (latestKey != key) {
+        refreshAfterRoute = latestOrder.status == 'accepted';
+        return;
+      }
       setState(() {
         _approachRoute = null;
         _routeError = e.toString();
         _routeRetryAfter = DateTime.now().add(const Duration(seconds: 30));
       });
     } finally {
-      if (mounted) setState(() => _routeLoading = false);
+      if (mounted) {
+        setState(() => _routeLoading = false);
+        if (refreshAfterRoute) {
+          final latestOrder = TaxiParkState.activeOrder;
+          final latestDriver = latestOrder?.assignedDriver;
+          if (latestOrder?.id == orderId &&
+              latestDriver?.id == driverId &&
+              latestOrder?.status == 'accepted' &&
+              latestDriver != null) {
+            unawaited(_loadApproachRoute(latestDriver.currentLocation));
+          }
+        }
+      }
     }
   }
-
   double? _readValidCoordinate(dynamic value, {required double min, required double max}) {
     final parsed = double.tryParse((value ?? '').toString());
     if (parsed == null || !parsed.isFinite || parsed < min || parsed > max) return null;
