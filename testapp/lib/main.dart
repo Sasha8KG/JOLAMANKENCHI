@@ -866,7 +866,12 @@ class RoleSelectionScreen extends StatelessWidget {
           ),
         ],
       ),
-    );
+    ).whenComplete(() {
+      Future<void>.delayed(const Duration(milliseconds: 350), () {
+        phoneController.dispose();
+        passwordController.dispose();
+      });
+    });
   }
 
   @override
@@ -1081,7 +1086,12 @@ class ClientAuthScreen extends StatelessWidget {
           ),
         ],
       ),
-    );
+    ).whenComplete(() {
+      Future<void>.delayed(const Duration(milliseconds: 350), () {
+        phoneController.dispose();
+        pinController.dispose();
+      });
+    });
   }
 
   void _showRegisterDialog(BuildContext context) {
@@ -1098,6 +1108,8 @@ class ClientAuthScreen extends StatelessWidget {
           children: [
             TextField(
                 controller: nameController,
+                maxLength: 80,
+                textCapitalization: TextCapitalization.words,
                 decoration: const InputDecoration(labelText: 'Ваше имя')),
             const SizedBox(height: 10),
             TextField(
@@ -1168,7 +1180,13 @@ class ClientAuthScreen extends StatelessWidget {
           ),
         ],
       ),
-    );
+    ).whenComplete(() {
+      Future<void>.delayed(const Duration(milliseconds: 350), () {
+        nameController.dispose();
+        phoneController.dispose();
+        pinController.dispose();
+      });
+    });
   }
 
   @override
@@ -3033,9 +3051,11 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
         ],
       ),
     );
-    // Не вызываем dispose сразу после закрытия диалога: Flutter ещё может
-    // завершать анимацию маршрута, а TextField пока остаётся подписанным
-    // на контроллер. Ранний dispose вызывает assertion _dependents.isEmpty.
+    // Освобождаем контроллеры после завершения анимации закрытия диалога.
+    Future<void>.delayed(const Duration(milliseconds: 350), () {
+      cityController.dispose();
+      intercityController.dispose();
+    });
     if (values == null || !mounted) return;
     setState(() => _working = true);
     try {
@@ -3160,8 +3180,9 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
         ],
       ),
     );
-    controller.dispose();
-    if (percent == null) return;
+    // Не освобождаем TextField-контроллер до завершения анимации закрытия.
+    Future<void>.delayed(const Duration(milliseconds: 350), () => controller.dispose());
+    if (percent == null || !mounted) return;
     setState(() => _working = true);
     try {
       await WorkerApi.setDriverCommission(driverUid: uid, commissionPercent: percent);

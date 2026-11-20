@@ -105,6 +105,40 @@ void main() {
       expect(FirebaseService.isValidKgPhone('+++---()'), isFalse);
     });
 
+
+    test('accepts local number with separated digits', () {
+      expect(FirebaseService.isValidKgPhone('0 700 123 456'), isTrue);
+    });
+
+    test('accepts international number without plus sign', () {
+      expect(FirebaseService.isValidKgPhone('996700123456'), isTrue);
+    });
+
+    test('rejects a plus sign after leading whitespace', () {
+      expect(FirebaseService.isValidKgPhone(' +996700123456'), isFalse);
+    });
+
+    test('rejects repeated and nested parentheses', () {
+      expect(FirebaseService.isValidKgPhone('(0700)(123)456'), isFalse);
+      expect(FirebaseService.isValidKgPhone('0700((123))456'), isFalse);
+    });
+
+    test('rejects full-width unicode digits', () {
+      expect(FirebaseService.isValidKgPhone('０７００１２３４５６'), isFalse);
+    });
+
+    test('rejects separators before and after the phone number', () {
+      expect(FirebaseService.isValidKgPhone('---0700123456'), isFalse);
+      expect(FirebaseService.isValidKgPhone('0700123456---'), isFalse);
+    });
+
+    test('maps a parenthesized international number consistently', () {
+      expect(
+        FirebaseService.phoneLoginEmail('+996 (700) 123-456'),
+        'kg996700123456@jolamankenchi.app',
+      );
+    });
+
     test('phone login mapping refuses text disguised as a phone number', () {
       expect(
         () => FirebaseService.phoneLoginEmail('abc0700123456'),
