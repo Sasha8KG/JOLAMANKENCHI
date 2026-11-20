@@ -2665,7 +2665,7 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Закрыть смену водителя?'),
-        content: Text('Водитель: $name\\nЗаработок за день: $earned сом\\nПроцент водителя: ${driver['commission_percent'] ?? 50}%\\n\\nПосле закрытия сумма и процент сохранятся в истории. Повторно закрыть эту смену будет нельзя.'),
+        content: Text('Водитель: $name\\nЗаработок за день: $earned сом\nПроцент водителя: ${driver['commission_percent'] ?? 50}%\n\nПосле закрытия сумма и процент сохранятся в истории. Повторно закрыть эту смену будет нельзя.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
           ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Закрыть смену')),
@@ -2876,7 +2876,7 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
                   leading: const Icon(Icons.verified, color: Colors.green),
                   title: Text((row['driver_name'] ?? 'Водитель').toString()),
                   subtitle: Text('Дата: ${row['shift_date']} · Поездок: ${row['trip_count']} · Процент водителя: ${row['driver_percent']}%'),
-                  trailing: Text('${row['gross_earnings_som']} сом\\nВодителю: ${row['driver_share_som']} сом',
+                  trailing: Text('${row['gross_earnings_som']} сом\nВодителю: ${row['driver_share_som']} сом',
                     textAlign: TextAlign.end, style: const TextStyle(fontWeight: FontWeight.bold)),
                 ))),
                 _sectionTitle('Статусы заказов за сегодня', Icons.analytics_outlined),
