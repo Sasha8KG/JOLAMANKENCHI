@@ -719,8 +719,19 @@ export default {
         await env.DB.prepare("UPDATE orders SET response_deadline=COALESCE(response_deadline, ?) WHERE id=? AND status='new'")
           .bind(now + 10, order.id).run();
         const fresh = await env.DB.prepare("SELECT response_deadline,status,assigned_driver_uid FROM orders WHERE id=?").bind(order.id).first();
-        return response({ status: "ok", result: fresh.status === "driver_assigned" ? "assigned" : "waiting",
-          responseDeadline: fresh.response_deadline, message: "Отклик принят. Подождите до 10 секунд: система выберет ближайшего водителя." });
+        const assignedToThisDriver = ["driver_assigned", "arrived"].includes(fresh.status) &&
+          fresh.assigned_driver_uid === auth.user.localId;
+        const assignedToAnotherDriver = fresh.status !== "new" && !assignedToThisDriver;
+        return response({
+          status: "ok",
+          result: assignedToThisDriver ? "assigned" : assignedToAnotherDriver ? "taken" : "waiting",
+          responseDeadline: fresh.response_deadline,
+          message: assignedToThisDriver
+            ? "Заказ назначен вам."
+            : assignedToAnotherDriver
+              ? "Заказ уже назначен другому водителю."
+              : "Отклик принят. Подождите до 10 секунд: система выберет ближайшего водителя."
+        });
       }
 
       if (url.pathname === "/radio/messages" && request.method === "GET") {
