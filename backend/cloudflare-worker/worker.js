@@ -14,6 +14,12 @@ function response(data, status = 200) {
   });
 }
 
+function hasForbiddenControlCharacters(value) {
+  return Array.from(String(value)).some((character) => {
+    const code = character.charCodeAt(0);
+    return (code < 32 && code !== 9 && code !== 10 && code !== 13) || code === 127;
+  });
+}
 async function verifyFirebaseUser(request) {
   const h = request.headers.get("Authorization") || "";
   const token = h.startsWith("Bearer ") ? h.slice(7) : "";
@@ -572,7 +578,7 @@ export default {
         if (!["По городу", "Межгород"].includes(tariff)) {
           return response({ status: "error", message: "Выберите допустимый тариф" }, 400);
         }
-        if (typeof comment !== "string" || comment.length > 500 || /[\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f]/.test(comment)) {
+        if (typeof comment !== "string" || comment.length > 500 || hasForbiddenControlCharacters(comment)) {
           return response({ status: "error", message: "Комментарий не должен превышать 500 символов" }, 400);
         }
         // Publishing is idempotent: a retry must never reset an assigned or completed order.
