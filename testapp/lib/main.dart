@@ -1791,6 +1791,8 @@ class DriverMapScreen extends StatefulWidget {
 
 class _DriverMapScreenState extends State<DriverMapScreen> {
   final TextEditingController _finalPriceController = TextEditingController();
+  final MapController _driverMapController = MapController();
+  bool _driverMapReady = false;
   StreamSubscription<Position>? _positionSubscription;
   Timer? _heartbeatTimer;
   Timer? _ordersPollTimer;
@@ -1922,12 +1924,26 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
       final route = await RouteService.drivingRoute(driver.currentLocation, pickup);
       if (!mounted) return;
       setState(() { _driverApproachRoute = route; _driverRouteOrderId = id; _driverRouteError = null; });
+      _focusDriverMapOnRoute(driver.currentLocation, pickup);
     } catch (e) {
       if (!mounted) return;
       setState(() { _driverApproachRoute = null; _driverRouteOrderId = id; _driverRouteError = e.toString(); });
     } finally {
       _driverRouteLoading = false;
     }
+  }
+
+  void _focusDriverMapOnRoute(LatLng driverPoint, LatLng pickupPoint) {
+    if (!_driverMapReady) return;
+    final center = LatLng(
+      (driverPoint.latitude + pickupPoint.latitude) / 2,
+      (driverPoint.longitude + pickupPoint.longitude) / 2,
+    );
+    final latSpan = (driverPoint.latitude - pickupPoint.latitude).abs();
+    final lngSpan = (driverPoint.longitude - pickupPoint.longitude).abs();
+    final span = latSpan > lngSpan ? latSpan : lngSpan;
+    final zoom = span > 0.5 ? 9.5 : span > 0.15 ? 11.0 : span > 0.04 ? 12.5 : 14.0;
+    _driverMapController.move(center, zoom);
   }
 
   Future<void> _startLocationTracking() async {
@@ -2069,10 +2085,21 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
         children: [
           Expanded(
             child: FlutterMap(
+              mapController: _driverMapController,
               options: MapOptions(
                   initialCenter:
                       driver?.currentLocation ?? TaxiParkState.sulyuktaCenter,
-                  initialZoom: 14.0),
+                  initialZoom: 14.0,
+                  onMapReady: () {
+                    _driverMapReady = true;
+                    if (_driverApproachRoute != null && _serverAssignedOrders.isNotEmpty) {
+                      final pickup = _orderPickup(_serverAssignedOrders.first);
+                      final current = TaxiParkState.currentLoggedInDriver?.currentLocation;
+                      if (pickup != null && current != null) _focusDriverMapOnRoute(current, pickup);
+                    } else if (driver != null) {
+                      _driverMapController.move(driver.currentLocation, 14.0);
+                    }
+                  }),
               children: [
                 TileLayer(
                   urlTemplate: 'https://tile.openstreetmap.de/{z}/{x}/{y}.png',
