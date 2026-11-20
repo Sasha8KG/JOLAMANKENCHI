@@ -1551,7 +1551,9 @@ class _DriverEntryScreenState extends State<DriverEntryScreen> {
         _showMessage('Анкета водителя не найдена. Подайте заявку на регистрацию.');
         return;
       }
-      if (data['approved'] != true) {
+      final approvalValue = data['approved'];
+      final isApproved = approvalValue == true || approvalValue == 1 || approvalValue.toString() == '1';
+      if (!isApproved) {
         if (!mounted) return;
         Navigator.pushReplacement(context, MaterialPageRoute(
           builder: (_) => DriverReviewStatusScreen(profile: Map<String, dynamic>.from(data as Map)),
