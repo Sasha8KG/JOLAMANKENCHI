@@ -150,4 +150,46 @@ void main() {
       );
     });
   });
+
+  group('Kyrgyz phone validation regression matrix', () {
+    final cases = <({String input, bool expected, String label})>[
+      (input: ' 0700123456 ', expected: true, label: 'trims outer spaces'),
+      (input: '0 700 123 456', expected: true, label: 'accepts separated local digits'),
+      (input: '0700-123-456', expected: true, label: 'accepts local hyphens'),
+      (input: ' (0700) 123-456 ', expected: true, label: 'accepts surrounding spaces and parentheses'),
+      (input: '(0700)(123)456', expected: true, label: 'accepts sequential balanced parentheses'),
+      (input: '+996700123456', expected: true, label: 'accepts international prefix with plus'),
+      (input: '996700123456', expected: true, label: 'accepts international prefix without plus'),
+      (input: '+996 (700) 123-456', expected: true, label: 'accepts international visual separators'),
+      (input: '---0700123456', expected: true, label: 'accepts leading hyphen separators under current rules'),
+      (input: '0700123456---', expected: true, label: 'accepts trailing hyphen separators under current rules'),
+      (input: '   ', expected: false, label: 'rejects whitespace only'),
+      (input: 'abc0700123456', expected: false, label: 'rejects alphabetic prefix'),
+      (input: '0700123456xyz', expected: false, label: 'rejects alphabetic suffix'),
+      (input: '0700+123456', expected: false, label: 'rejects plus in the middle'),
+      (input: '++996700123456', expected: false, label: 'rejects repeated plus signs'),
+      (input: '(0700123456', expected: false, label: 'rejects an unclosed parenthesis'),
+      (input: '0700123456)', expected: false, label: 'rejects an unmatched closing parenthesis'),
+      (input: '((0700))123456', expected: false, label: 'rejects nested parentheses'),
+      (input: '0700.123.456', expected: false, label: 'rejects periods'),
+      (input: '0700/123/456', expected: false, label: 'rejects slashes'),
+      (input: '0700,123,456', expected: false, label: 'rejects commas'),
+      (input: '0700;123;456', expected: false, label: 'rejects semicolons'),
+      (input: '0700\n123456', expected: false, label: 'rejects line feeds'),
+      (input: '0700\t123456', expected: false, label: 'rejects tabs'),
+      (input: '0700\r123456', expected: false, label: 'rejects carriage returns'),
+      (input: '０７００１２３４５６', expected: false, label: 'rejects full-width Unicode digits'),
+      (input: '070012345', expected: false, label: 'rejects a number that is too short'),
+      (input: '07001234567', expected: false, label: 'rejects a number that is too long'),
+      (input: '+995700123456', expected: false, label: 'rejects a foreign country prefix'),
+      (input: '1700123456', expected: false, label: 'rejects an invalid local prefix'),
+    ];
+    for (final item in cases) {
+      test(item.label, () {
+        expect(FirebaseService.isValidKgPhone(item.input), item.expected,
+            reason: 'Input: ${item.input}');
+      });
+    }
+  });
+
 }
