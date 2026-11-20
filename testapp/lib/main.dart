@@ -1108,6 +1108,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
   int _intercityFareSom = 0;
   bool _tariffsLoaded = false;
   Timer? _orderStatusTimer;
+  bool _orderStatusRequestInProgress = false;
   RoadRoute? _approachRoute;
   bool _routeLoading = false;
   String? _routeError;
@@ -1219,7 +1220,10 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
     final order = TaxiParkState.activeOrder;
     final driverId = order?.assignedDriver?.id;
     final orderId = order?.id ?? '';
-    if (order == null || driverId == null || orderId.isEmpty) return;
+    if (order == null ||
+        driverId == null ||
+        orderId.isEmpty ||
+        order.status != 'accepted') return;
     final key = '$orderId:$driverId:${driverPoint.latitude.toStringAsFixed(3)},${driverPoint.longitude.toStringAsFixed(3)}';
     if (_routeLoading || _lastRouteKey == key) return;
     _lastRouteKey = key;
@@ -1245,6 +1249,9 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
   }
 
   Future<void> _refreshOrderStatus(String orderId) async {
+    // Timer ticks must not create overlapping requests on a slow mobile network.
+    if (_orderStatusRequestInProgress) return;
+    _orderStatusRequestInProgress = true;
     try {
       final data = await WorkerApi.orderStatus(orderId);
       final order = TaxiParkState.activeOrder;
@@ -1302,11 +1309,16 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
         }
       });
       final assigned = order.assignedDriver;
-      if (assigned != null) unawaited(_loadApproachRoute(assigned.currentLocation));
+      // Once the taxi has arrived, stop recalculating the approach route.
+      if (assigned != null && order.status == 'accepted') {
+        unawaited(_loadApproachRoute(assigned.currentLocation));
+      }
     } on WorkerApiException {
       // A short network interruption is retried on the next timer tick.
     } catch (_) {
       // Keep the last known order status until the next successful refresh.
+    } finally {
+      _orderStatusRequestInProgress = false;
     }
   }
 
