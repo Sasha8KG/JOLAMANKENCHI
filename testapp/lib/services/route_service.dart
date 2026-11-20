@@ -133,6 +133,7 @@ class RouteService {
         throw const FormatException('Маршрутизатор не подтвердил начальную и конечную точки.');
       }
       final snappedPoints = <LatLng>[];
+      final snapDistances = <double>[];
       for (final waypointValue in waypointsValue) {
         if (waypointValue is! Map) {
           throw const FormatException('Маршрутизатор вернул неверную точку маршрута.');
@@ -154,14 +155,43 @@ class RouteService {
           throw const FormatException('Маршрутизатор вернул неверные координаты дороги.');
         }
         snappedPoints.add(snapped);
+        snapDistances.add(snapDistance.toDouble());
+      }
+      final startSnapActual = const Distance().as(LengthUnit.Meter, from, snappedPoints.first);
+      final endSnapActual = const Distance().as(LengthUnit.Meter, to, snappedPoints.last);
+      if ((startSnapActual - snapDistances.first).abs() > 100 ||
+          (endSnapActual - snapDistances.last).abs() > 100) {
+        throw const FormatException('Расстояние привязки к дороге не совпадает с координатами заказа.');
       }
       if (const Distance().as(LengthUnit.Meter, points.first, snappedPoints.first) > 250 ||
           const Distance().as(LengthUnit.Meter, points.last, snappedPoints.last) > 250) {
         throw const FormatException('Точки дорожного маршрута не совпадают с его началом и концом.');
       }
+      // Check that the returned geometry is continuous and its measured
+      // length is reasonably consistent with the server's route distance.
+      var geometryLength = 0.0;
+      for (var i = 1; i < points.length; i++) {
+        final segment = const Distance().as(LengthUnit.Meter, points[i - 1], points[i]);
+        if (!segment.isFinite || segment > 50000) {
+          throw const FormatException('В дорожной линии обнаружен слишком большой разрыв.');
+        }
+        geometryLength += segment;
+      }
+      if (!geometryLength.isFinite || geometryLength <= 0) {
+        throw const FormatException('Не удалось проверить длину дорожной линии.');
+      }
       final directDistance = const Distance().as(LengthUnit.Meter, from, to);
       final distance = route['distance'];
       final duration = route['duration'];
+      if (distance is num && distance.toDouble().isFinite &&
+          (geometryLength < distance * 0.5 || geometryLength > distance * 2.0 + 1000)) {
+        throw const FormatException('Дорожная линия не соответствует заявленной длине маршрута.');
+      }
+      if (distance is num && duration is num &&
+          distance.toDouble().isFinite && duration.toDouble().isFinite &&
+          duration > 0 && distance / duration > 100) {
+        throw const FormatException('Время маршрута выглядит неправдоподобно коротким.');
+      }
       if (distance is num && distance.toDouble().isFinite &&
           distance < directDistance * 0.5) {
         throw const FormatException('Длина маршрута не соответствует расстоянию между точками.');
