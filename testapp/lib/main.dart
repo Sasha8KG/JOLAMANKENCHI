@@ -1226,6 +1226,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
   String _paymentMethod = 'Наличные';
   int _passengerCount = 1;
   bool _sendingOrder = false;
+  bool _cancellingOrder = false;
   int _cityFareSom = 0;
   int _intercityFareSom = 0;
   bool _tariffsLoaded = false;
@@ -1244,14 +1245,22 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
     _loadTariffs();
   }
 
+  int _parseFare(dynamic value) {
+    final parsed = value is num
+        ? value.toInt()
+        : int.tryParse((value ?? '').toString().trim());
+    if (parsed == null || parsed < 0 || parsed > 1000000) return 0;
+    return parsed;
+  }
+
   Future<void> _loadTariffs() async {
     try {
       final data = await WorkerApi.getTariffs();
       final tariffs = Map<String, dynamic>.from(data['tariffs'] as Map? ?? {});
       if (!mounted) return;
       setState(() {
-        _cityFareSom = (tariffs['city_fare_som'] as num?)?.toInt() ?? 0;
-        _intercityFareSom = (tariffs['intercity_fare_som'] as num?)?.toInt() ?? 0;
+        _cityFareSom = _parseFare(tariffs['city_fare_som']);
+        _intercityFareSom = _parseFare(tariffs['intercity_fare_som']);
         _tariffsLoaded = true;
       });
     } catch (_) {
@@ -1260,11 +1269,37 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
   }
 
   Future<void> _createOrder() async {
+    if (_sendingOrder) return;
     final destination = _destinationController.text.trim();
     final client = TaxiParkState.currentLoggedInClient;
-    if (destination.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Укажите пункт назначения!')));
+    if (destination.isEmpty || destination.length > 200) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(destination.isEmpty
+            ? 'Укажите пункт назначения!'
+            : 'Пункт назначения слишком длинный. Укажите не более 200 символов.'),
+      ));
+      return;
+    }
+    final pickupLat = _pickupPoint.latitude;
+    final pickupLng = _pickupPoint.longitude;
+    if (!pickupLat.isFinite || !pickupLng.isFinite ||
+        pickupLat < -90 || pickupLat > 90 ||
+        pickupLng < -180 || pickupLng > 180) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Не удалось определить точку подачи. Выберите её на карте ещё раз.'),
+      ));
+      return;
+    }
+    if (_passengerCount < 1 || _passengerCount > 4) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Количество пассажиров должно быть от 1 до 4.'),
+      ));
+      return;
+    }
+    if (!_isByContract && !['Наличные', 'QR-код'].contains(_paymentMethod)) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Выберите допустимый способ оплаты.'),
+      ));
       return;
     }
     final selectedFare = _isIntercity ? _intercityFareSom : _cityFareSom;
@@ -1280,7 +1315,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
       return;
     }
 
-    final orderId = DateTime.now().millisecondsSinceEpoch.toString();
+    final orderId = DateTime.now().microsecondsSinceEpoch.toString();
     final tariff = _isIntercity ? 'Межгород' : 'По городу';
     final payment = _isByContract ? 'По договору' : _paymentMethod;
     setState(() => _sendingOrder = true);
@@ -1289,8 +1324,8 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
         'id': orderId,
         'customerUid': FirebaseService.auth.currentUser!.uid,
         'pickup': 'Точка подачи на карте — Сулюкта',
-        'pickupLat': _pickupPoint.latitude,
-        'pickupLng': _pickupPoint.longitude,
+        'pickupLat': pickupLat,
+        'pickupLng': pickupLng,
         'destination': destination,
         'people': _passengerCount,
         'payment': payment,
@@ -1304,6 +1339,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
       // Прямая запись из приложения в Firestore здесь не нужна и блокировалась
       // правилами Firestore (permission-denied).
       await WorkerApi.publishOrder(orderData);
+      if (!mounted) return;
       final price = _isIntercity ? _intercityFareSom : _cityFareSom;
       setState(() {
         TaxiParkState.activeOrder = TaxiOrder(
@@ -1318,7 +1354,9 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
       });
       _orderStatusTimer?.cancel();
       _orderStatusTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-        _refreshOrderStatus(orderId);
+        if (mounted && TaxiParkState.activeOrder?.id == orderId) {
+          _refreshOrderStatus(orderId);
+        }
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -1327,11 +1365,11 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
       }
     } on WorkerApiException catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Заказ сохранён в Firebase, но очередь водителей не подтвердила публикацию: ${e.message}')),
+        SnackBar(content: Text('Сервер не подтвердил публикацию заказа: ${e.message}')),
       );
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Не удалось опубликовать заказ. Проверьте соединение и правила Firestore: $e')),
+        SnackBar(content: Text('Не удалось отправить заказ. Проверьте интернет и повторите попытку: $e')),
       );
     } finally {
       if (mounted) setState(() => _sendingOrder = false);
@@ -1468,7 +1506,8 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
         ],
       ),
     );
-    if (confirm != true || !mounted) return;
+    if (confirm != true || !mounted || _cancellingOrder) return;
+    setState(() => _cancellingOrder = true);
     try {
       await WorkerApi.cancelOrder(orderId: order.id, role: 'customer');
       _orderStatusTimer?.cancel();
@@ -1481,6 +1520,8 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
       });
     } on WorkerApiException catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } finally {
+      if (mounted) setState(() => _cancellingOrder = false);
     }
   }
 
