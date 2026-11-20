@@ -19,6 +19,16 @@ class WorkerApi {
   static bool _hasControlCharacters(String value) =>
       RegExp(r'[\x00-\x1F\x7F]').hasMatch(value);
 
+  static String _normalizeKgPhone(String value) {
+    final input = value.trim();
+    final digits = input.replaceAll(RegExp(r'\D'), '');
+    if (digits.length == 10 && digits.startsWith('0')) return digits;
+    if (digits.length == 12 && digits.startsWith('996')) {
+      return input.startsWith('+') ? '+$digits' : digits;
+    }
+    return '';
+  }
+
   static String _validatedUid(String value) {
     final uid = value.trim();
     if (uid.isEmpty || uid.length > 128 || uid.contains('/') || uid.contains('\\') || _hasControlCharacters(uid)) {
@@ -209,7 +219,7 @@ class WorkerApi {
 
   static Future<Map<String, dynamic>> sendRadioMessage(String message) {
     final normalized = message.trim();
-    if (normalized.isEmpty || normalized.length > 500 || _hasControlCharacters(normalized)) {
+    if (normalized.isEmpty || normalized.length > 500 || _hasControlCharacters(normalized) || normalized.contains('\n') || normalized.contains('\r')) {
       throw const WorkerApiException(
         'Сообщение должно содержать от 1 до 500 символов.',
       );
@@ -316,7 +326,7 @@ class WorkerApi {
     required String decision,
     String reason = '',
   }) {
-    final normalizedUid = uid.trim();
+    final normalizedUid = _validatedUid(uid);
     final normalizedDecision = decision.trim().toLowerCase();
     final normalizedReason = reason.trim();
     if (normalizedUid.isEmpty || normalizedUid.length > 128 || normalizedUid.contains('/') || normalizedUid.contains('\\') || _hasControlCharacters(normalizedUid)) {
@@ -325,7 +335,7 @@ class WorkerApi {
     if (!{'approved', 'rejected'}.contains(normalizedDecision)) {
       throw const WorkerApiException('Неизвестное решение по заявке водителя.');
     }
-    if (normalizedReason.length > 500 || _hasControlCharacters(normalizedReason) || (normalizedDecision == 'rejected' && normalizedReason.length < 5)) {
+    if (normalizedReason.length > 500 || _hasControlCharacters(normalizedReason) || normalizedReason.contains('\n') || normalizedReason.contains('\r') || (normalizedDecision == 'rejected' && normalizedReason.length < 5)) {
       throw const WorkerApiException('Для отказа укажите причину от 5 до 500 символов.');
     }
     return _request('/drivers/review', method: 'POST', body: {
@@ -353,10 +363,10 @@ class WorkerApi {
     required String carNumber,
   }) {
     final cleanName = name.trim();
-    final cleanPhone = phone.trim();
+    final cleanPhone = _normalizeKgPhone(phone);
     final cleanCarModel = carModel.trim();
     final cleanCarNumber = carNumber.trim();
-    final validPhone = RegExp(r'^(?:0\d{9}|\+996\d{9}|996\d{9})$').hasMatch(cleanPhone);
+    final validPhone = cleanPhone.isNotEmpty;
     if (cleanName.length < 2 || cleanName.length > 80 || _hasControlCharacters(cleanName) ||
         !validPhone ||
         cleanCarModel.length < 2 || cleanCarModel.length > 60 || _hasControlCharacters(cleanCarModel) ||
@@ -382,10 +392,16 @@ class WorkerApi {
     final driverPhoto = driverPhotoUrl.trim();
     final carPhoto = carPhotoUrl.trim();
     final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
-    if (uid.isEmpty || [license, driverPhoto, carPhoto].any((value) => !value.startsWith('drivers/$uid/')) ||
-        {license, driverPhoto, carPhoto}.length != 3 || [license, driverPhoto, carPhoto].any((value) =>
-        value.isEmpty || value.length > 500 || _hasControlCharacters(value) || value.contains('..') || value.contains('?') || value.contains('#') || value.contains('\\'))) {
-      throw const WorkerApiException('Не все документы водителя подготовлены корректно.');
+    if (uid.isEmpty ||
+        license != 'drivers/$uid/license.jpg' ||
+        driverPhoto != 'drivers/$uid/driver_photo.jpg' ||
+        carPhoto != 'drivers/$uid/car_photo.jpg' ||
+        {license, driverPhoto, carPhoto}.length != 3 ||
+        [license, driverPhoto, carPhoto].any((value) =>
+            value.length > 500 || _hasControlCharacters(value) ||
+            value.contains('..') || value.contains('?') ||
+            value.contains('#') || value.contains('\\'))) {
+      throw const WorkerApiException('Не все документы водителя подготовлены корректно.');      throw const WorkerApiException('Не все документы водителя подготовлены корректно.');
     }
     return _request('/drivers/documents', method: 'POST', body: {
       'license_url': license,
@@ -399,7 +415,7 @@ class WorkerApi {
     double? latitude,
     double? longitude,
   }) {
-    if ((latitude == null) != (longitude == null)) {
+    if ((latitude == null) != (longitude == null) || (online && latitude == null)) {
       throw const WorkerApiException('Для GPS нужны обе координаты.');
     }
     if (latitude != null && longitude != null &&
@@ -424,25 +440,39 @@ class WorkerApi {
     if (order.isEmpty) {
       throw const WorkerApiException('В заказе отсутствуют данные.');
     }
-    final orderId = (order['id'] ?? '').toString().trim();
-    if (orderId.isEmpty || orderId.length > 128 || _hasControlCharacters(orderId) || orderId.contains('/')) {
-      throw const WorkerApiException('В заказе указан неверный номер.');
-    }
-    final pickup = (order['pickup'] ?? '').toString().trim();
+    final orderId = _validatedOrderId((order['id'] ?? '').toString());
+    final pickup =    final pickup = (order['pickup'] ?? '').toString().trim();
     if (pickup.isEmpty || pickup.length > 200 || _hasControlCharacters(pickup)) {
       throw const WorkerApiException('Укажите корректное место подачи автомобиля.');
     }
-    return _request('/orders/publish', method: 'POST', body: order);
+    final destination = (order['destination'] ?? '').toString().trim();
+    if (destination.isEmpty || destination.length > 200 ||
+        _hasControlCharacters(destination)) {
+      throw const WorkerApiException('Укажите корректный пункт назначения.');
+    }
+    final latitude = order['pickupLat'];
+    final longitude = order['pickupLng'];
+    if (latitude is! num || longitude is! num ||
+        !latitude.toDouble().isFinite || !longitude.toDouble().isFinite ||
+        latitude < -90 || latitude > 90 ||
+        longitude < -180 || longitude > 180) {
+      throw const WorkerApiException('Проверьте координаты места подачи автомобиля.');
+    }
+    final normalizedOrder = Map<String, dynamic>.from(order)
+      ..['id'] = orderId
+      ..['pickup'] = pickup
+      ..['destination'] = destination;
+    return _request('/orders/publish', method: 'POST', body: normalizedOrder);    return _request('/orders/publish', method: 'POST', body: order);
   }
 
   static Future<Map<String, dynamic>> syncOrders(
     List<Map<String, dynamic>> orders,
   ) {
-    final ids = orders.map((order) => (order['id'] ?? '').toString().trim()).toList();
-    if (ids.any((id) => id.isEmpty || id.length > 128 || _hasControlCharacters(id)) || ids.toSet().length != ids.length) {
+    final ids = orders.map((order) => _validatedOrderId((order['id'] ?? '').toString())).toList();
+    if (ids.toSet().length != ids.length) {
       throw const WorkerApiException('Список заказов содержит пустые или повторяющиеся номера.');
     }
-    if (orders.length > 500 || orders.any((order) => order.isEmpty)) {
+    if (orders.isEmpty || orders.length > 500 || orders.any((order) => order.isEmpty)) {
       throw const WorkerApiException('Список заказов для синхронизации пуст или содержит слишком много записей.');
     }
     return _request('/orders/sync', method: 'POST', body: {'orders': orders});
@@ -462,7 +492,7 @@ class WorkerApi {
 
   static String _validatedOrderId(String orderId) {
     final id = orderId.trim();
-    if (id.isEmpty || id.length > 128 || _hasControlCharacters(id) || id.contains('/') || id.contains('\\') || id.contains('#')) {
+    if (id.isEmpty || id.length > 128 || _hasControlCharacters(id) || id.contains('/') || id.contains('\\') || id.contains('#') || id.contains('?')) {
       throw const WorkerApiException('Не удалось выполнить действие: неверный номер заказа.');
     }
     return id;
