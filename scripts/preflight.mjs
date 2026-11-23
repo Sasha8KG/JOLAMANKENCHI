@@ -134,6 +134,28 @@ const nearbyMarkerBlock = nearbyMarkerStart >= 0 ? app.slice(nearbyMarkerStart, 
 check("Passenger map renders distinct green taxi markers", nearbyMarkerBlock.includes("point: entry.key") && nearbyMarkerBlock.includes("Icons.local_taxi") && nearbyMarkerBlock.includes("Colors.green"));
 check("Passenger cancels nearby timer when disposed", /_nearbyDriversTimer\?\.cancel\(\)/.test(app));
 
+ // Dispatcher live fleet map and refresh regression checks.
+check("Dispatcher overview supplies driver GPS coordinates", worker.includes("d.latitude, d.longitude, d.location_updated_at"));
+check("Dispatcher overview is protected by dispatcher authentication", /url\.pathname === "\/dispatcher\/overview"[\s\S]{0,100}requireDispatcher\(request\)/.test(worker));
+check("Dispatcher dashboard refresh timer is configured", app.includes("Timer.periodic(const Duration(seconds: 15)"));
+check("Dispatcher refresh runs without replacing the dashboard", app.includes("_load(showLoading: false)"));
+check("Dispatcher refresh avoids overlapping requests", app.includes("if (_dispatcherLoadInProgress) return;"));
+check("Dispatcher refresh lock is released in finally", app.includes("_dispatcherLoadInProgress = false;"));
+check("Dispatcher refresh pauses while an action is running", app.includes("mounted && !_working"));
+check("Dispatcher map filters approved drivers", app.includes("if (!approved || !online) continue;") && app.includes("driver['approved']"));
+check("Dispatcher map filters online drivers", app.includes("driver['online']"));
+check("Dispatcher map parses latitude", app.includes("double.tryParse((driver['latitude'] ?? '').toString())"));
+check("Dispatcher map parses longitude", app.includes("double.tryParse((driver['longitude'] ?? '').toString())"));
+check("Dispatcher map rejects non-finite coordinates", app.includes("!latitude.isFinite || !longitude.isFinite"));
+check("Dispatcher map validates latitude bounds", app.includes("latitude < -90 || latitude > 90"));
+check("Dispatcher map validates longitude bounds", app.includes("longitude < -180 || longitude > 180"));
+check("Dispatcher map parses GPS update timestamp", app.includes("parseGpsTimestamp(driver['location_updated_at'])"));
+check("Dispatcher map hides stale GPS positions", app.includes("!isGpsTimestampFresh(updatedAt)"));
+check("Dispatcher map creates markers from validated coordinates", app.includes("point: LatLng(latitude, longitude)"));
+check("Dispatcher map uses green taxi markers", app.includes("Icons.local_taxi, color: Colors.green"));
+check("Dispatcher map uses the configured OpenStreetMap layer", app.includes("https://tile.openstreetmap.de/{z}/{x}/{y}.png"));
+check("Dispatcher refresh timer is cancelled on dispose", app.includes("_dispatcherRefreshTimer?.cancel()"));
+
 for (const item of checks) {
   process.stdout.write(`${item.ok ? 'PASS' : 'FAIL'}  ${item.label}\n`);
 }

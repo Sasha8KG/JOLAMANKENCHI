@@ -3061,14 +3061,27 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
   int _cityFareSom = 0;
   int _intercityFareSom = 0;
   bool _working = false;
+  bool _dispatcherLoadInProgress = false;
+  Timer? _dispatcherRefreshTimer;
 
   @override
   void initState() {
     super.initState();
     _load();
+    _dispatcherRefreshTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (mounted && !_working) unawaited(_load(showLoading: false));
+    });
+  }
+
+  @override
+  void dispose() {
+    _dispatcherRefreshTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _load({bool showLoading = true}) async {
+    if (_dispatcherLoadInProgress) return;
+    _dispatcherLoadInProgress = true;
     // При обновлении данных после изменения тарифа не убираем всю панель
     // с экрана: это сохраняет состояние вложенных виджетов и диалогов.
     if (mounted) {
@@ -3101,7 +3114,54 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() { _loading = false; _error = e.toString(); });
+    } finally {
+      _dispatcherLoadInProgress = false;
     }
+  }
+
+  Widget _dispatcherDriverMap() {
+    final markers = <Marker>[];
+    for (final driver in _drivers) {
+      final approved = driver['approved'] == true || driver['approved'] == 1 || driver['approved'].toString() == '1';
+      final online = driver['online'] == true || driver['online'] == 1 || driver['online'].toString() == '1';
+      if (!approved || !online) continue;
+      final latitude = double.tryParse((driver['latitude'] ?? '').toString());
+      final longitude = double.tryParse((driver['longitude'] ?? '').toString());
+      final updatedAt = parseGpsTimestamp(driver['location_updated_at']);
+      if (latitude == null || longitude == null || !latitude.isFinite || !longitude.isFinite ||
+          latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180 ||
+          !isGpsTimestampFresh(updatedAt)) continue;
+      final name = (driver['name'] ?? 'Водитель').toString();
+      markers.add(Marker(
+        point: LatLng(latitude, longitude),
+        width: 44,
+        height: 48,
+        child: Tooltip(
+          message: name,
+          child: const Icon(Icons.local_taxi, color: Colors.green, size: 34),
+        ),
+      ));
+    }
+    return Card(child: Padding(
+      padding: const EdgeInsets.all(12),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('На линии с актуальным GPS: ${markers.length}', style: const TextStyle(fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        SizedBox(height: 260, child: FlutterMap(
+          options: MapOptions(initialCenter: TaxiParkState.sulyuktaCenter, initialZoom: 12),
+          children: [
+            TileLayer(
+              urlTemplate: 'https://tile.openstreetmap.de/{z}/{x}/{y}.png',
+              userAgentPackageName: 'com.jolamankenchi.taxi',
+            ),
+            MarkerLayer(markers: markers),
+          ],
+        )),
+        const SizedBox(height: 6),
+        const Text('Показываются только одобренные водители на линии с GPS не старше 60 секунд.',
+          style: TextStyle(fontSize: 12, color: Colors.black54)),
+      ]),
+    ));
   }
 
   Future<void> _approve(Map<String, dynamic> driver, bool approved) async {
@@ -3458,6 +3518,8 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
                     Text('Водителей в базе: ${_drivers.length}'),
                   ]))),
                 const WalkieTalkieWidget(senderName: 'Диспетчер', allowText: true),
+                _sectionTitle('Карта водителей на линии', Icons.map_outlined),
+                _dispatcherDriverMap(),
                 _sectionTitle('Тарифы для клиентов', Icons.price_change),
                 Card(child: Padding(padding: const EdgeInsets.all(12), child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start, children: [
