@@ -475,9 +475,9 @@ const registerEnd = worker.indexOf('if (url.pathname === "/drivers/documents" &&
 const registerRoute = registerStart >= 0 && registerEnd > registerStart ? worker.slice(registerStart, registerEnd) : '';
 check('Registration rejects non-object or non-text profile payloads', registerRoute.includes('!b || typeof b !== "object" || Array.isArray(b)') && registerRoute.includes('typeof value === "string"'));
 check('Registration caps raw field lengths before normalization', registerRoute.includes('b.name.length > 240') && registerRoute.includes('b.phone.length > 64') && registerRoute.includes('b.car_model.length > 180') && registerRoute.includes('b.car_number.length > 60'));
-check('Registration collapses repeated whitespace with a real whitespace regex', registerRoute.includes('replace(/\s+/g, " ")'));
-check('Registration extracts digits with a real nondigit regex', registerRoute.includes('phoneInput.replace(/\D/g, "")'));
-check('Registration validates phone syntax with an optional leading plus', registerRoute.includes('!/^\+?[0-9 ()-]+$/.test(phoneInput)'));
+check('Registration collapses repeated whitespace with a real whitespace regex', registerRoute.includes('replace(/\\s+/g, " ")'));
+check('Registration extracts digits with a real nondigit regex', registerRoute.includes('phoneInput.replace(/\\D/g, "")'));
+check('Registration validates phone syntax with an optional leading plus', registerRoute.includes('!/^\\+?[0-9 ()-]+$/.test(phoneInput)'));
 check('Registration rejects unbalanced or nested phone parentheses', registerRoute.includes('parenthesisDepth !== 0') && registerRoute.includes('if (parenthesisDepth !== 0)'));
 check('Registration accepts only ten-digit local Kyrgyz numbers', registerRoute.includes('/^0[0-9]{9}$/.test(phoneDigits)'));
 check('Registration accepts only twelve-digit international Kyrgyz numbers', registerRoute.includes('/^996[0-9]{9}$/.test(phoneDigits)'));
