@@ -264,6 +264,34 @@ check('Driver order polling runs every five seconds', app.includes('Timer.period
 check('Open-order endpoint requires an approved online driver', worker.includes('url.pathname === "/orders/open"') && worker.includes('requireApprovedDriver(request, env, true)'));
 check('Open-order query returns only unassigned new orders', worker.includes("FROM orders o WHERE status='new'"));
 check('Open-order query excludes a driver with an active assigned trip', worker.includes("active.assigned_driver_uid=?") && worker.includes("active.status IN ('driver_assigned','arrived')"));
+
+// Open offers are visible only while the requesting driver has fresh, valid GPS.
+const openOrdersStart = worker.indexOf('if (url.pathname === "/orders/open" && request.method === "GET")');
+const openOrdersEnd = worker.indexOf('if (url.pathname === "/orders/status" && request.method === "GET")', openOrdersStart);
+const openOrdersRoute = openOrdersStart >= 0 && openOrdersEnd > openOrdersStart ? worker.slice(openOrdersStart, openOrdersEnd) : '';
+const openOrdersQueryStart = openOrdersRoute.indexOf('const open = await env.DB.prepare');
+const openOrdersQueryEnd = openOrdersRoute.indexOf('const assignedOrders =', openOrdersQueryStart);
+const openOrdersQuery = openOrdersQueryStart >= 0 && openOrdersQueryEnd > openOrdersQueryStart ? openOrdersRoute.slice(openOrdersQueryStart, openOrdersQueryEnd) : '';
+check('Open-order offers use a dedicated current-time snapshot', openOrdersRoute.includes('const openNow = Math.floor(Date.now() / 1000);'));
+check('Open-order offers are filtered through the current driver profile', openOrdersQuery.includes('FROM drivers available_driver WHERE available_driver.uid=?'));
+check('Open-order offers require approved driver status in SQL', openOrdersQuery.includes('available_driver.approved=1'));
+check('Open-order offers require online driver status in SQL', openOrdersQuery.includes('available_driver.online=1'));
+check('Open-order offers require a valid latitude in SQL', openOrdersQuery.includes('available_driver.latitude BETWEEN -90 AND 90'));
+check('Open-order offers require a valid longitude in SQL', openOrdersQuery.includes('available_driver.longitude BETWEEN -180 AND 180'));
+check('Open-order offers reject GPS timestamps older than 60 seconds', openOrdersQuery.includes('available_driver.location_updated_at BETWEEN ? AND ?') && openOrdersRoute.includes('openNow - 60'));
+check('Open-order offers reject future GPS timestamps', openOrdersQuery.includes('available_driver.location_updated_at BETWEEN ? AND ?') && openOrdersRoute.includes('openNow,'));
+check('Open-order offers bind the authenticated driver UID to the profile filter', openOrdersQuery.includes('.bind(\n            auth.user.localId, openNow - 60, openNow,'));
+check('Open-order offers bind both active-trip and refusal exclusions', openOrdersQuery.includes('auth.user.localId, auth.user.localId\n          ).all()'));
+check('Open-order offers remain limited to new unassigned orders', openOrdersQuery.includes("FROM orders o WHERE status='new'"));
+check('Open-order offers continue excluding active trips', openOrdersQuery.includes("active.status IN ('driver_assigned','arrived')"));
+check('Open-order offers continue respecting driver refusals', openOrdersQuery.includes('order_refusals x WHERE x.order_id=o.id AND x.driver_uid=?'));
+check('Open-order offer result count remains bounded', openOrdersQuery.includes('ORDER BY created_at ASC LIMIT 100'));
+check('Assigned active orders are fetched separately from open offers', openOrdersRoute.includes('const assignedOrders = await env.DB.prepare'));
+check('Assigned active orders remain visible even when open-offer GPS is stale', openOrdersRoute.includes("status IN ('driver_assigned','arrived') AND assigned_driver_uid=?"));
+check('Driver API response keeps open and assigned order lists separate', openOrdersRoute.includes('orders: open.results || [], assignedOrders: assignedOrders.results || []'));
+check('Driver UI clears open offers when the driver manually goes offline', app.includes('_driverWantsOnline = false;') && app.includes('_serverOpenOrders = [];'));
+check('Driver UI only polls order offers while the driver wants to be online', app.includes('if (!mounted || !_driverWantsOnline || _ordersPollInProgress) return;'))
+
 check('Driver sees availability again after the active order disappears', app.includes('hadAssignedOrder && assigned.isEmpty') && app.includes('Вы снова можете принимать заказы.'));
 
 check('Driver screen keeps a user-controlled desired availability state with offline as the safe default', app.includes('bool _driverWantsOnline = false;'));

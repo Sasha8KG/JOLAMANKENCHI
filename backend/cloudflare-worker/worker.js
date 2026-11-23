@@ -719,13 +719,22 @@ export default {
           if (patch.ok) await env.DB.prepare("UPDATE orders SET firebase_synced_at=unixepoch() WHERE id=?").bind(o.id).run();
           syncResults.push({ id: o.firebase_order_id, ...patch });
         }
+        const openNow = Math.floor(Date.now() / 1000);
         const open = await env.DB.prepare(`SELECT id, firebase_order_id, pickup_address, pickup_lat, pickup_lng,
           destination_address, destination_lat, destination_lng, passenger_count, payment_method, tariff_type, comment,
           created_at, response_deadline FROM orders o WHERE status='new'
+          AND EXISTS (SELECT 1 FROM drivers available_driver WHERE available_driver.uid=?
+            AND available_driver.approved=1 AND available_driver.online=1
+            AND available_driver.latitude BETWEEN -90 AND 90
+            AND available_driver.longitude BETWEEN -180 AND 180
+            AND available_driver.location_updated_at BETWEEN ? AND ?)
           AND NOT EXISTS (SELECT 1 FROM orders active WHERE active.assigned_driver_uid=?
             AND active.status IN ('driver_assigned','arrived'))
           AND NOT EXISTS (SELECT 1 FROM order_refusals x WHERE x.order_id=o.id AND x.driver_uid=?)
-          ORDER BY created_at ASC LIMIT 100`).bind(auth.user.localId, auth.user.localId).all();
+          ORDER BY created_at ASC LIMIT 100`).bind(
+            auth.user.localId, openNow - 60, openNow,
+            auth.user.localId, auth.user.localId
+          ).all();
         const assignedOrders = await env.DB.prepare(`SELECT id, firebase_order_id, pickup_address, pickup_lat, pickup_lng,
           destination_address, destination_lat, destination_lng, passenger_count, payment_method, tariff_type, comment,
           assigned_at, status FROM orders WHERE status IN ('driver_assigned','arrived') AND assigned_driver_uid=? ORDER BY assigned_at DESC LIMIT 5`)
