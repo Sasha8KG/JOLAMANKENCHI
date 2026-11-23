@@ -323,19 +323,47 @@ export default {
       if (url.pathname === "/drivers/register" && request.method === "POST") {
         const auth = await verifyFirebaseUser(request);
         const b = await request.json();
-        const clean = value => String(value ?? "").trim().replace(/\\s+/g, " ");
+        if (!b || typeof b !== "object" || Array.isArray(b) ||
+            ![b.name, b.phone, b.car_model, b.car_number].every(value => typeof value === "string")) {
+          return response({ status: "error", message: "Передайте ФИО, телефон, марку и номер автомобиля обычным текстом." }, 400);
+        }
+        // Reject oversized raw values before trimming or normalizing them.
+        if (b.name.length > 240 || b.phone.length > 64 || b.car_model.length > 180 || b.car_number.length > 60) {
+          return response({ status: "error", message: "Одно из полей анкеты слишком длинное. Проверьте введённые данные." }, 400);
+        }
+        const clean = value => String(value ?? "").trim().replace(/\s+/g, " ");
         const name = clean(b.name);
-        const phone = clean(b.phone);
+        const phoneInput = clean(b.phone);
         const carModel = clean(b.car_model);
         const carNumber = clean(b.car_number).toUpperCase();
-        const phoneDigits = phone.replace(/\\D/g, "");
+        const phoneDigits = phoneInput.replace(/\D/g, "");
+        let parenthesisDepth = 0;
+        for (const character of phoneInput) {
+          if (character === "(") {
+            if (parenthesisDepth !== 0) {
+              return response({ status: "error", message: "Проверьте скобки в номере телефона." }, 400);
+            }
+            parenthesisDepth = 1;
+          } else if (character === ")") {
+            if (parenthesisDepth !== 1) {
+              return response({ status: "error", message: "Проверьте скобки в номере телефона." }, 400);
+            }
+            parenthesisDepth = 0;
+          }
+        }
         if (hasForbiddenControlCharacters(name) || name.length < 3 || name.length > 80) {
           return response({ status: "error", message: "Укажите ФИО водителя от 3 до 80 символов." }, 400);
         }
-        if (hasForbiddenControlCharacters(phone) || !/^\\+?[0-9 ()-]+$/.test(phone) ||
+        if (hasForbiddenControlCharacters(phoneInput) || !/^\+?[0-9 ()-]+$/.test(phoneInput) ||
+            parenthesisDepth !== 0 ||
             !( /^0[0-9]{9}$/.test(phoneDigits) || /^996[0-9]{9}$/.test(phoneDigits) )) {
           return response({ status: "error", message: "Укажите корректный номер Кыргызстана: 0XXXXXXXXX или +996XXXXXXXXX." }, 400);
         }
+        // Store one canonical international form so formatting differences do not
+        // create duplicate-looking profiles or trigger unnecessary re-approval.
+        const phone = phoneDigits.startsWith("0")
+          ? "+996" + phoneDigits.slice(1)
+          : "+" + phoneDigits;
         if (hasForbiddenControlCharacters(carModel) || carModel.length < 2 || carModel.length > 60) {
           return response({ status: "error", message: "Укажите марку и модель автомобиля от 2 до 60 символов." }, 400);
         }
@@ -370,16 +398,19 @@ export default {
         }
         const savedProfile = await env.DB.prepare("SELECT approved FROM drivers WHERE uid=?")
           .bind(auth.user.localId).first();
-        const documents = await env.DB.prepare("SELECT review_status FROM driver_documents WHERE driver_uid=?")
+        const documents = await env.DB.prepare("SELECT review_status,rejection_reason FROM driver_documents WHERE driver_uid=?")
           .bind(auth.user.localId).first();
+        const profileChanged = Number(profileResults?.[0]?.meta?.changes || 0) > 0;
         const reviewRequired = documents?.review_status === "rejected";
         return response({
           status: "ok",
           approved: Number(savedProfile?.approved) === 1,
           review_required: reviewRequired,
-          message: reviewRequired
+          message: profileChanged
             ? "Данные анкеты изменены. Водитель временно снят с линии до повторной проверки диспетчером."
-            : "Анкета сохранена. Ожидайте одобрения диспетчера."
+            : reviewRequired
+              ? (documents.rejection_reason || "Документы отклонены. Исправьте замечания и отправьте документы повторно.")
+              : "Анкета сохранена. Ожидайте одобрения диспетчера."
         });
       }
 

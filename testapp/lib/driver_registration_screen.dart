@@ -329,8 +329,8 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
                   maxLength: 80,
                   validator: (v) {
                     final value = _cleanText(v ?? '');
-                    return _hasControlCharacters(value) || value.length < 2 || value.length > 80
-                        ? 'Укажите ФИО без служебных символов (2–80 символов)'
+                    return _hasControlCharacters(value) || value.length < 3 || value.length > 80
+                        ? 'Укажите ФИО без служебных символов (3–80 символов)'
                         : null;
                   },
                 ),
@@ -343,8 +343,8 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
                   autofillHints: const [AutofillHints.telephoneNumber],
                   enableSuggestions: false,
                   autocorrect: false,
-                  maxLength: 16,
-                  decoration: const InputDecoration(labelText: 'Телефон 0XXXXXXXXX'),
+                  maxLength: 24,
+                  decoration: const InputDecoration(labelText: 'Телефон 0XXXXXXXXX или +996XXXXXXXXX'),
                   validator: (v) {
                     return FirebaseService.isValidKgPhone((v ?? '').trim())
                         ? null

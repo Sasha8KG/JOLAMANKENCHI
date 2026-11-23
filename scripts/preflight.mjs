@@ -473,16 +473,27 @@ check('Driver review rejects a stale or concurrently processed decision', review
 const registerStart = worker.indexOf('if (url.pathname === "/drivers/register" && request.method === "POST")');
 const registerEnd = worker.indexOf('if (url.pathname === "/drivers/documents" && request.method === "POST")', registerStart);
 const registerRoute = registerStart >= 0 && registerEnd > registerStart ? worker.slice(registerStart, registerEnd) : '';
-check('Driver registration normalizes repeated whitespace in profile fields', registerRoute.includes('replace(/\\\\s+/g, " ")'));
-check('Driver registration rejects missing or overlong driver names', registerRoute.includes('name.length < 3 || name.length > 80'));
-check('Driver registration rejects control characters in names', registerRoute.includes('hasForbiddenControlCharacters(name)'));
-check('Driver registration validates phone characters before saving', registerRoute.includes('!/^\\\\+?[0-9 ()-]+$/.test(phone)'));
-check('Driver registration accepts valid local Kyrgyz phone format', registerRoute.includes('/^0[0-9]{9}$/.test(phoneDigits)'));
-check('Driver registration accepts valid international Kyrgyz phone format', registerRoute.includes('/^996[0-9]{9}$/.test(phoneDigits)'));
-check('Driver registration requires a bounded car model', registerRoute.includes('carModel.length < 2 || carModel.length > 60'));
-check('Driver registration requires a bounded vehicle plate', registerRoute.includes('carNumber.length < 2 || carNumber.length > 20'));
-check('Profile change revokes document review and driver approval in one D1 batch', registerRoute.includes('const profileResults = await env.DB.batch([') && registerRoute.includes("review_status='rejected'") && registerRoute.includes('approved=CASE WHEN drivers.name<>excluded.name'));
-check('Profile save checks the D1 write result and reloads persisted approval', registerRoute.includes('profileResults?.[1]?.meta?.changes') && registerRoute.includes('SELECT approved FROM drivers WHERE uid=?'));
+check('Registration rejects non-object or non-text profile payloads', registerRoute.includes('!b || typeof b !== "object" || Array.isArray(b)') && registerRoute.includes('typeof value === "string"'));
+check('Registration caps raw field lengths before normalization', registerRoute.includes('b.name.length > 240') && registerRoute.includes('b.phone.length > 64') && registerRoute.includes('b.car_model.length > 180') && registerRoute.includes('b.car_number.length > 60'));
+check('Registration collapses repeated whitespace with a real whitespace regex', registerRoute.includes('replace(/\s+/g, " ")'));
+check('Registration extracts digits with a real nondigit regex', registerRoute.includes('phoneInput.replace(/\D/g, "")'));
+check('Registration validates phone syntax with an optional leading plus', registerRoute.includes('!/^\+?[0-9 ()-]+$/.test(phoneInput)'));
+check('Registration rejects unbalanced or nested phone parentheses', registerRoute.includes('parenthesisDepth !== 0') && registerRoute.includes('if (parenthesisDepth !== 0)'));
+check('Registration accepts only ten-digit local Kyrgyz numbers', registerRoute.includes('/^0[0-9]{9}$/.test(phoneDigits)'));
+check('Registration accepts only twelve-digit international Kyrgyz numbers', registerRoute.includes('/^996[0-9]{9}$/.test(phoneDigits)'));
+check('Registration stores local and international numbers in canonical +996 form', registerRoute.includes('"+996" + phoneDigits.slice(1)') && registerRoute.includes('"+" + phoneDigits'));
+check('Registration validates car model and plate length on the server', registerRoute.includes('carModel.length < 2 || carModel.length > 60') && registerRoute.includes('carNumber.length < 2 || carNumber.length > 20'));
+check('Profile review revocation and profile update stay in one D1 batch', registerRoute.includes('const profileResults = await env.DB.batch([') && registerRoute.includes("review_status='rejected'") && registerRoute.includes('approved=CASE WHEN drivers.name<>excluded.name'));
+check('Profile response distinguishes changed data from previously rejected documents', registerRoute.includes('const profileChanged = Number(profileResults?.[0]?.meta?.changes || 0) > 0') && registerRoute.includes('documents.rejection_reason'));
+check('Profile save checks D1 result and reloads persisted approval', registerRoute.includes('profileResults?.[1]?.meta?.changes') && registerRoute.includes('SELECT approved FROM drivers WHERE uid=?'));
+check('Registration UI enforces the same three-character minimum as the Worker', registration.includes('value.length < 3 || value.length > 80'));
+check('Registration phone field allows formatted international Kyrgyz numbers', registration.includes('maxLength: 24') && registration.includes('+996XXXXXXXXX'));
+const phoneSyntax = /^\+?[0-9 ()-]+$/;
+const digitsOnly = value => value.replace(/\D/g, '');
+check('Phone syntax accepts local and international formatted examples', phoneSyntax.test('0700 123 456') && phoneSyntax.test('+996 (700) 123-456'));
+check('Phone digit extraction accepts the supported local number', digitsOnly('0700 123-456') === '0700123456');
+check('Phone digit extraction accepts the supported international number', digitsOnly('+996 (700) 123-456') === '996700123456');
+check('Phone validation rejects letters, extensions and misplaced plus signs', !phoneSyntax.test('+996700123456 ext2') && !phoneSyntax.test('996+700123456'));
 
 for (const item of checks) {
   process.stdout.write(`${item.ok ? 'PASS' : 'FAIL'}  ${item.label}\n`);
