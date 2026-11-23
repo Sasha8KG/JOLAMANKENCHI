@@ -319,8 +319,8 @@ export default {
           .bind(auth.user.localId, profile.name, profile.phone, profile.carModel, profile.carNumber,
             profileChanged ? 1 : 0, profileChanged ? 1 : 0).run();
         if (profileChanged) {
-          await env.DB.prepare(`UPDATE driver_documents SET review_status='pending',
-            rejection_reason='Данные анкеты изменены. Требуется повторная проверка диспетчером.',
+          await env.DB.prepare(`UPDATE driver_documents SET review_status='rejected',
+            rejection_reason='Данные анкеты изменены. Повторно отправьте водительское удостоверение, фото водителя и фото автомобиля.',
             reviewed_at=NULL, reviewed_by=NULL WHERE driver_uid=?`)
             .bind(auth.user.localId).run();
         }
@@ -364,9 +364,11 @@ export default {
           return response({ status: "error", message: "Укажите водителя и решение" }, 400);
         if (decision === "rejected" && reason.length < 5)
           return response({ status: "error", message: "Напишите причину отказа (не менее 5 символов)" }, 400);
-        const docs = await env.DB.prepare("SELECT license_url,driver_photo_url,car_photo_url FROM driver_documents WHERE driver_uid=?").bind(uid).first();
+        const docs = await env.DB.prepare("SELECT license_url,driver_photo_url,car_photo_url,review_status FROM driver_documents WHERE driver_uid=?").bind(uid).first();
         if (!docs || !docs.license_url || !docs.driver_photo_url || !docs.car_photo_url)
           return response({ status: "error", message: "У водителя ещё нет всех трёх документов" }, 409);
+        if (docs.review_status !== "pending")
+          return response({ status: "error", message: "Водитель должен повторно отправить документы. Одобрение до новой отправки запрещено." }, 409);
         const exists = await env.DB.prepare("SELECT uid FROM drivers WHERE uid=?").bind(uid).first();
         if (!exists) return response({ status: "error", message: "Водитель не найден" }, 404);
         await env.DB.prepare(`UPDATE driver_documents SET review_status=?, rejection_reason=?, reviewed_at=unixepoch(), reviewed_by=? WHERE driver_uid=?`)
