@@ -87,6 +87,16 @@ async function createLiveKitToken(env, uid, name) {
 
 function num(v) { const n = Number(v); return Number.isFinite(n) ? n : null; }
 
+function hasFreshValidDriverLocation(driver, nowSeconds = Math.floor(Date.now() / 1000)) {
+  const latitude = num(driver?.latitude);
+  const longitude = num(driver?.longitude);
+  const updatedAt = num(driver?.location_updated_at);
+  if (latitude === null || longitude === null || updatedAt === null ||
+      latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) return false;
+  const ageSeconds = nowSeconds - updatedAt;
+  return ageSeconds >= 0 && ageSeconds <= 60;
+}
+
 // Kyrgyzstan business day: UTC+6, independent of the Cloudflare data-center timezone.
 function kgTodayDate() {
   return new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -134,11 +144,14 @@ async function finalizeExpiredOrders(env) {
   for (const order of (expired.results || [])) {
     const rows = await env.DB.prepare(`SELECT r.driver_uid, r.requested_at, d.name, d.car_number, d.latitude, d.longitude, d.location_updated_at
       FROM order_responses r JOIN drivers d ON d.uid=r.driver_uid
-      WHERE r.order_id=? AND d.approved=1 AND d.online=1 AND d.location_updated_at>=?
+      WHERE r.order_id=? AND d.approved=1 AND d.online=1 AND d.location_updated_at>=? AND d.location_updated_at<=?
       AND NOT EXISTS (SELECT 1 FROM order_refusals x WHERE x.order_id=r.order_id AND x.driver_uid=r.driver_uid)`)
-      .bind(order.id, now - 60).all();
-    const candidates = (rows.results || []).filter(d => num(d.latitude) !== null && num(d.longitude) !== null && num(order.pickup_lat) !== null && num(order.pickup_lng) !== null)
-      .map(d => ({ ...d, distance: distanceKm(Number(order.pickup_lat), Number(order.pickup_lng), Number(d.latitude), Number(d.longitude)) }))
+      .bind(order.id, now - 60, now).all();
+    const pickupLat = num(order.pickup_lat), pickupLng = num(order.pickup_lng);
+    const candidates = (rows.results || []).filter(d => hasFreshValidDriverLocation(d, now) &&
+      pickupLat !== null && pickupLng !== null && pickupLat >= -90 && pickupLat <= 90 &&
+      pickupLng >= -180 && pickupLng <= 180)
+      .map(d => ({ ...d, distance: distanceKm(pickupLat, pickupLng, Number(d.latitude), Number(d.longitude)) }))
       .sort((a, b) => a.distance - b.distance || Number(a.requested_at) - Number(b.requested_at));
     if (!candidates.length) {
       await env.DB.prepare("DELETE FROM order_responses WHERE order_id=?").bind(order.id).run();
@@ -534,11 +547,7 @@ export default {
         if (!orderId || !driverUid) return response({ status: "error", message: "Укажите заказ и водителя" }, 400);
         const driver = await env.DB.prepare("SELECT uid, approved, online, latitude, longitude, location_updated_at FROM drivers WHERE uid=?").bind(driverUid).first();
         if (!driver || Number(driver.approved) !== 1) return response({ status: "error", message: "Водитель не найден или не одобрен" }, 409);
-        const gpsAge = Math.floor(Date.now() / 1000) - Number(driver.location_updated_at || 0);
-        const driverLat = num(driver.latitude), driverLng = num(driver.longitude);
-        if (Number(driver.online) !== 1 || driverLat === null || driverLng === null ||
-            driverLat < -90 || driverLat > 90 || driverLng < -180 || driverLng > 180 ||
-            gpsAge < 0 || gpsAge > 60) {
+        if (Number(driver.online) !== 1 || !hasFreshValidDriverLocation(driver)) {
           return response({ status: "error", message: "Назначить можно только водителя на линии с актуальной геолокацией. Попросите водителя выйти на линию и обновить GPS." }, 409);
         }
         const refused = await env.DB.prepare("SELECT 1 AS found FROM order_refusals WHERE order_id=? AND driver_uid=?")
@@ -787,9 +796,9 @@ export default {
         const refused = await env.DB.prepare("SELECT 1 AS found FROM order_refusals WHERE order_id=? AND driver_uid=?")
           .bind(order.id, auth.user.localId).first();
         if (refused) return response({ status: "error", message: "Вы уже отказались от этого заказа; повторный отклик недоступен" }, 409);
-        if (num(auth.driver.latitude) === null || num(auth.driver.longitude) === null || !auth.driver.location_updated_at || Math.floor(Date.now()/1000)-Number(auth.driver.location_updated_at)>60)
+        const now = Math.floor(Date.now() / 1000);
+        if (!hasFreshValidDriverLocation(auth.driver, now))
           return response({ status: "error", message: "Сначала обновите геолокацию и попробуйте снова" }, 409);
-        const now = Math.floor(Date.now()/1000);
         await env.DB.prepare("INSERT OR IGNORE INTO order_responses (order_id,driver_uid,requested_at) VALUES (?,?,?)")
           .bind(order.id, auth.user.localId, now).run();
         await env.DB.prepare("UPDATE orders SET response_deadline=COALESCE(response_deadline, ?) WHERE id=? AND status='new'")
