@@ -51,10 +51,10 @@ check('Self-selection rejects a second active order', worker.includes('Снач�
 check('Dispatcher assignment checks driver approval', worker.includes('Number(driver.approved) !== 1'));
 check('Dispatcher assignment checks driver online state', worker.includes('Number(driver.online) !== 1'));
 check('Dispatcher assignment requires fresh GPS', worker.includes('Назначить можно только водителя на линии с актуальной геолокацией'));
-check('Dispatcher assignment atomically excludes active orders', worker.includes("active.status IN ('driver_assigned','arrived')") && worker.includes('.bind(driverUid, orderId, driverUid).run()'));
+check('Dispatcher assignment atomically excludes active orders', /UPDATE orders SET status='driver_assigned',[\\s\\S]*?NOT EXISTS \\(SELECT 1 FROM orders active WHERE active\\.assigned_driver_uid=\\?\\s+AND active\\.status IN \\('driver_assigned','arrived'\\)\\)/.test(worker) && worker.includes('.bind(driverUid, orderId, driverUid, driverUid, assignmentNow - 60, assignmentNow).run()'));
 check('Automatic candidate selection requires approved online drivers', worker.includes('d.approved=1 AND d.online=1'));
 check('Automatic selection excludes drivers with active orders', worker.includes('active.assigned_driver_uid=r.driver_uid'));
-check('Automatic assignment rechecks active-order exclusion', worker.includes('.bind(winner.driver_uid, now, order.id, now, winner.driver_uid).run()'));
+check('Automatic assignment rechecks active-order exclusion', /UPDATE orders SET status='driver_assigned',[\\s\\S]*?NOT EXISTS \\(SELECT 1 FROM orders active WHERE active\\.assigned_driver_uid=\\?\\s+AND active\\.status IN \\('driver_assigned','arrived'\\)\\)/.test(worker) && worker.includes('.bind(winner.driver_uid, assignmentNow, order.id, assignmentNow, winner.driver_uid, winner.driver_uid, assignmentNow - 60, assignmentNow).run()'));
 check('Automatic assignment only changes new orders', worker.includes("WHERE id=? AND status='new' AND response_deadline<=?"));
 check('Trip completion is dispatcher-only', worker.includes('url.pathname === "/orders/complete"') && worker.includes('const auth = await requireDispatcher(request);'));
 check('Trip completion requires driver arrival', worker.includes("WHERE id=? AND status='arrived' AND assigned_driver_uid IS NOT NULL"));
@@ -208,6 +208,38 @@ check('Atomic automatic assignment rejects invalid longitude', automaticAssignBl
 check('Atomic automatic assignment enforces the fresh GPS time window', automaticAssignBlock.includes('current_driver.location_updated_at BETWEEN ? AND ?'));
 check('Atomic automatic assignment preserves the active-trip exclusion', automaticAssignBlock.includes("active.status IN ('driver_assigned','arrived')"));
 check('Atomic automatic assignment still requires the order response deadline', automaticAssignBlock.includes("response_deadline<=?"));
+
+
+ // Keep the SQL's active-trip guard and driver-eligibility guard bound together atomically.
+const dispatcherAssignStart = worker.indexOf('if (url.pathname === "/orders/assign" && request.method === "POST")');
+const dispatcherAssignEnd = worker.indexOf('if (url.pathname === "/drivers/online" && request.method === "POST")', dispatcherAssignStart);
+const dispatcherAssignBlock = dispatcherAssignStart >= 0 && dispatcherAssignEnd > dispatcherAssignStart ? worker.slice(dispatcherAssignStart, dispatcherAssignEnd) : '';
+const dispatcherUpdateStart = dispatcherAssignBlock.indexOf("UPDATE orders SET status='driver_assigned'");
+const dispatcherUpdateEnd = dispatcherAssignBlock.indexOf('.run();', dispatcherUpdateStart);
+const dispatcherUpdate = dispatcherUpdateStart >= 0 && dispatcherUpdateEnd > dispatcherUpdateStart ? dispatcherAssignBlock.slice(dispatcherUpdateStart, dispatcherUpdateEnd + 6) : '';
+const autoUpdateStart = worker.indexOf('const winner = candidates[0];');
+const autoUpdateEnd = worker.indexOf('if (Number(assigned.meta?.changes || 0) === 1)', autoUpdateStart);
+const autoUpdate = autoUpdateStart >= 0 && autoUpdateEnd > autoUpdateStart ? worker.slice(autoUpdateStart, autoUpdateEnd) : '';
+check('Dispatcher atomic update is isolated for structural checks', dispatcherUpdate.includes("UPDATE orders SET status='driver_assigned'"));
+check('Dispatcher atomic update contains both eligibility and active-order guards', dispatcherUpdate.includes('NOT EXISTS (SELECT 1 FROM orders active') && dispatcherUpdate.includes('EXISTS (SELECT 1 FROM drivers current_driver'));
+check('Dispatcher active-order guard matches the same driver UID', /active\.assigned_driver_uid=\?/.test(dispatcherUpdate));
+check('Dispatcher active-order guard blocks driver_assigned status', dispatcherUpdate.includes("'driver_assigned'"));
+check('Dispatcher active-order guard blocks arrived status', dispatcherUpdate.includes("'arrived'"));
+check('Dispatcher driver recheck uses the same UID as the assignment', /current_driver\.uid=\?/.test(dispatcherUpdate));
+check('Dispatcher update binds six SQL parameters', (dispatcherUpdate.match(/\?/g) || []).length === 6);
+check('Dispatcher update binds assigned driver first', dispatcherUpdate.includes('.bind(driverUid, orderId, driverUid, driverUid, assignmentNow - 60, assignmentNow)'));
+check('Dispatcher update binds order ID second', dispatcherUpdate.includes('.bind(driverUid, orderId,'));
+check('Dispatcher update binds active driver UID third', dispatcherUpdate.includes('.bind(driverUid, orderId, driverUid,'));
+check('Dispatcher update binds eligibility UID fourth', dispatcherUpdate.includes('.bind(driverUid, orderId, driverUid, driverUid,'));
+check('Dispatcher update binds lower GPS age bound before upper bound', dispatcherUpdate.includes('assignmentNow - 60, assignmentNow).run()'));
+check('Automatic update is isolated for structural checks', autoUpdate.includes("UPDATE orders SET status='driver_assigned'"));
+check('Automatic update contains both eligibility and active-order guards', autoUpdate.includes('NOT EXISTS (SELECT 1 FROM orders active') && autoUpdate.includes('EXISTS (SELECT 1 FROM drivers current_driver'));
+check('Automatic active-order guard matches the winning driver UID', /active\.assigned_driver_uid=\?/.test(autoUpdate));
+check('Automatic update binds eight SQL parameters', (autoUpdate.match(/\?/g) || []).length === 8);
+check('Automatic update binds the winner as assigned driver', autoUpdate.includes('.bind(winner.driver_uid, assignmentNow,'));
+check('Automatic update binds the winner to the active-order guard', autoUpdate.includes('order.id, assignmentNow, winner.driver_uid,'));
+check('Automatic update binds the winner again to driver eligibility', autoUpdate.includes('winner.driver_uid, winner.driver_uid, assignmentNow - 60'));
+check('Automatic update binds fresh GPS bounds as the final parameters', autoUpdate.includes('assignmentNow - 60, assignmentNow).run()'));
 
 for (const item of checks) {
   process.stdout.write(`${item.ok ? 'PASS' : 'FAIL'}  ${item.label}\n`);
