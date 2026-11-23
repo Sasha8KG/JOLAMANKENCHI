@@ -2556,7 +2556,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
         isGpsTimestampFresh(position.timestamp);
   }
 
-  Future<void> _publishDriverLocation(DriverModel driver) async {
+  Future<bool> _publishDriverLocation(DriverModel driver) async {
     // A single in-flight request is shared by GPS updates and the heartbeat.
     // This prevents slow mobile networks from accumulating location requests.
     final point = driver.currentLocation;
@@ -2564,16 +2564,18 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
         TaxiParkState.currentLoggedInDriver?.id != driver.id ||
         !point.latitude.isFinite || !point.longitude.isFinite ||
         point.latitude < -90 || point.latitude > 90 ||
-        point.longitude < -180 || point.longitude > 180) return;
+        point.longitude < -180 || point.longitude > 180) return false;
     _locationUpdateInProgress = true;
     try {
       await WorkerApi.setDriverOnline(
         online: true,
-        latitude: driver.currentLocation.latitude,
-        longitude: driver.currentLocation.longitude,
+        latitude: point.latitude,
+        longitude: point.longitude,
       );
+      return true;
     } catch (_) {
-      // GPS tracking continues locally; the next GPS update or heartbeat retries.
+      // The caller can distinguish a failed server update from a fresh GPS fix.
+      return false;
     } finally {
       _locationUpdateInProgress = false;
     }
@@ -2596,7 +2598,10 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
       }
       driver.currentLocation = LatLng(position.latitude, position.longitude);
       setState(() {});
-      await _publishDriverLocation(driver);
+      final published = await _publishDriverLocation(driver);
+      if (!published) {
+        throw StateError('Не удалось обновить геолокацию на сервере.');
+      }
     } catch (_) {
       if (!mounted || TaxiParkState.currentLoggedInDriver?.id != driver.id) return;
       // Do not keep the driver advertised as online when fresh GPS cannot be confirmed.
@@ -2690,7 +2695,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
         if (_serverAssignedOrders.isNotEmpty) {
           unawaited(_loadDriverApproachRoute());
         }
-        unawaited(_publishDriverLocation(driver));
+        unawaited(_publishDriverLocation(driver).then<void>((_) {}));
       }, onError: (Object error) {
         if (!mounted) return;
         _positionSubscription?.cancel();
