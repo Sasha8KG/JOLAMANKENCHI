@@ -329,6 +329,33 @@ check('Offline retry has mounted guard', app.includes('if (!mounted || _driverWa
 check('GPS retry timer remains separate', app.includes('Timer? _locationRetryTimer;') && app.includes('Timer? _offlineSyncRetryTimer;'));
 check('Offline retry timer is cleared before returning online', app.includes('_offlineSyncRetryTimer = null;'));
 
+
+// Server-side driver availability must remain consistent with active-trip rules.
+const onlineRouteStart = worker.indexOf('if (url.pathname === "/drivers/online" && request.method === "POST")');
+const onlineRouteEnd = worker.indexOf('if (url.pathname === "/orders/publish" && request.method === "POST")', onlineRouteStart);
+const onlineRoute = onlineRouteStart >= 0 && onlineRouteEnd > onlineRouteStart
+  ? worker.slice(onlineRouteStart, onlineRouteEnd) : '';
+check('Driver online route authenticates an approved driver', onlineRoute.includes('requireApprovedDriver(request, env)'));
+check('Driver online route validates the requested boolean state', onlineRoute.includes('typeof b.online !== "boolean"'));
+check('Driver online route rejects unpaired GPS coordinates', onlineRoute.includes('hasLatitude !== hasLongitude'));
+check('Driver online route requires GPS before going online', onlineRoute.includes('(b.online && (!hasLatitude || !hasLongitude))'));
+check('Driver online route validates finite latitude and longitude', onlineRoute.includes('!Number.isFinite(b.latitude)') && onlineRoute.includes('!Number.isFinite(b.longitude)'));
+check('Driver online route enforces latitude bounds', onlineRoute.includes('b.latitude < -90 || b.latitude > 90'));
+check('Driver online route enforces longitude bounds', onlineRoute.includes('b.longitude < -180 || b.longitude > 180'));
+check('Driver state update is scoped to the authenticated UID', onlineRoute.includes('WHERE uid=? AND approved=1'));
+check('Driver state update rechecks approval atomically', onlineRoute.includes('WHERE uid=? AND approved=1'));
+check('Driver state update allows going online only with approved state', onlineRoute.includes('AND (?=1 OR NOT EXISTS'));
+check('Driver offline update is blocked by an active assigned trip', onlineRoute.includes('NOT EXISTS (') && onlineRoute.includes('active.assigned_driver_uid=?'));
+check('Driver offline update blocks driver_assigned trips', onlineRoute.includes("active.status IN ('driver_assigned','arrived')"));
+check('Driver offline update blocks arrived trips', onlineRoute.includes("'driver_assigned','arrived'"));
+check('Online state can bypass only the offline active-trip guard', onlineRoute.includes('(?=1 OR NOT EXISTS'));
+check('Driver location coordinates are preserved when omitted', onlineRoute.includes('latitude=COALESCE(?,latitude)') && onlineRoute.includes('longitude=COALESCE(?,longitude)'));
+check('GPS freshness timestamp changes only with a complete coordinate pair', onlineRoute.includes('location_updated_at=CASE WHEN ? IS NOT NULL AND ? IS NOT NULL THEN unixepoch()'));
+check('Driver online update checks the database affected-row count', onlineRoute.includes('Number(result.meta.changes || 0) !== 1'));
+check('Unapplied driver state transitions return HTTP 409', onlineRoute.includes('}, 409);'));
+check('Failed driver state transition does not return success', onlineRoute.includes('if (!result.meta || Number(result.meta.changes || 0) !== 1)'));
+check('Successful response reports the requested persisted online state', onlineRoute.includes('return response({ status: "ok", online: !!online });'));
+
 for (const item of checks) {
   process.stdout.write(`${item.ok ? 'PASS' : 'FAIL'}  ${item.label}\n`);
 }

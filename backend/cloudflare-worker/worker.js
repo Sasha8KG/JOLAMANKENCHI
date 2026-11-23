@@ -604,10 +604,23 @@ export default {
         const online = b.online ? 1 : 0;
         const lat = hasLatitude ? b.latitude : null;
         const lng = hasLongitude ? b.longitude : null;
-        await env.DB.prepare(`UPDATE drivers SET online=?, latitude=COALESCE(?,latitude), longitude=COALESCE(?,longitude),
+        // Keep the line state transition atomic with trip eligibility: an
+        // offline update must not race an assignment or strand an active trip.
+        const result = await env.DB.prepare(`UPDATE drivers SET online=?, latitude=COALESCE(?,latitude), longitude=COALESCE(?,longitude),
           location_updated_at=CASE WHEN ? IS NOT NULL AND ? IS NOT NULL THEN unixepoch() ELSE location_updated_at END,
-          updated_at=unixepoch() WHERE uid=?`)
-          .bind(online, lat, lng, lat, lng, auth.user.localId).run();
+          updated_at=unixepoch()
+          WHERE uid=? AND approved=1
+            AND (?=1 OR NOT EXISTS (
+              SELECT 1 FROM orders active WHERE active.assigned_driver_uid=?
+                AND active.status IN ('driver_assigned','arrived')
+            ))`)
+          .bind(online, lat, lng, lat, lng, auth.user.localId, online, auth.user.localId).run();
+        if (!result.meta || Number(result.meta.changes || 0) !== 1) {
+          return response({
+            status: "error",
+            message: "Статус не изменён: проверьте одобрение диспетчера и отсутствие активного заказа"
+          }, 409);
+        }
         return response({ status: "ok", online: !!online });
       }
 
