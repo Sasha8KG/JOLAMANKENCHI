@@ -609,8 +609,8 @@ check('Widget test covers switching between Russian and Kyrgyz', read('testapp/t
 
 check('Client login and registration titles are localized', app.includes("Кардар катары кирүү") && app.includes("Кардарды каттоо"));
 check('Client login and registration actions are localized', app.includes("Аккаунтка кирүү") && app.includes("Жаңы кардарды каттоо"));
-check('Client auth page exposes the language switcher', app.includes("title: const TaxiLocalizedText(russian: 'Клиентская панель', kyrgyz: 'Кардардын панели')") && app.includes("child: const TaxiLanguageSwitcher()"));
-check('Driver login page exposes the language switcher', app.includes("title: const TaxiLocalizedText(russian: 'Кабинет водителя', kyrgyz: 'Айдоочунун кабинети')") && app.includes("child: const TaxiLanguageSwitcher()"));
+check('Client auth page exposes the language switcher', app.includes("title: const TaxiLocalizedText(russian: 'Клиентская панель', kyrgyz: 'Кардардын панели')") && app.includes("actions: const [Padding(padding: EdgeInsets.only(right: 12), child: TaxiLanguageSwitcher())]"));
+check('Driver login page exposes the language switcher', app.includes("title: const TaxiLocalizedText(russian: 'Кабинет водителя', kyrgyz: 'Айдоочунун кабинети')") && app.includes("actions: const [Padding(padding: EdgeInsets.only(right: 12), child: TaxiLanguageSwitcher())]"));
 check('Driver login title, fields and actions are localized', app.includes("Айдоочунун телефону") && app.includes("АЙДООЧУ КАТАРЫ КИРҮҮ") && app.includes("АЙДООЧУ БОЛУУГА ӨТҮНМӨ БЕРҮҮ"));
 check('Client login password field is localized', app.includes("Сырсөз (кеминде 6 белги)"));
 check('Client registration name field is localized', app.includes("Атыңыз"));
