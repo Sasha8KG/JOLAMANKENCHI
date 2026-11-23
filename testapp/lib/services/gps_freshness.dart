@@ -1,7 +1,15 @@
 /// Shared GPS timestamp parsing and freshness rules for passenger and driver screens.
 DateTime? parseGpsTimestamp(dynamic value) {
   if (value is num) {
-    return DateTime.fromMillisecondsSinceEpoch(value.toInt() * 1000);
+    final seconds = value.toDouble();
+    // Worker timestamps are Unix seconds. Ignore non-finite or out-of-range
+    // values so a malformed API response cannot crash the passenger/driver map.
+    if (!seconds.isFinite || seconds.abs() > 8640000000000) return null;
+    try {
+      return DateTime.fromMillisecondsSinceEpoch(value.toInt() * 1000);
+    } catch (_) {
+      return null;
+    }
   }
   final text = (value ?? '').toString().trim();
   if (text.isEmpty) return null;

@@ -292,6 +292,18 @@ void main() {
       expect(parseGpsTimestamp('not-a-date'), isNull);
     });
 
+    test('rejects non-finite numeric GPS timestamps', () {
+      expect(parseGpsTimestamp(double.nan), isNull);
+      expect(parseGpsTimestamp(double.infinity), isNull);
+      expect(parseGpsTimestamp(double.negativeInfinity), isNull);
+    });
+
+    test('rejects numeric GPS timestamps outside the DateTime range', () {
+      expect(parseGpsTimestamp(8640000000001), isNull);
+      expect(parseGpsTimestamp(-8640000000001), isNull);
+      expect(parseGpsTimestamp(double.maxFinite), isNull);
+    });
+
     test('accepts a GPS update exactly at the 60-second limit', () {
       expect(
         isGpsTimestampFresh(now.subtract(const Duration(seconds: 60)), now: now),
