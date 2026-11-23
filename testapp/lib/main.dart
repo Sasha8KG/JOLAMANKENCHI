@@ -1520,7 +1520,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
               currentLocation: LatLng(lat, lng),
               locationUpdatedAt: locationUpdatedAt,
               isApproved: true,
-              isOnline: _isEnabled(raw['online']) &&
+              isOnline: (raw['online'] == true || raw['online'] == 1 || raw['online']?.toString().trim().toLowerCase() == 'true' || raw['online']?.toString().trim() == '1') &&
                   gpsAge != null && gpsAge >= 0 && gpsAge <= 60,
               );
             }
