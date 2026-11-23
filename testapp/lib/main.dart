@@ -2366,6 +2366,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
   String? _driverRouteError;
   String? _driverRouteKey;
   DateTime? _driverRouteRetryAfter;
+  bool _driverWantsOnline = true;
 
   @override
   void initState() {
@@ -2396,7 +2397,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
 
   Future<void> _pollServerOrders() async {
     // Не допускаем наложения запросов, если сеть отвечает дольше интервала опроса.
-    if (!mounted || _ordersPollInProgress) return;
+    if (!mounted || !_driverWantsOnline || _ordersPollInProgress) return;
     _ordersPollInProgress = true;
     try {
       final data = await WorkerApi.openOrders();
@@ -2643,10 +2644,10 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
     final waitUntil = DateTime.now().add(const Duration(seconds: 42));
     while (_locationUpdateInProgress && DateTime.now().isBefore(waitUntil)) {
       await Future<void>.delayed(const Duration(milliseconds: 100));
-      if (!mounted ||
+      if (!mounted || !_driverWantsOnline ||
           TaxiParkState.currentLoggedInDriver?.id != driver.id) return false;
     }
-    if (!mounted || _locationUpdateInProgress ||
+    if (!mounted || !_driverWantsOnline || _locationUpdateInProgress ||
         TaxiParkState.currentLoggedInDriver?.id != driver.id) return false;
     // Read the latest point only after the previous request has completed.
     final point = driver.currentLocation;
@@ -2660,6 +2661,14 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
         latitude: point.latitude,
         longitude: point.longitude,
       );
+      // If the driver switched off while this request was in flight, the final
+      // server state must remain offline rather than being overwritten by GPS.
+      if (!mounted || !_driverWantsOnline) {
+        await WorkerApi.setDriverOnline(online: false);
+        driver.isOnline = false;
+        return false;
+      }
+      driver.isOnline = true;
       return true;
     } catch (_) {
       // The caller can distinguish a failed server update from a fresh GPS fix.
@@ -2670,7 +2679,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
   }
 
   Future<void> _refreshDriverHeartbeat(DriverModel driver) async {
-    if (!mounted || _positionSubscription == null ||
+    if (!mounted || !_driverWantsOnline || _positionSubscription == null ||
         _heartbeatCheckInProgress ||
         TaxiParkState.currentLoggedInDriver?.id != driver.id) return;
     _heartbeatCheckInProgress = true;
@@ -2679,7 +2688,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
         desiredAccuracy: LocationAccuracy.high,
         timeLimit: const Duration(seconds: 15),
       );
-      if (!mounted || _positionSubscription == null ||
+      if (!mounted || !_driverWantsOnline || _positionSubscription == null ||
           TaxiParkState.currentLoggedInDriver?.id != driver.id) return;
       if (!_isUsableDriverPosition(position)) {
         throw StateError('GPS не предоставил свежие и точные координаты.');
@@ -2691,7 +2700,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
         throw StateError('Не удалось обновить геолокацию на сервере.');
       }
     } catch (_) {
-      if (!mounted || TaxiParkState.currentLoggedInDriver?.id != driver.id) return;
+      if (!mounted || !_driverWantsOnline || TaxiParkState.currentLoggedInDriver?.id != driver.id) return;
       // Do not keep the driver advertised as online when fresh GPS cannot be confirmed.
       _positionSubscription?.cancel();
       _positionSubscription = null;
@@ -2710,16 +2719,16 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
   }
 
   void _scheduleLocationRetry() {
-    if (!mounted || _locationRetryTimer?.isActive == true) return;
+    if (!mounted || !_driverWantsOnline || _locationRetryTimer?.isActive == true) return;
     _locationRetryTimer = Timer(const Duration(seconds: 20), () {
       _locationRetryTimer = null;
-      if (mounted) unawaited(_startLocationTracking());
+      if (mounted && _driverWantsOnline) unawaited(_startLocationTracking());
     });
   }
 
   Future<void> _startLocationTracking() async {
     final driver = TaxiParkState.currentLoggedInDriver;
-    if (driver == null || !mounted || _locationTrackingStarting ||
+    if (driver == null || !mounted || !_driverWantsOnline || _locationTrackingStarting ||
         _positionSubscription != null) return;
     _locationTrackingStarting = true;
     try {
@@ -2745,7 +2754,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
         timeLimit: const Duration(seconds: 20),
       );
       // Экран мог закрыться, пока телефон определял координаты.
-      if (!mounted) return;
+      if (!mounted || !_driverWantsOnline) return;
       if (!_isUsableDriverPosition(firstPosition)) {
         unawaited(WorkerApi.setDriverOnline(online: false).then<void>((_) {}).catchError((_) {}));
         _showLocationMessage('GPS пока определяет координаты недостаточно точно. Повторяем попытку.');
@@ -2771,7 +2780,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
           distanceFilter: 20,
         ),
       ).listen((position) {
-        if (!mounted) return;
+        if (!mounted || !_driverWantsOnline) return;
         // Ignore inaccurate or malformed fixes instead of moving the taxi marker.
         if (!_isUsableDriverPosition(position)) return;
         final latitude = position.latitude;
@@ -2785,7 +2794,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
         }
         unawaited(_publishDriverLocation(driver).then<void>((_) {}));
       }, onError: (Object error) {
-        if (!mounted) return;
+        if (!mounted || !_driverWantsOnline) return;
         _positionSubscription?.cancel();
         _positionSubscription = null;
         _stopLocationHeartbeat();
@@ -2798,6 +2807,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
         _scheduleLocationRetry();
       });
     } catch (e) {
+      if (!mounted || !_driverWantsOnline) return;
       // Do not leave the driver advertised as available after GPS startup failed.
       _stopLocationHeartbeat();
       unawaited(WorkerApi.setDriverOnline(online: false).then<void>((_) {}).catchError((_) {}));
@@ -2808,6 +2818,38 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
     }
   }
 
+  Future<void> _toggleDriverAvailability() async {
+    if (!mounted) return;
+    if (_serverAssignedOrders.isNotEmpty) {
+      _showLocationMessage('Сначала завершите активный заказ. Во время поездки нельзя уходить с линии.');
+      return;
+    }
+    if (_driverWantsOnline) {
+      setState(() {
+        _driverWantsOnline = false;
+        _serverOpenOrders = [];
+        if (TaxiParkState.currentLoggedInDriver != null) {
+          TaxiParkState.currentLoggedInDriver!.isOnline = false;
+        }
+      });
+      _locationRetryTimer?.cancel();
+      _locationRetryTimer = null;
+      await _positionSubscription?.cancel();
+      _positionSubscription = null;
+      _stopLocationHeartbeat();
+      try {
+        await WorkerApi.setDriverOnline(online: false);
+        if (mounted) _showLocationMessage('Вы вышли с линии. Новые заказы поступать не будут.');
+      } catch (_) {
+        if (mounted) _showLocationMessage('Не удалось подтвердить выход с линии. Проверьте интернет.');
+      }
+      return;
+    }
+    setState(() => _driverWantsOnline = true);
+    await _startLocationTracking();
+    if (mounted) unawaited(_pollServerOrders());
+  }
+
   void _showLocationMessage(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
@@ -2815,6 +2857,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
 
   @override
   void dispose() {
+    _driverWantsOnline = false;
     _positionSubscription?.cancel();
     _heartbeatTimer?.cancel();
     _locationRetryTimer?.cancel();
@@ -2879,6 +2922,13 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
         title: Text(
             'Водитель: ${driver?.name ?? ""} (${driver?.fullCarInfo ?? ""})'),
         backgroundColor: Colors.amber,
+        actions: [
+          IconButton(
+            tooltip: _driverWantsOnline ? 'Выйти с линии' : 'Выйти на линию',
+            icon: Icon(_driverWantsOnline ? Icons.toggle_on : Icons.toggle_off),
+            onPressed: _toggleDriverAvailability,
+          ),
+        ],
       ),
       body: Column(
         children: [
