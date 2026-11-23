@@ -531,14 +531,24 @@ class WorkerApi {
   static Future<Map<String, dynamic>> cancelOrder({
     required String orderId,
     required String role,
+    String? reason,
   }) {
     final normalizedRole = role.trim().toLowerCase();
     if (!{'customer', 'driver'}.contains(normalizedRole)) {
       throw const WorkerApiException('Недопустимая роль для отмены заказа.');
     }
+    const allowedReasons = {
+      'customer_not_found',
+      'customer_unreachable',
+      'customer_left_with_other_car',
+    };
+    if (reason != null && (normalizedRole != 'driver' || !allowedReasons.contains(reason))) {
+      throw const WorkerApiException('Недопустимая причина отмены заказа.');
+    }
     return _request('/orders/cancel', method: 'POST', body: {
       'order_id': _validatedOrderId(orderId),
       'role': normalizedRole,
+      if (reason != null) 'reason': reason,
     });
   }
 

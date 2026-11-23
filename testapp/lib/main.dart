@@ -2509,6 +2509,38 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
     }
   }
 
+  Future<void> _cancelArrivedNoShowOrder(Map<String, dynamic> order) async {
+    final id = _serverOrderId(order);
+    if (id.isEmpty || _orderActionIds.contains(id)) return;
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Пассажир не вышел'),
+        content: const Text('Подтвердите ситуацию после прибытия к месту подачи. Выберите причину отмены:'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('НАЗАД')),
+          TextButton(onPressed: () => Navigator.pop(ctx, 'customer_not_found'), child: const Text('ПАССАЖИР НЕ ВЫШЕЛ')),
+          TextButton(onPressed: () => Navigator.pop(ctx, 'customer_unreachable'), child: const Text('НЕ ОТВЕЧАЕТ')),
+          TextButton(onPressed: () => Navigator.pop(ctx, 'customer_left_with_other_car'), child: const Text('УЕХАЛ НА ДРУГОЙ МАШИНЕ')),
+        ],
+      ),
+    );
+    if (reason == null || !mounted || _orderActionIds.contains(id)) return;
+    setState(() => _orderActionIds.add(id));
+    try {
+      final result = await WorkerApi.cancelOrder(orderId: id, role: 'driver', reason: reason);
+      if (mounted) _showLocationMessage((result['message'] ??
+          'Заказ отменён как неявка пассажира. Начислений нет.').toString());
+    } on WorkerApiException catch (e) {
+      if (mounted) _showLocationMessage(e.message);
+    } catch (_) {
+      if (mounted) _showLocationMessage('Не удалось отменить заказ из-за ошибки сети. Обновите список заказов.');
+    } finally {
+      if (mounted) setState(() => _orderActionIds.remove(id));
+      if (mounted) await _pollServerOrders();
+    }
+  }
+
   Future<void> _cancelAssignedOrder(Map<String, dynamic> order) async {
     final id = _serverOrderId(order);
     if (id.isEmpty || _orderActionIds.contains(id)) return;
@@ -3130,7 +3162,17 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
                       title: Text((item['destination_address'] ?? 'Пункт назначения не указан').toString()),
                       subtitle: Text('Подача: ${item['pickup_address'] ?? 'На карте'}\nПассажиров: ${item['passenger_count'] ?? 1} · ${item['payment_method'] ?? ''}\n${_driverRouteLoading ? 'Строим маршрут…' : (_driverApproachRoute != null && _driverRouteOrderId == (item['id'] ?? item['firebase_order_id'] ?? '').toString() ? 'По дорогам: ${_driverApproachRoute!.distanceLabel} · примерно ${_driverApproachRoute!.etaLabel}' : (_driverRouteError ?? 'Маршрут пока не рассчитан'))}'),
                       trailing: (item['status'] ?? 'driver_assigned') == 'arrived'
-                          ? const Text('ВЫ ПРИБЫЛИ', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold))
+                          ? Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Text('ВЫ ПРИБЫЛИ', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+                                TextButton.icon(
+                                  onPressed: _orderActionIds.contains((item['id'] ?? item['firebase_order_id'] ?? '').toString()) ? null : () => _cancelArrivedNoShowOrder(item),
+                                  icon: const Icon(Icons.person_off, color: Colors.red),
+                                  label: const Text('ПАССАЖИР НЕ ВЫШЕЛ', style: TextStyle(color: Colors.red)),
+                                ),
+                              ],
+                            )
                           : Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [

@@ -910,10 +910,27 @@ export default {
           await env.DB.prepare("DELETE FROM order_responses WHERE order_id=?").bind(orderId).run();
           return response({ status: "ok", cancelled: true, statusNow: "cancelled_by_customer" });
         }
-        // A driver may refuse only the order assigned to this driver, before arrival.
+        // A driver may report a passenger no-show only after marking arrival.
         if (order.assigned_driver_uid !== auth.user.localId) return response({ status: "error", message: "Этот заказ назначен не вам" }, 403);
-        if (Number(order.status === "driver_assigned") !== 1) {
-          return response({ status: "error", message: "Отказ доступен только до прибытия водителя" }, 409);
+        if (order.status === "arrived") {
+          const reason = String(b.reason || "");
+          const allowedNoShowReasons = ["customer_not_found", "customer_unreachable", "customer_left_with_other_car"];
+          if (!allowedNoShowReasons.includes(reason)) {
+            return response({ status: "error", message: "Выберите причину: пассажир не вышел, не отвечает или уехал на другой машине" }, 400);
+          }
+          const noShow = await env.DB.prepare(`UPDATE orders SET status='cancelled_by_driver_no_show', response_deadline=NULL
+            WHERE id=? AND assigned_driver_uid=? AND status='arrived'
+            AND NOT EXISTS (SELECT 1 FROM trip_finances WHERE order_id=orders.id)`)
+            .bind(orderId, auth.user.localId).run();
+          if (!noShow.meta || Number(noShow.meta.changes || 0) !== 1) {
+            return response({ status: "error", message: "Отмена невозможна: заказ уже изменён или закрыт диспетчером" }, 409);
+          }
+          return response({ status: "ok", cancelled: true, no_show: true, earned_som: 0,
+            statusNow: "cancelled_by_driver_no_show",
+            message: "Заказ отменён как неявка пассажира. Поездка не засчитана, начислений нет. Вы можете принимать следующий заказ." });
+        }
+        if (order.status !== "driver_assigned") {
+          return response({ status: "error", message: "Отказ до прибытия доступен только для назначенного заказа" }, 409);
         }
         const result = await env.DB.prepare(`UPDATE orders SET status='new', assigned_driver_uid=NULL,
           assigned_at=NULL, response_deadline=NULL WHERE id=? AND assigned_driver_uid=? AND status='driver_assigned'`)

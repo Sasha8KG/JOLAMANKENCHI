@@ -29,6 +29,16 @@ check('App has microphone permission', /android\.permission\.RECORD_AUDIO/.test(
 check('App has location permissions', /ACCESS_FINE_LOCATION/.test(manifest) && /ACCESS_COARSE_LOCATION/.test(manifest));
 check('Worker has cancellation endpoint', worker.includes('"/orders/cancel"'));
 check('Worker has trip completion endpoint', worker.includes('"/orders/complete"'));
+check('Driver no-show cancellation is allowed only after arrival', worker.includes('if (order.status === "arrived")') && worker.includes("status='cancelled_by_driver_no_show'"));
+check('Driver no-show cancellation validates three explicit reasons', ['customer_not_found', 'customer_unreachable', 'customer_left_with_other_car'].every((reason) => worker.includes(reason)));
+check('Driver no-show cancellation is scoped to assigned driver and arrived order', worker.includes("WHERE id=? AND assigned_driver_uid=? AND status='arrived'"));
+check('Driver no-show cancellation excludes orders already recorded in trip finance', worker.includes('NOT EXISTS (SELECT 1 FROM trip_finances WHERE order_id=orders.id)'));
+check('Driver no-show cancellation records zero earnings', worker.includes('earned_som: 0'));
+check('No-show cancellation does not force driver offline', !worker.includes("UPDATE drivers SET online=0 WHERE uid=(SELECT assigned_driver_uid FROM orders"));
+check('Flutter API validates no-show cancellation reason codes', api.includes('allowedReasons') && api.includes("'customer_left_with_other_car'"));
+check('Driver UI shows no-show cancellation only for arrived order', app.includes('_cancelArrivedNoShowOrder(item)') && app.includes("== 'arrived'"));
+check('Driver UI offers all three passenger no-show reasons', ['ПАССАЖИР НЕ ВЫШЕЛ', 'НЕ ОТВЕЧАЕТ', 'УЕХАЛ НА ДРУГОЙ МАШИНЕ'].every((label) => app.includes(label)));
+check('No-show cancellation refreshes assigned and open orders', app.includes("role: 'driver', reason: reason") && app.includes('await _pollServerOrders();'));
 check('Worker has radio token endpoint', worker.includes('"/radio/token"'));
 check('Worker has radio chat endpoint', worker.includes('"/radio/messages"'));
 check('Worker reads LiveKit secret only from environment', /env\.LIVEKIT_API_SECRET/.test(worker) && !/LIVEKIT_API_SECRET\s*=\s*["'][^"']+["']/.test(worker));
