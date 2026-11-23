@@ -1,10 +1,22 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sulyukta_taxi/main.dart' show BrandedSplashGate;
 import 'package:latlong2/latlong.dart';
 import 'package:sulyukta_taxi/services/firebase_service.dart';
 import 'package:sulyukta_taxi/services/route_service.dart';
 import 'package:sulyukta_taxi/services/gps_freshness.dart';
 
 void main() {
+  group('Branded splash screen', () {
+    testWidgets('shows the approved brand and Kyrgyz slogan', (tester) async {
+      await tester.pumpWidget(const MaterialApp(home: BrandedSplashGate()));
+      expect(find.text('ЖОЛ АМАН КЕНЧИ'), findsOneWidget);
+      expect(find.text('Такси'), findsOneWidget);
+      expect(find.text('Жолуңуз ар дайым шыдыр болсун!'), findsOneWidget);
+      expect(find.text('СҮЛҮКТҮ  •  ЛЕЙЛЕК  •  БАТКЕН'), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 100));
+    });
+  });
+
   group('Firebase phone login mapping', () {
     test('converts local Kyrgyz number to the internal login', () {
       expect(

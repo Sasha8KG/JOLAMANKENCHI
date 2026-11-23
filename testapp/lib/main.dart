@@ -440,6 +440,108 @@ class _SessionGateState extends State<SessionGate> {
   }
 }
 
+
+class BrandedSplashGate extends StatefulWidget {
+  const BrandedSplashGate({super.key});
+  @override
+  State<BrandedSplashGate> createState() => _BrandedSplashGateState();
+}
+class _BrandedSplashGateState extends State<BrandedSplashGate>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _fade;
+  late final Animation<double> _scale;
+  Timer? _navigationTimer;
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 1250));
+    _fade = CurvedAnimation(parent: _controller, curve: Curves.easeIn);
+    _scale = Tween<double>(begin: 0.88, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOutBack),
+    );
+    _controller.forward();
+    _navigationTimer = Timer(const Duration(milliseconds: 2400), () {
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute<void>(builder: (_) => const SessionGate()),
+      );
+    });
+  }
+  @override
+  void dispose() {
+    _navigationTimer?.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
+  @override
+  Widget build(BuildContext context) {
+    const ink = Color(0xFF171717);
+    const gold = Color(0xFFFFD400);
+    return Scaffold(
+      backgroundColor: gold,
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 32),
+            child: FadeTransition(
+              opacity: _fade,
+              child: ScaleTransition(
+                scale: _scale,
+                child: Semantics(
+                  label: 'Жол Аман Кенчи Такси',
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('❧  ✥  ❧  ✥  ❧', style: TextStyle(color: ink, fontSize: 27, fontWeight: FontWeight.w900, letterSpacing: 3)),
+                      const SizedBox(height: 22),
+                      const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _TaxiCheckSquare(), _TaxiCheckSquare(dark: true),
+                          _TaxiCheckSquare(), _TaxiCheckSquare(dark: true),
+                          _TaxiCheckSquare(), _TaxiCheckSquare(dark: true),
+                          _TaxiCheckSquare(),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      const Icon(Icons.local_taxi_rounded, size: 94, color: ink),
+                      const SizedBox(height: 12),
+                      const Text('ЖОЛ АМАН КЕНЧИ', textAlign: TextAlign.center,
+                        style: TextStyle(color: ink, fontSize: 30, height: 1.0, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 7),
+                        decoration: BoxDecoration(color: ink, borderRadius: BorderRadius.circular(28)),
+                        child: const Text('Такси', style: TextStyle(color: Colors.white, fontSize: 25, fontWeight: FontWeight.w800, fontStyle: FontStyle.italic)),
+                      ),
+                      const SizedBox(height: 24),
+                      const Text('Жолуңуз ар дайым шыдыр болсун!', textAlign: TextAlign.center,
+                        style: TextStyle(color: ink, fontSize: 16, fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 18),
+                      const Text('СҮЛҮКТҮ  •  ЛЕЙЛЕК  •  БАТКЕН',
+                        style: TextStyle(color: ink, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.2)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+class _TaxiCheckSquare extends StatelessWidget {
+  const _TaxiCheckSquare({this.dark = false});
+  final bool dark;
+  @override
+  Widget build(BuildContext context) => Container(
+    width: 25, height: 25, margin: const EdgeInsets.symmetric(horizontal: 2),
+    color: dark ? const Color(0xFF171717) : const Color(0xFFFFF2A6),
+  );
+}
+
 class SulyuktaTaxiApp extends StatelessWidget {
   const SulyuktaTaxiApp({super.key});
 
@@ -506,7 +608,7 @@ class SulyuktaTaxiApp extends StatelessWidget {
           ),
         ),
       ),
-      home: const SessionGate(),
+      home: const BrandedSplashGate(),
     );
   }
 }

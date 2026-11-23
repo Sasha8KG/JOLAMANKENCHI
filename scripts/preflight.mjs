@@ -580,6 +580,20 @@ check('GPS freshness rejects negative age limits', gps.includes('maxAge.isNegati
 check('GPS tests cover fractional and string Unix timestamps', read('testapp/test/widget_test.dart').includes('preserves fractional Unix seconds') && read('testapp/test/widget_test.dart').includes('serialized as numeric strings'));
 check('GPS tests cover sub-second future timestamps and exact custom age boundaries', read('testapp/test/widget_test.dart').includes('less than one second ahead') && read('testapp/test/widget_test.dart').includes('exactly at a custom freshness limit') && read('testapp/test/widget_test.dart').includes('negative freshness limits'));
 
+
+check('Branded animated splash is the first app screen', app.includes('home: const BrandedSplashGate()'));
+check('Branded splash has a bounded entrance animation', app.includes('duration: const Duration(milliseconds: 1250)'));
+check('Branded splash fades in its brand content', app.includes('FadeTransition(') && app.includes('opacity: _fade,'));
+check('Branded splash scales in its brand content', app.includes('ScaleTransition(') && app.includes('scale: _scale,'));
+check('Branded splash transitions to the existing session gate', app.includes('Timer(const Duration(milliseconds: 2400)') && app.includes('const SessionGate()'));
+check('Branded splash cancels its navigation timer on dispose', app.includes('_navigationTimer?.cancel();'));
+check('Branded splash guards navigation after widget disposal', app.includes('if (!mounted) return;'));
+check('Branded splash shows the approved taxi fleet brand', app.includes('ЖОЛ АМАН КЕНЧИ') && app.includes("'Такси'"));
+check('Branded splash includes the requested Kyrgyz slogan', app.includes('Жолуңуз ар дайым шыдыр болсун!'));
+check('Branded splash includes Kyrgyz ornament and checker motif', app.includes('❧  ✥  ❧  ✥  ❧') && app.includes('class _TaxiCheckSquare'));
+check('Branded splash exposes an accessible semantic brand label', app.includes("label: 'Жол Аман Кенчи Такси'"));
+check('Widget test covers splash brand, slogan and service area', read('testapp/test/widget_test.dart').includes('Branded splash screen') && read('testapp/test/widget_test.dart').includes('shows the approved brand and Kyrgyz slogan'));
+
 for (const item of checks) {
   process.stdout.write(`${item.ok ? 'PASS' : 'FAIL'}  ${item.label}\n`);
 }
