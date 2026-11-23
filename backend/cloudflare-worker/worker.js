@@ -782,7 +782,7 @@ export default {
         const member = await requireRadioMember(request, env);
         const body = await request.json();
         const message = String(body.message || "").trim();
-        if (!message || message.length > 500) return response({ status: "error", message: "Сообщение должно содержать от 1 до 500 символов" }, 400);
+        if (!message || message.length > 500 || hasForbiddenControlCharacters(message)) return response({ status: "error", message: "Сообщение должно содержать от 1 до 500 символов и не содержать управляющих символов" }, 400);
         const result = await env.DB.prepare(`INSERT INTO radio_messages (sender_uid,sender_name,sender_role,message,created_at)
           VALUES (?,?,?,?,unixepoch())`).bind(member.user.localId, member.name, member.role, message).run();
         await env.DB.prepare("DELETE FROM radio_messages WHERE id NOT IN (SELECT id FROM radio_messages ORDER BY id DESC LIMIT 300)").run();
