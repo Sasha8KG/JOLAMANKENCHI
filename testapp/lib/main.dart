@@ -1416,7 +1416,14 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
     if (_lastRouteKey == key &&
         (_routeRetryAfter == null || DateTime.now().isBefore(_routeRetryAfter!))) return;
     _lastRouteKey = key;
-    if (mounted) setState(() { _routeLoading = true; _routeError = null; });
+    if (mounted) {
+      setState(() {
+        _routeLoading = true;
+        _routeError = null;
+        // The previous line belongs to an older taxi position; hide it while refreshing.
+        _approachRoute = null;
+      });
+    }
     var refreshAfterRoute = false;
     try {
       final route = await RouteService.drivingRoute(driverPoint, _pickupPoint);
@@ -1424,7 +1431,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
       final latestOrder = TaxiParkState.activeOrder;
       if (latestOrder?.id != orderId ||
           latestOrder?.assignedDriver?.id != driverId ||
-          !['accepted', 'arrived'].contains(latestOrder?.status)) return;
+          latestOrder?.status != 'accepted') return;
       final latestPoint = latestOrder!.assignedDriver!.currentLocation;
       final latestKey = '$orderId:$driverId:${latestPoint.latitude.toStringAsFixed(3)},${latestPoint.longitude.toStringAsFixed(3)}';
       if (latestKey != key) {
@@ -1441,7 +1448,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
       final latestOrder = TaxiParkState.activeOrder;
       if (latestOrder?.id != orderId ||
           latestOrder?.assignedDriver?.id != driverId ||
-          !['accepted', 'arrived'].contains(latestOrder?.status)) return;
+          latestOrder?.status != 'accepted') return;
       final latestPoint = latestOrder!.assignedDriver!.currentLocation;
       final latestKey = '$orderId:$driverId:${latestPoint.latitude.toStringAsFixed(3)},${latestPoint.longitude.toStringAsFixed(3)}';
       if (latestKey != key) {

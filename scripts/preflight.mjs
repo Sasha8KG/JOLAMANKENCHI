@@ -85,6 +85,27 @@ check('A stale route request is refreshed after GPS movement', /if \(refreshAfte
 check('Route loading state is reset through setState', /setState\(\(\) => _driverRouteLoading = false\)/.test(app));
 check('Driver map draws a route only for its assigned order', /_driverApproachRoute != null &&\s*_serverAssignedOrders\.isNotEmpty &&\s*_driverRouteOrderId ==/.test(app));
 
+check('Passenger route requires an active taxi order', /final order = TaxiParkState\.activeOrder/.test(app) && /order\.status != 'accepted'/.test(app));
+check('Passenger route requires an assigned driver', /driverId == null/.test(app));
+check('Passenger route requires a valid order identifier', /orderId\.isEmpty/.test(app));
+check('Passenger route requires the driver to be online', /!driver\.isOnline/.test(app));
+check('Passenger route requires a known GPS timestamp', /gpsAge == null/.test(app));
+check('Passenger route rejects stale GPS older than 60 seconds', /gpsAge > 60/.test(app));
+check('Passenger route cache includes order and driver identity', /final key = '\$orderId:\$driverId:/.test(app));
+check('Passenger route cache includes driver coordinates', /driverPoint\.latitude\.toStringAsFixed\(3\)/.test(app) && /driverPoint\.longitude\.toStringAsFixed\(3\)/.test(app));
+check('Passenger route avoids overlapping route requests', /if \(_routeLoading\) return;/.test(app));
+check('Passenger route respects retry cooldown', /_routeRetryAfter == null \|\| DateTime\.now\(\)\.isBefore\(_routeRetryAfter!\)/.test(app));
+check('Passenger route clears previous line before refresh', /_approachRoute = null;\s*\}\);\s*\}\s*var refreshAfterRoute/.test(app));
+check('Passenger route loading state is enabled before request', /_routeLoading = true;\s*_routeError = null;/.test(app));
+check('Passenger route starts at taxi and ends at pickup', /RouteService\.drivingRoute\(driverPoint, _pickupPoint\)/.test(app));
+check('Passenger route response checks current order identity', /latestOrder\?\.id != orderId/.test(app));
+check('Passenger route response checks current driver identity', /latestOrder\?\.assignedDriver\?\.id != driverId/.test(app));
+check('Passenger route response is discarded after taxi arrival', /latestOrder\?\.status != 'accepted'/.test(app));
+check('Passenger route response rejects outdated GPS coordinates', /if \(latestKey != key\) \{\s*refreshAfterRoute = latestOrder\.status == 'accepted';/.test(app));
+check('Passenger route retries after driver moved during request', /unawaited\(_loadApproachRoute\(latestDriver\.currentLocation\)\)/.test(app));
+check('Passenger route errors trigger a bounded retry delay', /_routeRetryAfter = DateTime\.now\(\)\.add\(const Duration\(seconds: 30\)\)/.test(app));
+check('Passenger map hides road route when GPS is stale', /_approachRoute != null && gpsIsFresh/.test(app));
+
 for (const item of checks) {
   process.stdout.write(`${item.ok ? 'PASS' : 'FAIL'}  ${item.label}\n`);
 }
