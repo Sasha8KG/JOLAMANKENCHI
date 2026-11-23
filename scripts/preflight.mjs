@@ -450,7 +450,7 @@ check('No-show cancellations have a durable one-row-per-order audit table', work
 check('Cancellation audit table restricts reasons to the three supported values', worker.includes("CHECK(reason IN ('customer_not_found','customer_unreachable','customer_left_with_other_car'))"));
 check('Order status update and cancellation audit insert use one D1 batch', noShowRoute.includes('const noShowResults = await env.DB.batch(['));
 check('No-show cancellation checks both atomic batch results', noShowRoute.includes('noShowResults?.[0]?.meta?.changes') && noShowRoute.includes('noShowResults?.[1]?.meta?.changes'));
-check('Dispatcher overview joins durable cancellation reason and timestamp', overviewRoute.includes('LEFT JOIN order_cancellations c ON c.order_id=o.id') && overviewRoute.includes('c.reason AS cancellation_reason') && overviewRoute.includes('c.cancelled_at AS cancelled_at'));
+check('Dedicated dispatcher cancellation history joins durable reason and timestamp', cancellationHistoryRoute.includes('LEFT JOIN order_cancellations c ON c.order_id=o.id') && cancellationHistoryRoute.includes('c.reason') && cancellationHistoryRoute.includes('c.cancelled_at'));
 check('Dispatcher has a separate no-show cancellation history section', app.includes('Отмены после прибытия · неявка пассажира'));
 check('Dispatcher translates all three cancellation reason codes', ['Пассажир не вышел','Пассажир не отвечает','Пассажир уехал на другой машине'].every(label => app.includes(label)));
 check('Dispatcher cancellation history displays driver and timestamp', app.includes("o['driver_name']") && app.includes("o['cancelled_at']") && app.includes('Отменён: '));

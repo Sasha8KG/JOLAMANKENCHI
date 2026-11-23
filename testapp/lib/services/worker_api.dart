@@ -293,7 +293,7 @@ class WorkerApi {
       throw const WorkerApiException('Некорректный указатель истории отмен.');
     }
     final query = hasAt
-        ? '?before_at=$beforeAt&before_id=\${Uri.encodeQueryComponent(normalizedId!)}'
+        ? '?before_at=$beforeAt&before_id=${Uri.encodeQueryComponent(normalizedId!)}'
         : '';
     return _request('/dispatcher/cancellations$query');
   }
