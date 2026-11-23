@@ -406,7 +406,10 @@ export default {
         if (!Number.isSafeInteger(city) || !Number.isSafeInteger(intercity) || city < 0 || intercity < 0 || city > 1000000 || intercity > 1000000) {
           return response({ status: "error", message: "Укажите целые суммы от 0 до 1 000 000 сом" }, 400);
         }
-        await env.DB.prepare(`UPDATE tariff_settings SET city_fare_som=?, intercity_fare_som=?, updated_by=?, updated_at=unixepoch() WHERE id=1`)
+        await env.DB.prepare(`INSERT INTO tariff_settings (id,city_fare_som,intercity_fare_som,updated_by,updated_at)
+          VALUES (1,?,?,?,unixepoch())
+          ON CONFLICT(id) DO UPDATE SET city_fare_som=excluded.city_fare_som,
+          intercity_fare_som=excluded.intercity_fare_som, updated_by=excluded.updated_by, updated_at=unixepoch()`)
           .bind(city, intercity, auth.user.localId).run();
         return response({ status: "ok", tariffs: { city_fare_som: city, intercity_fare_som: intercity } });
       }
@@ -529,8 +532,12 @@ export default {
         const orderId = String(b.order_id || "");
         const driverUid = String(b.driver_uid || "");
         if (!orderId || !driverUid) return response({ status: "error", message: "Укажите заказ и водителя" }, 400);
-        const driver = await env.DB.prepare("SELECT uid, approved FROM drivers WHERE uid=?").bind(driverUid).first();
+        const driver = await env.DB.prepare("SELECT uid, approved, online, latitude, longitude, location_updated_at FROM drivers WHERE uid=?").bind(driverUid).first();
         if (!driver || Number(driver.approved) !== 1) return response({ status: "error", message: "Водитель не найден или не одобрен" }, 409);
+        const gpsAge = Math.floor(Date.now() / 1000) - Number(driver.location_updated_at || 0);
+        if (Number(driver.online) !== 1 || num(driver.latitude) === null || num(driver.longitude) === null || gpsAge > 60) {
+          return response({ status: "error", message: "Назначить можно только водителя на линии с актуальной геолокацией. Попросите водителя выйти на линию и обновить GPS." }, 409);
+        }
         const refused = await env.DB.prepare("SELECT 1 AS found FROM order_refusals WHERE order_id=? AND driver_uid=?")
           .bind(orderId, driverUid).first();
         if (refused) return response({ status: "error", message: "Этот водитель ранее отказался от данного заказа" }, 409);
