@@ -1520,7 +1520,8 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
               currentLocation: LatLng(lat, lng),
               locationUpdatedAt: locationUpdatedAt,
               isApproved: true,
-              isOnline: gpsAge != null && gpsAge >= 0 && gpsAge <= 60,
+              isOnline: _isEnabled(raw['online']) &&
+                  gpsAge != null && gpsAge >= 0 && gpsAge <= 60,
               );
             }
           }
@@ -1608,7 +1609,8 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
     final gpsAgeSeconds = order?.assignedDriver?.locationUpdatedAt == null
         ? null
         : DateTime.now().difference(order!.assignedDriver!.locationUpdatedAt!).inSeconds;
-    final gpsIsFresh = gpsAgeSeconds != null && gpsAgeSeconds >= 0 && gpsAgeSeconds <= 60;
+    final gpsIsFresh = order?.assignedDriver?.isOnline == true &&
+        gpsAgeSeconds != null && gpsAgeSeconds >= 0 && gpsAgeSeconds <= 60;
 
     return Scaffold(
       appBar: AppBar(
@@ -1688,7 +1690,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
                     gpsAgeSeconds == null
                         ? 'Положение автомобиля получено; время GPS пока неизвестно.'
                         : (!gpsIsFresh
-                            ? 'Внимание: GPS не обновлялся $gpsAgeSeconds сек. Проверьте связь с водителем.'
+                            ? 'Водитель не на линии или GPS устарел ($gpsAgeSeconds сек.). Положение машины скрыто.'
                             : 'GPS обновлён $gpsAgeSeconds сек. назад. Конечный адрес водитель уточнит у вас устно.'),
                     style: TextStyle(
                       fontSize: 12,
