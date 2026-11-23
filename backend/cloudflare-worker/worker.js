@@ -535,7 +535,10 @@ export default {
         const driver = await env.DB.prepare("SELECT uid, approved, online, latitude, longitude, location_updated_at FROM drivers WHERE uid=?").bind(driverUid).first();
         if (!driver || Number(driver.approved) !== 1) return response({ status: "error", message: "Водитель не найден или не одобрен" }, 409);
         const gpsAge = Math.floor(Date.now() / 1000) - Number(driver.location_updated_at || 0);
-        if (Number(driver.online) !== 1 || num(driver.latitude) === null || num(driver.longitude) === null || gpsAge > 60) {
+        const driverLat = num(driver.latitude), driverLng = num(driver.longitude);
+        if (Number(driver.online) !== 1 || driverLat === null || driverLng === null ||
+            driverLat < -90 || driverLat > 90 || driverLng < -180 || driverLng > 180 ||
+            gpsAge < 0 || gpsAge > 60) {
           return response({ status: "error", message: "Назначить можно только водителя на линии с актуальной геолокацией. Попросите водителя выйти на линию и обновить GPS." }, 409);
         }
         const refused = await env.DB.prepare("SELECT 1 AS found FROM order_refusals WHERE order_id=? AND driver_uid=?")
@@ -697,8 +700,8 @@ export default {
         const b = await request.json();
         const orderId = String(b.order_id || "");
         const fareSom = Number(b.fare_som);
-        if (!orderId || !Number.isSafeInteger(fareSom) || fareSom < 1 || fareSom > 10000000) {
-          return response({ status: "error", message: "Укажите заказ и корректную сумму от 1 до 10 000 000 сом" }, 400);
+        if (!orderId || !Number.isSafeInteger(fareSom) || fareSom < 1 || fareSom > 1000000) {
+          return response({ status: "error", message: "Укажите заказ и корректную сумму от 1 до 1 000 000 сом" }, 400);
         }
         // D1 batch is transactional. A unique order_id prevents double accounting.
         const results = await env.DB.batch([
