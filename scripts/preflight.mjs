@@ -572,13 +572,7 @@ check('Phone validation rejects letters, extensions and misplaced plus signs', !
 check('GPS Unix seconds are converted with millisecond precision', gps.includes('milliseconds.round()') && gps.includes('seconds * 1000'));
 check('GPS numeric timestamps reject non-finite values', gps.includes('!seconds.isFinite'));
 check('GPS numeric timestamps enforce the DateTime millisecond range', gps.includes('_maxUnixTimestampMilliseconds') && gps.includes('milliseconds.abs() > _maxUnixTimestampMilliseconds'));
-check('GPS parser accepts numeric-string Unix seconds', gps.includes("RegExp(r'^[+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)
-  process.stdout.write(`${item.ok ? 'PASS' : 'FAIL'}  ${item.label}\n`);
-}
-const failed = checks.filter((item) => !item.ok);
-process.stdout.write(`\nPreflight: ${checks.length - failed.length}/${checks.length} checks passed.\n`);
-if (failed.length) process.exitCode = 1;
-)") && gps.includes('double.tryParse(text)'));
+check('GPS parser accepts numeric-string Unix seconds', gps.includes("RegExp(r'^[+-]?") && gps.includes('double.tryParse(text)'));
 check('GPS parser caps timestamp text length before parsing', gps.includes('text.length > 64'));
 check('GPS parser retains ISO timestamp compatibility', gps.includes('DateTime.tryParse(text)'));
 check('GPS freshness compares full Duration precision, not truncated seconds', gps.includes('!age.isNegative && age <= maxAge') && !gps.includes('ageSeconds >= 0'));
