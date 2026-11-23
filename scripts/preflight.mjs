@@ -182,7 +182,7 @@ check("Dispatcher map parses GPS update timestamp", app.includes("parseGpsTimest
 check("Dispatcher map hides stale GPS positions", app.includes("!isGpsTimestampFresh(updatedAt)"));
 check("Dispatcher map creates markers from validated coordinates", app.includes("point: LatLng(latitude, longitude)"));
 check("Dispatcher map uses green taxi markers", app.includes("Icons.local_taxi, color: Colors.green"));
-check("Dispatcher map uses the configured OpenStreetMap layer", app.includes("https://tile.openstreetmap.de/{z}/{x}/{y}.png"));
+check("Dispatcher map uses the shared dark CARTO layer", app.includes("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png") && app.includes("buildTaxiDarkMapLayers"));
 check("Dispatcher refresh timer is cancelled on dispose", app.includes("_dispatcherRefreshTimer?.cancel()"));
 
  // Dispatcher background refresh resilience and fleet map centering checks.
@@ -204,7 +204,7 @@ check("Dispatcher fleet map chooses a zoom level for broad service areas", app.i
 check("Dispatcher fleet map uses a regional zoom for medium spread", app.includes("latitudeSpan > 0.1 || longitudeSpan > 0.1"));
 check("Dispatcher map centering only uses already validated markers", app.includes("final center = markers.isEmpty"));
 check("Dispatcher map continues to exclude stale GPS before calculating center", app.includes("!isGpsTimestampFresh(updatedAt)"));
-check("Dispatcher map retains the configured OSM tile layer", app.includes("https://tile.openstreetmap.de/{z}/{x}/{y}.png"));
+check("Dispatcher map retains shared dark layer and map attribution", app.includes("...buildTaxiDarkMapLayers()") && app.includes("© CARTO") && app.includes("© OpenStreetMap contributors"));
 check("Dispatcher refresh timer is still cancelled on dispose", app.includes("_dispatcherRefreshTimer?.cancel()"));
 
 
