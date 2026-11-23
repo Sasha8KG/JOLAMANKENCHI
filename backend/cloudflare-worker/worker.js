@@ -371,14 +371,21 @@ export default {
         ];
         const valid = paths.every((value, index) => value === expectedPaths[index]);
         if (!valid) return response({ status: "error", message: "Укажите три документа в правильном порядке из личной папки Firebase Storage" }, 400);
-        await env.DB.prepare(`INSERT INTO driver_documents (driver_uid,license_url,driver_photo_url,car_photo_url,submitted_at,review_status,rejection_reason,reviewed_at,reviewed_by)
-          VALUES (?,?,?,?,unixepoch(),'pending',NULL,NULL,NULL) ON CONFLICT(driver_uid) DO UPDATE SET
-          license_url=excluded.license_url, driver_photo_url=excluded.driver_photo_url,
-          car_photo_url=excluded.car_photo_url, submitted_at=unixepoch(), review_status='pending',
-          rejection_reason=NULL, reviewed_at=NULL, reviewed_by=NULL`)
-          .bind(auth.user.localId, ...paths).run();
-        await env.DB.prepare("UPDATE drivers SET approved=0, online=0, updated_at=unixepoch() WHERE uid=?")
-          .bind(auth.user.localId).run();
+        // Save the new submission and revoke line access in the same D1 batch.
+        const documentResults = await env.DB.batch([
+          env.DB.prepare(`INSERT INTO driver_documents (driver_uid,license_url,driver_photo_url,car_photo_url,submitted_at,review_status,rejection_reason,reviewed_at,reviewed_by)
+            VALUES (?,?,?,?,unixepoch(),'pending',NULL,NULL,NULL) ON CONFLICT(driver_uid) DO UPDATE SET
+            license_url=excluded.license_url, driver_photo_url=excluded.driver_photo_url,
+            car_photo_url=excluded.car_photo_url, submitted_at=unixepoch(), review_status='pending',
+            rejection_reason=NULL, reviewed_at=NULL, reviewed_by=NULL`)
+            .bind(auth.user.localId, ...paths),
+          env.DB.prepare("UPDATE drivers SET approved=0, online=0, updated_at=unixepoch() WHERE uid=?")
+            .bind(auth.user.localId)
+        ]);
+        if (Number(documentResults?.[0]?.meta?.changes || 0) !== 1 ||
+            Number(documentResults?.[1]?.meta?.changes || 0) !== 1) {
+          return response({ status: "error", message: "Не удалось безопасно сохранить документы и снять водителя с линии. Повторите отправку." }, 409);
+        }
         return response({ status: "ok", documents_saved: true, review_status: "pending" });
       }
 
@@ -399,10 +406,23 @@ export default {
           return response({ status: "error", message: "Водитель должен повторно отправить документы. Одобрение до новой отправки запрещено." }, 409);
         const exists = await env.DB.prepare("SELECT uid FROM drivers WHERE uid=?").bind(uid).first();
         if (!exists) return response({ status: "error", message: "Водитель не найден" }, 404);
-        await env.DB.prepare(`UPDATE driver_documents SET review_status=?, rejection_reason=?, reviewed_at=unixepoch(), reviewed_by=? WHERE driver_uid=?`)
-          .bind(decision, decision === "rejected" ? reason : null, auth.user.localId, uid).run();
-        await env.DB.prepare("UPDATE drivers SET approved=?, online=0, updated_at=unixepoch() WHERE uid=?")
-          .bind(decision === "approved" ? 1 : 0, uid).run();
+        // Apply the document decision and driver access change in one D1 batch.
+        // The second statement is tied to the exact review result, preventing a
+        // concurrent reviewer from changing access based on a stale decision.
+        const reviewResults = await env.DB.batch([
+          env.DB.prepare(`UPDATE driver_documents SET review_status=?, rejection_reason=?, reviewed_at=unixepoch(), reviewed_by=?
+            WHERE driver_uid=? AND review_status='pending'`)
+            .bind(decision, decision === "rejected" ? reason : null, auth.user.localId, uid),
+          env.DB.prepare(`UPDATE drivers SET approved=?, online=0, updated_at=unixepoch()
+            WHERE uid=? AND EXISTS (
+              SELECT 1 FROM driver_documents WHERE driver_uid=? AND review_status=? AND reviewed_by=?
+            )`)
+            .bind(decision === "approved" ? 1 : 0, uid, uid, decision, auth.user.localId)
+        ]);
+        if (Number(reviewResults?.[0]?.meta?.changes || 0) !== 1 ||
+            Number(reviewResults?.[1]?.meta?.changes || 0) !== 1) {
+          return response({ status: "error", message: "Заявка уже обработана или данные водителя изменились. Обновите список заявок." }, 409);
+        }
         return response({ status: "ok", review_status: decision });
       }
 

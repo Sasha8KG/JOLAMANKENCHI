@@ -465,6 +465,11 @@ check('Dispatcher pending queue requires pending status and a licence document',
 check('Dispatcher shows rejected driver applications separately', app.includes("d['review_status'] == 'rejected'"));
 check('Driver review screen explains that approval is required before going online', app.includes('До одобрения выход на линию недоступен.'));
 check('Rejected driver can submit replacement photos for another review', app.includes("if (rejected) ...[") && app.includes('_resubmit'));
+check('Driver document submission uses a single D1 batch for documents and access revocation', documentsRoute.includes('const documentResults = await env.DB.batch([') && documentsRoute.includes('UPDATE drivers SET approved=0, online=0'));
+check('Driver document submission verifies both D1 batch results', documentsRoute.includes('documentResults?.[0]?.meta?.changes') && documentsRoute.includes('documentResults?.[1]?.meta?.changes'));
+check('Driver approval or rejection updates documents and driver access in one D1 batch', reviewRoute.includes('const reviewResults = await env.DB.batch([') && reviewRoute.includes('UPDATE drivers SET approved=?, online=0'));
+check('Driver review update is conditional on the exact reviewer and decision', reviewRoute.includes('review_status=? AND reviewed_by=?') && reviewRoute.includes("WHERE driver_uid=? AND review_status='pending'"));
+check('Driver review rejects a stale or concurrently processed decision', reviewRoute.includes('reviewResults?.[0]?.meta?.changes') && reviewRoute.includes('reviewResults?.[1]?.meta?.changes') && reviewRoute.includes('409'));
 
 for (const item of checks) {
   process.stdout.write(`${item.ok ? 'PASS' : 'FAIL'}  ${item.label}\n`);
