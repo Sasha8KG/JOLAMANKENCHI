@@ -323,36 +323,61 @@ export default {
       if (url.pathname === "/drivers/register" && request.method === "POST") {
         const auth = await verifyFirebaseUser(request);
         const b = await request.json();
-        const profile = {
-          name: String(b.name || "").slice(0,100),
-          phone: String(b.phone || "").slice(0,30),
-          carModel: String(b.car_model || "").slice(0,100),
-          carNumber: String(b.car_number || "").slice(0,30)
-        };
-        const previous = await env.DB.prepare("SELECT name,phone,car_model,car_number,approved FROM drivers WHERE uid=?")
-          .bind(auth.user.localId).first();
-        const profileChanged = !!previous && (
-          previous.name !== profile.name || previous.phone !== profile.phone ||
-          previous.car_model !== profile.carModel || previous.car_number !== profile.carNumber
-        );
-        await env.DB.prepare(`INSERT INTO drivers (uid,name,phone,car_model,car_number,approved,online)
-          VALUES (?,?,?,?,?,0,0) ON CONFLICT(uid) DO UPDATE SET
-          name=excluded.name, phone=excluded.phone, car_model=excluded.car_model, car_number=excluded.car_number,
-          approved=CASE WHEN ?=1 THEN 0 ELSE drivers.approved END,
-          online=CASE WHEN ?=1 THEN 0 ELSE drivers.online END`)
-          .bind(auth.user.localId, profile.name, profile.phone, profile.carModel, profile.carNumber,
-            profileChanged ? 1 : 0, profileChanged ? 1 : 0).run();
-        if (profileChanged) {
-          await env.DB.prepare(`UPDATE driver_documents SET review_status='rejected',
-            rejection_reason='Данные анкеты изменены. Повторно отправьте водительское удостоверение, фото водителя и фото автомобиля.',
-            reviewed_at=NULL, reviewed_by=NULL WHERE driver_uid=?`)
-            .bind(auth.user.localId).run();
+        const clean = value => String(value ?? "").trim().replace(/\\s+/g, " ");
+        const name = clean(b.name);
+        const phone = clean(b.phone);
+        const carModel = clean(b.car_model);
+        const carNumber = clean(b.car_number).toUpperCase();
+        const phoneDigits = phone.replace(/\\D/g, "");
+        if (hasForbiddenControlCharacters(name) || name.length < 3 || name.length > 80) {
+          return response({ status: "error", message: "Укажите ФИО водителя от 3 до 80 символов." }, 400);
         }
+        if (hasForbiddenControlCharacters(phone) || !/^\\+?[0-9 ()-]+$/.test(phone) ||
+            !( /^0[0-9]{9}$/.test(phoneDigits) || /^996[0-9]{9}$/.test(phoneDigits) )) {
+          return response({ status: "error", message: "Укажите корректный номер Кыргызстана: 0XXXXXXXXX или +996XXXXXXXXX." }, 400);
+        }
+        if (hasForbiddenControlCharacters(carModel) || carModel.length < 2 || carModel.length > 60) {
+          return response({ status: "error", message: "Укажите марку и модель автомобиля от 2 до 60 символов." }, 400);
+        }
+        if (hasForbiddenControlCharacters(carNumber) || carNumber.length < 2 || carNumber.length > 20) {
+          return response({ status: "error", message: "Укажите государственный номер автомобиля от 2 до 20 символов." }, 400);
+        }
+        const profile = { name, phone, carModel, carNumber };
+        // In one D1 batch, invalidate the old document review first and then
+        // update the profile using the same old-value comparison. This keeps
+        // approval, online state and document review consistent on retries.
+        const changedWhere = "(name<>? OR phone<>? OR car_model<>? OR car_number<>?)";
+        const profileResults = await env.DB.batch([
+          env.DB.prepare(`UPDATE driver_documents SET review_status='rejected',
+            rejection_reason='Данные анкеты изменены. Повторно отправьте водительское удостоверение, фото водителя и фото автомобиля.',
+            reviewed_at=NULL, reviewed_by=NULL
+            WHERE driver_uid=? AND EXISTS (
+              SELECT 1 FROM drivers WHERE uid=? AND ${changedWhere}
+            )`).bind(auth.user.localId, auth.user.localId, name, phone, carModel, carNumber),
+          env.DB.prepare(`INSERT INTO drivers (uid,name,phone,car_model,car_number,approved,online)
+            VALUES (?,?,?,?,?,0,0) ON CONFLICT(uid) DO UPDATE SET
+            name=excluded.name, phone=excluded.phone, car_model=excluded.car_model, car_number=excluded.car_number,
+            approved=CASE WHEN drivers.name<>excluded.name OR drivers.phone<>excluded.phone OR
+              drivers.car_model<>excluded.car_model OR drivers.car_number<>excluded.car_number
+              THEN 0 ELSE drivers.approved END,
+            online=CASE WHEN drivers.name<>excluded.name OR drivers.phone<>excluded.phone OR
+              drivers.car_model<>excluded.car_model OR drivers.car_number<>excluded.car_number
+              THEN 0 ELSE drivers.online END`)
+            .bind(auth.user.localId, name, phone, carModel, carNumber)
+        ]);
+        if (Number(profileResults?.[1]?.meta?.changes || 0) !== 1) {
+          return response({ status: "error", message: "Не удалось сохранить анкету водителя. Повторите попытку." }, 409);
+        }
+        const savedProfile = await env.DB.prepare("SELECT approved FROM drivers WHERE uid=?")
+          .bind(auth.user.localId).first();
+        const documents = await env.DB.prepare("SELECT review_status FROM driver_documents WHERE driver_uid=?")
+          .bind(auth.user.localId).first();
+        const reviewRequired = documents?.review_status === "rejected";
         return response({
           status: "ok",
-          approved: !profileChanged && Number(previous?.approved) === 1,
-          review_required: profileChanged,
-          message: profileChanged
+          approved: Number(savedProfile?.approved) === 1,
+          review_required: reviewRequired,
+          message: reviewRequired
             ? "Данные анкеты изменены. Водитель временно снят с линии до повторной проверки диспетчером."
             : "Анкета сохранена. Ожидайте одобрения диспетчера."
         });

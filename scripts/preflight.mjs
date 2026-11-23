@@ -470,6 +470,19 @@ check('Driver document submission verifies both D1 batch results', documentsRout
 check('Driver approval or rejection updates documents and driver access in one D1 batch', reviewRoute.includes('const reviewResults = await env.DB.batch([') && reviewRoute.includes('UPDATE drivers SET approved=?, online=0'));
 check('Driver review update is conditional on the exact reviewer and decision', reviewRoute.includes('review_status=? AND reviewed_by=?') && reviewRoute.includes("WHERE driver_uid=? AND review_status='pending'"));
 check('Driver review rejects a stale or concurrently processed decision', reviewRoute.includes('reviewResults?.[0]?.meta?.changes') && reviewRoute.includes('reviewResults?.[1]?.meta?.changes') && reviewRoute.includes('409'));
+const registerStart = worker.indexOf('if (url.pathname === "/drivers/register" && request.method === "POST")');
+const registerEnd = worker.indexOf('if (url.pathname === "/drivers/documents" && request.method === "POST")', registerStart);
+const registerRoute = registerStart >= 0 && registerEnd > registerStart ? worker.slice(registerStart, registerEnd) : '';
+check('Driver registration normalizes repeated whitespace in profile fields', registerRoute.includes('replace(/\\\\s+/g, " ")'));
+check('Driver registration rejects missing or overlong driver names', registerRoute.includes('name.length < 3 || name.length > 80'));
+check('Driver registration rejects control characters in names', registerRoute.includes('hasForbiddenControlCharacters(name)'));
+check('Driver registration validates phone characters before saving', registerRoute.includes('!/^\\\\+?[0-9 ()-]+$/.test(phone)'));
+check('Driver registration accepts valid local Kyrgyz phone format', registerRoute.includes('/^0[0-9]{9}$/.test(phoneDigits)'));
+check('Driver registration accepts valid international Kyrgyz phone format', registerRoute.includes('/^996[0-9]{9}$/.test(phoneDigits)'));
+check('Driver registration requires a bounded car model', registerRoute.includes('carModel.length < 2 || carModel.length > 60'));
+check('Driver registration requires a bounded vehicle plate', registerRoute.includes('carNumber.length < 2 || carNumber.length > 20'));
+check('Profile change revokes document review and driver approval in one D1 batch', registerRoute.includes('const profileResults = await env.DB.batch([') && registerRoute.includes("review_status='rejected'") && registerRoute.includes('approved=CASE WHEN drivers.name<>excluded.name'));
+check('Profile save checks the D1 write result and reloads persisted approval', registerRoute.includes('profileResults?.[1]?.meta?.changes') && registerRoute.includes('SELECT approved FROM drivers WHERE uid=?'));
 
 for (const item of checks) {
   process.stdout.write(`${item.ok ? 'PASS' : 'FAIL'}  ${item.label}\n`);
