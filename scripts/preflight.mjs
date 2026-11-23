@@ -64,6 +64,27 @@ check('Trip completion does not take driver offline', !worker.includes("UPDATE d
 check('Driver app polls server orders every five seconds', app.includes('Timer.periodic(const Duration(seconds: 5), (_) {') && app.includes('_pollServerOrders();'));
 check('Driver app notifies availability after active order clears', app.includes('hadAssignedOrder && assigned.isEmpty') && app.includes('Вы снова можете принимать заказы'));
 
+check('Driver route requires an assigned order', /_serverAssignedOrders\.isEmpty/.test(app) && /final order = _serverAssignedOrders\.first/.test(app));
+check('Driver route requires a valid order identifier', /if \(id\.isEmpty\) return;/.test(app));
+check('Pickup latitude is parsed from the server order', /order\['pickup_lat'\]/.test(app));
+check('Pickup longitude is parsed from the server order', /order\['pickup_lng'\]/.test(app));
+check('Pickup coordinates reject non-finite values', /!lat\.isFinite \|\| !lng\.isFinite/.test(app));
+check('Pickup coordinates enforce geographic bounds', /lat < -90 \|\| lat > 90 \|\| lng < -180 \|\| lng > 180/.test(app));
+check('Driver approach route runs from driver to pickup', /RouteService\.drivingRoute\(driverPoint, pickup\)/.test(app));
+check('Route cache key includes the order identifier', /final routeKey = '\$id:/.test(app));
+check('Route cache key includes pickup coordinates', /final routeKey = '[^']*pickup\.latitude\.toStringAsFixed\(5\)/.test(app) && /pickup\.longitude\.toStringAsFixed\(5\)/.test(app));
+check('Route cache key includes driver coordinates', /driverPoint\.latitude\.toStringAsFixed\(3\)/.test(app) && /driverPoint\.longitude\.toStringAsFixed\(3\)/.test(app));
+check('An unchanged successful route is not requested again', /_driverRouteKey == routeKey && _driverApproachRoute != null/.test(app));
+check('Route retries respect the retry cooldown', /_driverRouteRetryAfter != null &&\s*DateTime\.now\(\)\.isBefore\(_driverRouteRetryAfter!\)/.test(app));
+check('A previous route is cleared when a new route is requested', /_driverApproachRoute = null;\s*_driverRouteOrderId = id;\s*_driverRouteError = null;/.test(app));
+check('Route loading state is published through setState', /setState\(\(\) \{\s*_driverRouteLoading = true;/.test(app));
+check('Route response verifies the current driver identity', /TaxiParkState\.currentLoggedInDriver\?\.id != driver\.id/.test(app));
+check('Route response verifies the assigned order is unchanged', /_serverOrderId\(_serverAssignedOrders\.first\)\s*;[\s\S]{0,100}if \(latestAssignedId != id\) return;/.test(app));
+check('Route response rejects a stale driver GPS position', /if \(latestRouteKey != routeKey\) \{\s*refreshAfterRoute = true;/.test(app));
+check('A stale route request is refreshed after GPS movement', /if \(refreshAfterRoute && mounted\)\s*\{\s*unawaited\(_loadDriverApproachRoute\(\)\);/.test(app));
+check('Route loading state is reset through setState', /setState\(\(\) => _driverRouteLoading = false\)/.test(app));
+check('Driver map draws a route only for its assigned order', /_driverApproachRoute != null &&\s*_serverAssignedOrders\.isNotEmpty &&\s*_driverRouteOrderId ==/.test(app));
+
 for (const item of checks) {
   process.stdout.write(`${item.ok ? 'PASS' : 'FAIL'}  ${item.label}\n`);
 }

@@ -2486,7 +2486,18 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
         _driverRouteRetryAfter != null &&
         DateTime.now().isBefore(_driverRouteRetryAfter!)) return;
     _driverRouteKey = routeKey;
-    _driverRouteLoading = true;
+    if (mounted) {
+      setState(() {
+        _driverRouteLoading = true;
+        // Remove the previous line immediately; it belongs to the old GPS point.
+        _driverApproachRoute = null;
+        _driverRouteOrderId = id;
+        _driverRouteError = null;
+        _driverRouteRetryAfter = null;
+      });
+    } else {
+      _driverRouteLoading = true;
+    }
     var refreshAfterRoute = false;
     try {
       final route = await RouteService.drivingRoute(driverPoint, pickup);
@@ -2531,7 +2542,11 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
       });
       _focusDriverMapOnRoute(latestPoint, pickup);
     } finally {
-      _driverRouteLoading = false;
+      if (mounted) {
+        setState(() => _driverRouteLoading = false);
+      } else {
+        _driverRouteLoading = false;
+      }
       if (refreshAfterRoute && mounted) {
         unawaited(_loadDriverApproachRoute());
       }
