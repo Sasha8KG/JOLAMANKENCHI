@@ -689,7 +689,7 @@ export default {
           o.pickup_lat, o.pickup_lng, o.destination_address, o.destination_lat, o.destination_lng,
           o.passenger_count, o.payment_method, o.tariff_type, o.assigned_driver_uid,
           d.name AS driver_name, d.phone AS driver_phone, d.car_model, d.car_number,
-          d.latitude AS driver_latitude, d.longitude AS driver_longitude,
+          d.latitude AS driver_latitude, d.longitude AS driver_longitude, d.online AS driver_online,
           d.location_updated_at AS driver_location_updated_at
           FROM orders o LEFT JOIN drivers d ON d.uid=o.assigned_driver_uid
           WHERE o.firebase_order_id=? AND o.customer_uid=? LIMIT 1`)
@@ -699,6 +699,7 @@ export default {
           uid: order.assigned_driver_uid, name: order.driver_name, phone: order.driver_phone,
           car_model: order.car_model, car_number: order.car_number,
           latitude: order.driver_latitude, longitude: order.driver_longitude,
+          online: Number(order.driver_online) === 1,
           location_updated_at: order.driver_location_updated_at
         } : null;
         return response({ apiStatus: "ok", status: order.status, order, driver });
