@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:sulyukta_taxi/services/firebase_service.dart';
 import 'package:sulyukta_taxi/services/route_service.dart';
+import 'package:sulyukta_taxi/services/gps_freshness.dart';
 
 void main() {
   group('Firebase phone login mapping', () {
@@ -269,6 +270,60 @@ void main() {
         expect(route.etaLabel, item.expected);
       });
     }
+  });
+
+  group('Driver GPS freshness', () {
+    final now = DateTime.utc(2026, 11, 23, 12);
+
+    test('parses Unix timestamps in seconds from the Worker', () {
+      final timestamp = DateTime.fromMillisecondsSinceEpoch(1795435140 * 1000);
+      expect(parseGpsTimestamp(1795435140), timestamp);
+    });
+
+    test('parses ISO timestamps returned by compatible API responses', () {
+      expect(
+        parseGpsTimestamp('2026-11-23T12:00:00Z'),
+        DateTime.utc(2026, 11, 23, 12),
+      );
+    });
+
+    test('rejects missing or malformed timestamps', () {
+      expect(parseGpsTimestamp(null), isNull);
+      expect(parseGpsTimestamp('not-a-date'), isNull);
+    });
+
+    test('accepts a GPS update exactly at the 60-second limit', () {
+      expect(
+        isGpsTimestampFresh(now.subtract(const Duration(seconds: 60)), now: now),
+        isTrue,
+      );
+    });
+
+    test('rejects GPS older than 60 seconds', () {
+      expect(
+        isGpsTimestampFresh(now.subtract(const Duration(seconds: 61)), now: now),
+        isFalse,
+      );
+    });
+
+    test('rejects timestamps from the future', () {
+      expect(
+        isGpsTimestampFresh(now.add(const Duration(seconds: 1)), now: now),
+        isFalse,
+      );
+    });
+
+    test('rejects a missing timestamp', () {
+      expect(isGpsTimestampFresh(null, now: now), isFalse);
+      expect(calculateGpsAgeSeconds(null, now: now), isNull);
+    });
+
+    test('reports age in whole seconds consistently', () {
+      expect(
+        calculateGpsAgeSeconds(now.subtract(const Duration(seconds: 17)), now: now),
+        17,
+      );
+    });
   });
 
 }

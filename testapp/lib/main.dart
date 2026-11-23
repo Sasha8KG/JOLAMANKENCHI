@@ -13,6 +13,7 @@ import 'services/firebase_service.dart';
 import 'driver_registration_screen.dart';
 import 'services/worker_api.dart';
 import 'services/route_service.dart';
+import 'services/gps_freshness.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -1505,12 +1506,8 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
             final lat = _readValidCoordinate(raw['latitude'], min: -90, max: 90);
             final lng = _readValidCoordinate(raw['longitude'], min: -180, max: 180);
             if (uid.isNotEmpty && lat != null && lng != null) {
-              final locationUpdatedAt = (raw['location_updated_at'] is num)
-                  ? DateTime.fromMillisecondsSinceEpoch((raw['location_updated_at'] as num).toInt() * 1000)
-                  : DateTime.tryParse((raw['location_updated_at'] ?? '').toString());
-              final gpsAge = locationUpdatedAt == null
-                  ? null
-                  : DateTime.now().difference(locationUpdatedAt).inSeconds;
+              final locationUpdatedAt = parseGpsTimestamp(raw['location_updated_at']);
+              final gpsAge = calculateGpsAgeSeconds(locationUpdatedAt);
               order.assignedDriver = DriverModel(
               id: uid,
               name: (raw['name'] ?? 'Водитель').toString(),
@@ -1608,11 +1605,9 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
   Widget build(BuildContext context) {
     final order = TaxiParkState.activeOrder;
     final client = TaxiParkState.currentLoggedInClient;
-    final gpsAgeSeconds = order?.assignedDriver?.locationUpdatedAt == null
-        ? null
-        : DateTime.now().difference(order!.assignedDriver!.locationUpdatedAt!).inSeconds;
+    final gpsAgeSeconds = calculateGpsAgeSeconds(order?.assignedDriver?.locationUpdatedAt);
     final gpsIsFresh = order?.assignedDriver?.isOnline == true &&
-        gpsAgeSeconds != null && gpsAgeSeconds >= 0 && gpsAgeSeconds <= 60;
+        isGpsTimestampFresh(order?.assignedDriver?.locationUpdatedAt);
 
     return Scaffold(
       appBar: AppBar(
