@@ -299,12 +299,39 @@ export default {
       if (url.pathname === "/drivers/register" && request.method === "POST") {
         const auth = await verifyFirebaseUser(request);
         const b = await request.json();
+        const profile = {
+          name: String(b.name || "").slice(0,100),
+          phone: String(b.phone || "").slice(0,30),
+          carModel: String(b.car_model || "").slice(0,100),
+          carNumber: String(b.car_number || "").slice(0,30)
+        };
+        const previous = await env.DB.prepare("SELECT name,phone,car_model,car_number,approved FROM drivers WHERE uid=?")
+          .bind(auth.user.localId).first();
+        const profileChanged = !!previous && (
+          previous.name !== profile.name || previous.phone !== profile.phone ||
+          previous.car_model !== profile.carModel || previous.car_number !== profile.carNumber
+        );
         await env.DB.prepare(`INSERT INTO drivers (uid,name,phone,car_model,car_number,approved,online)
           VALUES (?,?,?,?,?,0,0) ON CONFLICT(uid) DO UPDATE SET
-          name=excluded.name, phone=excluded.phone, car_model=excluded.car_model, car_number=excluded.car_number`)
-          .bind(auth.user.localId, String(b.name || "").slice(0,100), String(b.phone || "").slice(0,30),
-            String(b.car_model || "").slice(0,100), String(b.car_number || "").slice(0,30)).run();
-        return response({ status: "ok", approved: false, message: "Анкета сохранена. Ожидайте одобрения диспетчера." });
+          name=excluded.name, phone=excluded.phone, car_model=excluded.car_model, car_number=excluded.car_number,
+          approved=CASE WHEN ?=1 THEN 0 ELSE drivers.approved END,
+          online=CASE WHEN ?=1 THEN 0 ELSE drivers.online END`)
+          .bind(auth.user.localId, profile.name, profile.phone, profile.carModel, profile.carNumber,
+            profileChanged ? 1 : 0, profileChanged ? 1 : 0).run();
+        if (profileChanged) {
+          await env.DB.prepare(`UPDATE driver_documents SET review_status='pending',
+            rejection_reason='Данные анкеты изменены. Требуется повторная проверка диспетчером.',
+            reviewed_at=NULL, reviewed_by=NULL WHERE driver_uid=?`)
+            .bind(auth.user.localId).run();
+        }
+        return response({
+          status: "ok",
+          approved: !profileChanged && Number(previous?.approved) === 1,
+          review_required: profileChanged,
+          message: profileChanged
+            ? "Данные анкеты изменены. Водитель временно снят с линии до повторной проверки диспетчером."
+            : "Анкета сохранена. Ожидайте одобрения диспетчера."
+        });
       }
 
       if (url.pathname === "/drivers/documents" && request.method === "POST") {
