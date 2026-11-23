@@ -2367,6 +2367,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
   String? _driverRouteKey;
   DateTime? _driverRouteRetryAfter;
   bool _driverWantsOnline = false;
+  bool _driverGpsReady = false;
   bool _availabilityChanging = false;
   bool _offlineSyncInProgress = false;
   Timer? _offlineSyncRetryTimer;
@@ -2707,8 +2708,10 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
       if (!published) {
         throw StateError('Не удалось обновить геолокацию на сервере.');
       }
+      _setDriverGpsReady(true);
     } catch (_) {
       if (!mounted || !_driverWantsOnline || TaxiParkState.currentLoggedInDriver?.id != driver.id) return;
+      _setDriverGpsReady(false);
       // Do not keep the driver advertised as online when fresh GPS cannot be confirmed.
       _positionSubscription?.cancel();
       _positionSubscription = null;
@@ -2726,6 +2729,13 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
     _heartbeatTimer = null;
   }
 
+  void _setDriverGpsReady(bool ready) {
+    final driver = TaxiParkState.currentLoggedInDriver;
+    if (driver != null) driver.isOnline = ready;
+    if (!mounted || _driverGpsReady == ready) return;
+    setState(() => _driverGpsReady = ready);
+  }
+
   void _scheduleLocationRetry() {
     if (!mounted || !_driverWantsOnline || _locationRetryTimer?.isActive == true) return;
     _locationRetryTimer = Timer(const Duration(seconds: 20), () {
@@ -2739,6 +2749,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
     if (driver == null || !mounted || !_driverWantsOnline || _locationTrackingStarting ||
         _positionSubscription != null) return;
     _locationTrackingStarting = true;
+    _setDriverGpsReady(false);
     try {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
@@ -2777,6 +2788,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
       if (!published) {
         throw StateError('Не удалось подтвердить выход на линию на сервере.');
       }
+      _setDriverGpsReady(true);
 
       // Avoid duplicate timers if tracking is restarted after a GPS interruption.
       _stopLocationHeartbeat();
@@ -2803,9 +2815,12 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
         if (_serverAssignedOrders.isNotEmpty) {
           unawaited(_loadDriverApproachRoute());
         }
-        unawaited(_publishDriverLocation(driver).then<void>((_) {}));
+        unawaited(_publishDriverLocation(driver).then<void>((published) {
+          _setDriverGpsReady(published);
+        }));
       }, onError: (Object error) {
         if (!mounted || !_driverWantsOnline) return;
+        _setDriverGpsReady(false);
         _positionSubscription?.cancel();
         _positionSubscription = null;
         _stopLocationHeartbeat();
@@ -2819,6 +2834,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
       });
     } catch (e) {
       if (!mounted || !_driverWantsOnline) return;
+      _setDriverGpsReady(false);
       // Do not leave the driver advertised as available after GPS startup failed.
       _stopLocationHeartbeat();
       unawaited(WorkerApi.setDriverOnline(online: false).then<void>((_) {}).catchError((_) {}));
@@ -2869,6 +2885,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
       if (_driverWantsOnline) {
         setState(() {
           _driverWantsOnline = false;
+          _driverGpsReady = false;
           _serverOpenOrders = [];
           if (TaxiParkState.currentLoggedInDriver != null) {
             TaxiParkState.currentLoggedInDriver!.isOnline = false;
@@ -2894,7 +2911,10 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
       } else {
         _offlineSyncRetryTimer?.cancel();
         _offlineSyncRetryTimer = null;
-        setState(() => _driverWantsOnline = true);
+        setState(() {
+          _driverWantsOnline = true;
+          _driverGpsReady = false;
+        });
         await _startLocationTracking();
         if (mounted) unawaited(_pollServerOrders());
       }
@@ -2978,13 +2998,19 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
         backgroundColor: Colors.amber,
         actions: [
           Tooltip(
-            message: _driverWantsOnline ? 'Выйти с линии' : 'Выйти на линию',
+            message: !_driverWantsOnline
+                ? 'Выйти на линию'
+                : (_driverGpsReady ? 'Выйти с линии' : 'Отменить выход на линию'),
             child: TextButton.icon(
               onPressed: _availabilityChanging ? null : _toggleDriverAvailability,
-              icon: Icon(_driverWantsOnline ? Icons.toggle_on : Icons.toggle_off),
+              icon: Icon(!_driverWantsOnline
+                  ? Icons.toggle_off
+                  : (_driverGpsReady ? Icons.toggle_on : Icons.gps_not_fixed)),
               label: Text(_availabilityChanging
                   ? 'Подождите…'
-                  : (_driverWantsOnline ? 'На линии' : 'Не на линии')),
+                  : (!_driverWantsOnline
+                      ? 'Не на линии'
+                      : (_driverGpsReady ? 'На линии' : 'GPS не подтверждён')),
             ),
           ),
         ],
