@@ -268,7 +268,7 @@ check('Driver sees availability again after the active order disappears', app.in
 
 check('Driver screen keeps a user-controlled desired availability state with offline as the safe default', app.includes('bool _driverWantsOnline = false;'));
 check('Driver screen exposes a guarded availability control in the app bar', app.includes('onPressed: _availabilityChanging ? null : _toggleDriverAvailability'));
-check('Availability control labels the online action as going offline', app.includes("_driverWantsOnline ? 'Выйти с линии' : 'Выйти на линию'"));
+check('Availability control labels the online action as going offline', app.includes("!_driverWantsOnline\n                ? 'Выйти на линию'"));
 check('Availability control uses distinct online and offline icons', app.includes('Icons.toggle_on') && app.includes('Icons.toggle_off'));
 check('Driver availability toggle refuses to go offline during an active assigned order', app.includes('if (_serverAssignedOrders.isNotEmpty)') && app.includes('Сначала завершите активный заказ.'));
 check('Going offline updates the local desired state before network work', app.includes('_driverWantsOnline = false;'));
@@ -277,7 +277,7 @@ check('Going offline cancels a pending GPS retry', app.includes('_locationRetryT
 check('Going offline cancels the GPS stream', app.includes('await _positionSubscription?.cancel();'));
 check('Going offline stops the GPS heartbeat', app.includes('_stopLocationHeartbeat();'));
 check('Going offline is persisted through the Worker API', app.includes('await WorkerApi.setDriverOnline(online: false);'));
-check('Going online restarts GPS tracking', app.includes('setState(() => _driverWantsOnline = true);') && app.includes('await _startLocationTracking();'));
+check('Going online restarts GPS tracking', app.includes('_driverWantsOnline = true;') && app.includes('await _startLocationTracking();'));
 check('Offline drivers do not poll for new orders', app.includes('if (!mounted || !_driverWantsOnline || _ordersPollInProgress) return;'));
 check('GPS retry scheduling requires desired online state', app.includes('if (!mounted || !_driverWantsOnline || _locationRetryTimer?.isActive == true) return;'));
 check('GPS retry callback rechecks desired online state', app.includes('if (mounted && _driverWantsOnline) unawaited(_startLocationTracking());'));
@@ -294,9 +294,9 @@ check('The five-second order timer remains available for later online transition
 check('Availability changes have a dedicated in-progress lock', app.includes('bool _availabilityChanging = false;'));
 check('Rapid repeated availability taps are ignored while a change is running', app.includes('if (!mounted || _availabilityChanging) return;'));
 check('The availability button is disabled during a state transition', app.includes('onPressed: _availabilityChanging ? null : _toggleDriverAvailability'));
-check('The driver sees a clear online status label', app.includes("_driverWantsOnline ? 'На линии' : 'Не на линии'"));
+check('The driver sees a clear online status label', app.includes("_driverGpsReady ? 'На линии' : 'GPS не подтверждён'") && app.includes("'Не на линии'"));
 check('The driver sees a waiting label while the state is changing', app.includes("? 'Подождите…'"));
-check('The status control retains an explanatory tooltip', app.includes("message: _driverWantsOnline ? 'Выйти с линии' : 'Выйти на линию'"));
+check('The status control retains an explanatory tooltip', app.includes("message: !_driverWantsOnline") && app.includes("'Отменить выход на линию'"));
 check('Availability transition lock is always released after completion', app.includes('finally {\n      if (mounted) setState(() => _availabilityChanging = false);'));
 check('Online transition still starts location tracking', app.includes('await _startLocationTracking();'));
 check('Online transition refreshes server orders after GPS startup', app.includes('if (mounted) unawaited(_pollServerOrders());'));
@@ -318,7 +318,7 @@ check('Offline retry reschedules after request failure', app.includes('_schedule
 check('Offline retry clears timer after confirmation', app.includes('_offlineSyncRetryTimer?.cancel();'));
 check('Manual offline failure informs user of retry', app.includes('Приложение повторит отключение автоматически.'));
 check('Manual offline transition validates server response', app.includes('Сервер не подтвердил отключение водителя.'));
-check('Going online cancels pending offline retry', app.includes('setState(() => _driverWantsOnline = true);'));
+check('Going online cancels pending offline retry', app.includes('_offlineSyncRetryTimer?.cancel();\n        _offlineSyncRetryTimer = null;\n        setState(() {\n          _driverWantsOnline = true;'));
 check('Availability change is blocked during offline sync', app.includes('if (_offlineSyncInProgress) {'));
 check('Offline retry timer is cancelled on dispose', app.includes('_offlineSyncRetryTimer?.cancel();'));
 check('Offline retry uses a dedicated async method', app.includes('Future<void> _retryOfflineStateSync() async'));
