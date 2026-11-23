@@ -239,6 +239,33 @@ check('Automatic update binds the winner to the active-order guard', autoUpdate.
 check('Automatic update binds the winner again to driver eligibility', /\.bind\(winner\.driver_uid, assignmentNow, order\.id, assignmentNow, winner\.driver_uid,\s*winner\.driver_uid, assignmentNow - 60, assignmentNow\)\.run\(\)/.test(autoUpdate));
 check('Automatic update binds fresh GPS bounds as the final parameters', autoUpdate.includes('assignmentNow - 60, assignmentNow).run()'));
 
+
+ // Driver online/offline and post-trip availability regression coverage.
+const driverOnlineStart = worker.indexOf('if (url.pathname === "/drivers/online" && request.method === "POST")');
+const driverOnlineEnd = worker.indexOf('if (url.pathname === "/orders/publish" && request.method === "POST")', driverOnlineStart);
+const driverOnlineBlock = driverOnlineStart >= 0 && driverOnlineEnd > driverOnlineStart
+  ? worker.slice(driverOnlineStart, driverOnlineEnd) : '';
+check('Driver online endpoint requires an approved driver', driverOnlineBlock.includes('requireApprovedDriver(request, env)'));
+check('Driver online endpoint accepts only a boolean state', driverOnlineBlock.includes('typeof b.online !== "boolean"'));
+check('Driver online endpoint requires paired GPS coordinates', driverOnlineBlock.includes('hasLatitude !== hasLongitude'));
+check('Driver cannot go online without both GPS coordinates', driverOnlineBlock.includes('(b.online && (!hasLatitude || !hasLongitude))'));
+check('Driver latitude must be finite and geographically valid', driverOnlineBlock.includes('!Number.isFinite(b.latitude)') && driverOnlineBlock.includes('b.latitude < -90 || b.latitude > 90'));
+check('Driver longitude must be finite and geographically valid', driverOnlineBlock.includes('!Number.isFinite(b.longitude)') && driverOnlineBlock.includes('b.longitude < -180 || b.longitude > 180'));
+check('Driver online state is persisted as a numeric flag', driverOnlineBlock.includes('const online = b.online ? 1 : 0'));
+check('Driver location update preserves coordinates when none are supplied', driverOnlineBlock.includes('latitude=COALESCE(?,latitude)') && driverOnlineBlock.includes('longitude=COALESCE(?,longitude)'));
+check('GPS freshness timestamp changes only with a complete coordinate pair', driverOnlineBlock.includes('location_updated_at=CASE WHEN ? IS NOT NULL AND ? IS NOT NULL THEN unixepoch()'));
+check('Driver online update is scoped to the authenticated UID', driverOnlineBlock.includes('.bind(online, lat, lng, lat, lng, auth.user.localId).run()'));
+check('Flutter online API requires both GPS coordinates when online', api.includes('(online && latitude == null)'));
+check('Flutter online API rejects non-finite and out-of-range GPS', api.includes('!latitude.isFinite') && api.includes('!longitude.isFinite') && api.includes('latitude < -90') && api.includes('longitude > 180'));
+check('Driver GPS stream failure marks the driver offline', app.includes('Stop advertising an old position as live while GPS is unavailable.') && app.includes('WorkerApi.setDriverOnline(online: false)'));
+check('Driver heartbeat failure marks the driver offline', app.includes('Do not keep the driver advertised as online when fresh GPS cannot be confirmed.') && app.includes('WorkerApi.setDriverOnline(online: false)'));
+check('Leaving the live driver screen marks the driver offline', /void dispose\(\) \{[\s\S]{0,300}WorkerApi\.setDriverOnline\(online: false\)/.test(app));
+check('Driver order polling runs every five seconds', app.includes('Timer.periodic(const Duration(seconds: 5), (_) {') && app.includes('_pollServerOrders();'));
+check('Open-order endpoint requires an approved online driver', worker.includes('url.pathname === "/orders/open"') && worker.includes('requireApprovedDriver(request, env, true)'));
+check('Open-order query returns only unassigned new orders', worker.includes("FROM orders o WHERE status='new'"));
+check('Open-order query excludes a driver with an active assigned trip', worker.includes("active.assigned_driver_uid=?") && worker.includes("active.status IN ('driver_assigned','arrived')"));
+check('Driver sees availability again after the active order disappears', app.includes('hadAssignedOrder && assigned.isEmpty') && app.includes('Вы снова можете принимать заказы.'));
+
 for (const item of checks) {
   process.stdout.write(`${item.ok ? 'PASS' : 'FAIL'}  ${item.label}\n`);
 }
