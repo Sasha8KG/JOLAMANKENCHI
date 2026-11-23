@@ -456,6 +456,23 @@ check('Dispatcher translates all three cancellation reason codes', ['Пасса�
 check('Dispatcher cancellation history displays driver and timestamp', app.includes("o['driver_name']") && app.includes("o['cancelled_at']") && app.includes('Отменён: '));
 check('No-show cancellation history explicitly records zero earnings', app.includes('начисление: 0 сом'));
 check('Driver no-show cancellation action remains available after arrival', app.includes('_cancelArrivedNoShowOrder') && app.includes('ПАССАЖИР НЕ ВЫШЕЛ'));
+// Complete paginated dispatcher audit history for passenger no-show cancellations.
+const cancellationHistoryStart = worker.indexOf('if (url.pathname === "/dispatcher/cancellations"');
+const cancellationHistoryEnd = worker.indexOf('if (url.pathname === "/dispatcher/overview"', cancellationHistoryStart);
+const cancellationHistoryRoute = cancellationHistoryStart >= 0 && cancellationHistoryEnd > cancellationHistoryStart
+  ? worker.slice(cancellationHistoryStart, cancellationHistoryEnd) : '';
+check('Cancellation audit history has a dedicated dispatcher-only endpoint', cancellationHistoryRoute.includes('await requireDispatcher(request)'));
+check('Cancellation history includes all no-show statuses, not only recent dashboard orders', cancellationHistoryRoute.includes("WHERE o.status='cancelled_by_driver_no_show'"));
+check('Cancellation history retains legacy rows without a reason audit record', cancellationHistoryRoute.includes('LEFT JOIN order_cancellations c'));
+check('Cancellation history uses stable timestamp and order ID cursor ordering', cancellationHistoryRoute.includes('ORDER BY sort_at DESC, o.id DESC') && cancellationHistoryRoute.includes('o.id < ?'));
+check('Cancellation history validates cursor timestamp and order ID', cancellationHistoryRoute.includes('Number.isSafeInteger(beforeAt)') && cancellationHistoryRoute.includes('beforeId.length > 128'));
+check('Cancellation history fetches one extra row to determine whether another page exists', cancellationHistoryRoute.includes('LIMIT 51') && cancellationHistoryRoute.includes('rows.length > 50'));
+check('Cancellation history returns the next cursor from the last visible row', cancellationHistoryRoute.includes('before_at: Number(last.sort_at)') && cancellationHistoryRoute.includes('before_id: String(last.order_id)'));
+check('Dispatcher client requests the protected cancellation history endpoint', api.includes("return _request('/dispatcher/cancellations$query')"));
+check('Dispatcher can load subsequent cancellation pages without duplicate order IDs', app.includes('_loadMoreCancellationHistory') && app.includes('knownIds.contains'));
+check('Dispatcher history exposes refresh and load-more controls', app.includes('Обновить историю') && app.includes('Загрузить ещё'));
+check('Dispatcher cancellation history shows the route and preserves zero earnings', app.includes("o['pickup_address']") && app.includes('начисление: 0 сом'));
+check('Recent 100-order overview no longer limits the dedicated cancellation history', !worker.slice(worker.indexOf('if (url.pathname === "/dispatcher/overview"'), worker.indexOf('if (url.pathname === "/orders/assign"')).includes('LEFT JOIN order_cancellations c'));
 // Driver registration, document upload and dispatcher approval regression checks.
 check('Driver registration requires all three identity and vehicle photos', registration.includes('_license == null || _driverPhoto == null || _carPhoto == null'));
 check('Driver upload accepts only the three supported document kinds', registration.includes("const allowedKinds = {'license', 'driver_photo', 'car_photo'};"));

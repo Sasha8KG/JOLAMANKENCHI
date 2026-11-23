@@ -283,6 +283,21 @@ class WorkerApi {
 
   static Future<Map<String, dynamic>> dispatcherOverview() =>
       _request('/dispatcher/overview');
+  static Future<Map<String, dynamic>> dispatcherCancellations({
+    int? beforeAt,
+    String? beforeId,
+  }) {
+    final hasAt = beforeAt != null;
+    final normalizedId = beforeId?.trim();
+    if (hasAt != (normalizedId != null && normalizedId.isNotEmpty)) {
+      throw const WorkerApiException('Некорректный указатель истории отмен.');
+    }
+    final query = hasAt
+        ? '?before_at=$beforeAt&before_id=\${Uri.encodeQueryComponent(normalizedId!)}'
+        : '';
+    return _request('/dispatcher/cancellations$query');
+  }
+
 
   static Future<Map<String, dynamic>> getTariffs() => _request('/tariffs');
 

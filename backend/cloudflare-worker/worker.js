@@ -591,6 +591,50 @@ export default {
         return response({ status: "ok", closed: true, shift });
       }
 
+      // Complete, cursor-paginated audit history; never limited by the recent 100-order dashboard.
+      if (url.pathname === "/dispatcher/cancellations" && request.method === "GET") {
+        await requireDispatcher(request);
+        const beforeAtRaw = url.searchParams.get("before_at");
+        const beforeIdRaw = url.searchParams.get("before_id");
+        const hasCursor = beforeAtRaw !== null || beforeIdRaw !== null;
+        let beforeAt = null;
+        let beforeId = null;
+        if (hasCursor) {
+          beforeAt = Number(beforeAtRaw);
+          beforeId = String(beforeIdRaw || "").trim();
+          if (!Number.isSafeInteger(beforeAt) || beforeAt < 0 || !beforeId ||
+              beforeId.length > 128 || /[\u0000-\u001f\u007f]/.test(beforeId)) {
+            return response({ status: "error", message: "Некорректный указатель истории отмен" }, 400);
+          }
+        }
+        const baseQuery = "SELECT o.id AS order_id, c.reason, COALESCE(c.driver_uid,o.assigned_driver_uid) AS driver_uid, " +
+          "c.cancelled_at AS cancelled_at, COALESCE(c.cancelled_at,o.created_at) AS sort_at, " +
+          "d.name AS driver_name, d.car_number AS driver_car_number, o.pickup_address, o.destination_address " +
+          "FROM orders o LEFT JOIN order_cancellations c ON c.order_id=o.id " +
+          "LEFT JOIN drivers d ON d.uid=COALESCE(c.driver_uid,o.assigned_driver_uid) " +
+          "WHERE o.status='cancelled_by_driver_no_show'";
+        const pageQuery = hasCursor
+          ? baseQuery + " AND (COALESCE(c.cancelled_at,o.created_at) < ? OR " +
+            "(COALESCE(c.cancelled_at,o.created_at) = ? AND o.id < ?)) " +
+            "ORDER BY sort_at DESC, o.id DESC LIMIT 51"
+          : baseQuery + " ORDER BY sort_at DESC, o.id DESC LIMIT 51";
+        const result = hasCursor
+          ? await env.DB.prepare(pageQuery).bind(beforeAt, beforeAt, beforeId).all()
+          : await env.DB.prepare(pageQuery).all();
+        const rows = result.results || [];
+        const hasMore = rows.length > 50;
+        const cancellations = hasMore ? rows.slice(0, 50) : rows;
+        const last = cancellations.length ? cancellations[cancellations.length - 1] : null;
+        return response({
+          status: "ok",
+          cancellations,
+          has_more: hasMore,
+          next_cursor: hasMore && last
+            ? { before_at: Number(last.sort_at), before_id: String(last.order_id) }
+            : null
+        });
+      }
+
       // Secure dispatcher dashboard: only the fixed dispatcher Firebase UID can read fleet data.
       if (url.pathname === "/dispatcher/overview" && request.method === "GET") {
         await requireDispatcher(request);
@@ -606,10 +650,8 @@ export default {
         const orders = await env.DB.prepare(`SELECT o.id, o.firebase_order_id, o.pickup_address, o.pickup_lat, o.pickup_lng,
           o.destination_address, o.destination_lat, o.destination_lng, o.passenger_count, o.payment_method,
           o.tariff_type, o.comment, o.status, o.created_at, o.assigned_at, o.assigned_driver_uid,
-          d.name AS driver_name, d.car_number AS driver_car_number,
-          c.reason AS cancellation_reason, c.driver_uid AS cancellation_driver_uid, c.cancelled_at AS cancelled_at
+          d.name AS driver_name, d.car_number AS driver_car_number
           FROM orders o LEFT JOIN drivers d ON d.uid=o.assigned_driver_uid
-          LEFT JOIN order_cancellations c ON c.order_id=o.id
           ORDER BY o.created_at DESC LIMIT 100`).all();
         const todayDate = kgTodayDate();
         const todayBounds = kgDateBounds(todayDate);

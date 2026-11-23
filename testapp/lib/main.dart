@@ -3270,6 +3270,11 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
   String? _error;
   List<Map<String, dynamic>> _drivers = [];
   List<Map<String, dynamic>> _orders = [];
+  List<Map<String, dynamic>> _cancellations = [];
+  bool _hasMoreCancellations = false;
+  bool _loadingMoreCancellations = false;
+  int? _cancellationCursorAt;
+  String? _cancellationCursorId;
   List<Map<String, dynamic>> _today = [];
   List<Map<String, dynamic>> _earnings = [];
   List<Map<String, dynamic>> _closedShifts = [];
@@ -3285,8 +3290,14 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
   void initState() {
     super.initState();
     _load();
+    unawaited(_refreshCancellationHistory(silent: true));
     _dispatcherRefreshTimer = Timer.periodic(const Duration(seconds: 15), (_) {
-      if (mounted && !_working) unawaited(_load(showLoading: false));
+      if (mounted && !_working) {
+        unawaited(_load(showLoading: false));
+        if (_cancellations.length <= 50) {
+          unawaited(_refreshCancellationHistory(silent: true));
+        }
+      }
     });
   }
 
@@ -3341,6 +3352,82 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
       });
     } finally {
       _dispatcherLoadInProgress = false;
+    }
+  }
+
+  Future<void> _refreshCancellationHistory({bool silent = false}) async {
+    if (!mounted || _loadingMoreCancellations) return;
+    setState(() => _loadingMoreCancellations = true);
+    try {
+      final data = await WorkerApi.dispatcherCancellations();
+      final rows = (data['cancellations'] as List? ?? [])
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+      final cursor = data['next_cursor'] is Map
+          ? Map<String, dynamic>.from(data['next_cursor'] as Map)
+          : null;
+      if (!mounted) return;
+      setState(() {
+        _cancellations = rows;
+        _hasMoreCancellations = data['has_more'] == true;
+        _cancellationCursorAt = cursor?['before_at'] is num
+            ? (cursor!['before_at'] as num).toInt()
+            : null;
+        _cancellationCursorId = cursor?['before_id']?.toString();
+      });
+    } catch (error) {
+      if (!mounted) return;
+      if (!silent) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Не удалось обновить историю отмен: $error'),
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _loadingMoreCancellations = false);
+    }
+  }
+
+  Future<void> _loadMoreCancellationHistory() async {
+    final beforeAt = _cancellationCursorAt;
+    final beforeId = _cancellationCursorId;
+    if (!mounted || _loadingMoreCancellations || !_hasMoreCancellations ||
+        beforeAt == null || beforeId == null || beforeId.isEmpty) return;
+    setState(() => _loadingMoreCancellations = true);
+    try {
+      final data = await WorkerApi.dispatcherCancellations(
+        beforeAt: beforeAt,
+        beforeId: beforeId,
+      );
+      final rows = (data['cancellations'] as List? ?? [])
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+      final cursor = data['next_cursor'] is Map
+          ? Map<String, dynamic>.from(data['next_cursor'] as Map)
+          : null;
+      if (!mounted) return;
+      setState(() {
+        final knownIds = _cancellations
+            .map((item) => (item['order_id'] ?? '').toString())
+            .toSet();
+        _cancellations.addAll(rows.where(
+          (item) => !knownIds.contains((item['order_id'] ?? '').toString()),
+        ));
+        _hasMoreCancellations = data['has_more'] == true;
+        _cancellationCursorAt = cursor?['before_at'] is num
+            ? (cursor!['before_at'] as num).toInt()
+            : null;
+        _cancellationCursorId = cursor?['before_id']?.toString();
+      });
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Не удалось загрузить следующие отмены: $error'),
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _loadingMoreCancellations = false);
     }
   }
 
@@ -3901,26 +3988,52 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
                         icon: const Icon(Icons.check_circle), label: const Text('ЗАВЕРШИТЬ И ЗАПИСАТЬ ОПЛАТУ'))),
                     ])))),
                 _sectionTitle('Отмены после прибытия · неявка пассажира', Icons.person_off_outlined),
-                if (_orders.where((o) => o['status'] == 'cancelled_by_driver_no_show').isEmpty)
+                Row(children: [
+                  TextButton.icon(
+                    onPressed: _loadingMoreCancellations ? null : () => _refreshCancellationHistory(),
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Обновить историю'),
+                  ),
+                  if (_hasMoreCancellations)
+                    TextButton.icon(
+                      onPressed: _loadingMoreCancellations ? null : _loadMoreCancellationHistory,
+                      icon: const Icon(Icons.expand_more),
+                      label: const Text('Загрузить ещё'),
+                    ),
+                ]),
+                if (_cancellations.isEmpty && !_loadingMoreCancellations)
                   const Text('Нет отмен по причине отсутствия пассажира.'),
-                ..._orders.where((o) => o['status'] == 'cancelled_by_driver_no_show').map((o) {
-                  final reason = switch ((o['cancellation_reason'] ?? '').toString()) {
+                if (_loadingMoreCancellations && _cancellations.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
+                ..._cancellations.map((o) {
+                  final reason = switch ((o['reason'] ?? '').toString()) {
                     'customer_not_found' => 'Пассажир не вышел',
                     'customer_unreachable' => 'Пассажир не отвечает',
                     'customer_left_with_other_car' => 'Пассажир уехал на другой машине',
                     _ => 'Причина не указана в старой записи',
                   };
                   final cancelledAt = (o['cancelled_at'] as num?)?.toInt();
-                  final cancelledTime = cancelledAt == null ? 'Время не указано' : DateTime.fromMillisecondsSinceEpoch(cancelledAt * 1000).toLocal().toString();
+                  final cancelledTime = cancelledAt == null
+                      ? 'Время отмены не сохранилось в старой записи'
+                      : DateTime.fromMillisecondsSinceEpoch(cancelledAt * 1000).toLocal().toString();
                   return Card(child: Padding(padding: const EdgeInsets.all(12), child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text('Заказ №' + (o['id'] ?? '').toString(), style: const TextStyle(fontWeight: FontWeight.bold)),
+                      Text('Заказ №' + (o['order_id'] ?? '').toString(), style: const TextStyle(fontWeight: FontWeight.bold)),
                       Text('Водитель: ' + (o['driver_name'] ?? 'не указан').toString() + ' · ' + (o['driver_car_number'] ?? '').toString()),
                       Text('Причина: ' + reason),
                       Text('Отменён: ' + cancelledTime),
+                      Text('Маршрут: ' + (o['pickup_address'] ?? '—').toString() + ' → ' + (o['destination_address'] ?? '—').toString()),
                       const Text('Поездка не засчитана · начисление: 0 сом'),
                     ])));
                 }),
+                if (_loadingMoreCancellations && _cancellations.isNotEmpty)
+                  const Padding(
+                    padding: EdgeInsets.all(8),
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
                 _sectionTitle('Финансовый итог за сегодня · $_businessDate', Icons.account_balance_wallet_outlined),
                 Card(child: Padding(padding: const EdgeInsets.all(14), child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start, children: [
