@@ -1373,7 +1373,9 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
       _orderStatusTimer?.cancel();
       _orderStatusTimer = Timer.periodic(const Duration(seconds: 5), (_) {
         if (mounted && TaxiParkState.activeOrder?.id == orderId) {
-          _refreshOrderStatus(orderId);
+          // Rebuild even when the network is temporarily unavailable so GPS freshness expires on screen.
+          setState(() {});
+          unawaited(_refreshOrderStatus(orderId));
         }
       });
       if (mounted) {
