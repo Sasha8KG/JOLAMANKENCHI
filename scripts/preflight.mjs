@@ -107,8 +107,13 @@ check('Passenger route errors trigger a bounded retry delay', /_routeRetryAfter 
 check('Passenger map hides road route when GPS is stale', /_approachRoute != null && gpsIsFresh/.test(app));
 
 check("Nearby endpoint requires Firebase authentication", /url\.pathname === "\/drivers\/nearby"[\s\S]{0,100}verifyFirebaseUser\(request\)/.test(worker));
-check("Nearby endpoint returns approved drivers only", /url\.pathname === "\/drivers\/nearby"[\s\S]{0,240}approved=1/.test(worker));
-check("Nearby endpoint returns online drivers only", /url\.pathname === "\/drivers\/nearby"[\s\S]{0,260}online=1/.test(worker));
+const nearbyEndpointStart = worker.indexOf('if (url.pathname === "/drivers/nearby"');
+const nearbyEndpointEnd = worker.indexOf('if (url.pathname === "/orders/open"', nearbyEndpointStart);
+const nearbyEndpoint = nearbyEndpointStart >= 0 && nearbyEndpointEnd > nearbyEndpointStart
+  ? worker.slice(nearbyEndpointStart, nearbyEndpointEnd)
+  : '';
+check("Nearby endpoint returns approved drivers only", nearbyEndpoint.includes("FROM drivers d WHERE approved=1"));
+check("Nearby endpoint returns online drivers only", nearbyEndpoint.includes("WHERE approved=1 AND online=1"));
 check("Nearby endpoint applies GPS age lower bound", /location_updated_at>=\?/.test(worker));
 check("Nearby endpoint rejects future GPS timestamps", /location_updated_at<=\?/.test(worker) && /ageSeconds >= 0 && ageSeconds <= 60/.test(worker));
 check("Nearby endpoint excludes drivers with active trips", /active\.status IN \('driver_assigned','arrived'\)/.test(worker));
@@ -124,7 +129,9 @@ check("Passenger validates latitude and longitude bounds", /lat < -90 \|\| lat >
 check("Passenger rejects stale GPS responses", /!isGpsTimestampFresh\(updatedAt\)/.test(app));
 check("Passenger keeps previous markers only until GPS expires", /_nearbyDriverPoints\.removeWhere\([\s\S]{0,100}!isGpsTimestampFresh\(entry\.value\)/.test(app));
 check("Nearby request lock is released after completion", /_nearbyDriversRequestInProgress = false;/.test(app));
-check("Passenger map renders distinct green taxi markers", /_nearbyDriverPoints\.map\(\(entry\) => Marker\([\s\S]{0,100}Colors\.green/.test(app));
+const nearbyMarkerStart = app.indexOf('_nearbyDriverPoints.map((entry) => Marker(');
+const nearbyMarkerBlock = nearbyMarkerStart >= 0 ? app.slice(nearbyMarkerStart, nearbyMarkerStart + 500) : '';
+check("Passenger map renders distinct green taxi markers", nearbyMarkerBlock.includes("point: entry.key") && nearbyMarkerBlock.includes("Icons.local_taxi") && nearbyMarkerBlock.includes("Colors.green"));
 check("Passenger cancels nearby timer when disposed", /_nearbyDriversTimer\?\.cancel\(\)/.test(app));
 
 for (const item of checks) {
