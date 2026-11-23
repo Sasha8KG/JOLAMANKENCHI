@@ -254,7 +254,7 @@ check('Driver longitude must be finite and geographically valid', driverOnlineBl
 check('Driver online state is persisted as a numeric flag', driverOnlineBlock.includes('const online = b.online ? 1 : 0'));
 check('Driver location update preserves coordinates when none are supplied', driverOnlineBlock.includes('latitude=COALESCE(?,latitude)') && driverOnlineBlock.includes('longitude=COALESCE(?,longitude)'));
 check('GPS freshness timestamp changes only with a complete coordinate pair', driverOnlineBlock.includes('location_updated_at=CASE WHEN ? IS NOT NULL AND ? IS NOT NULL THEN unixepoch()'));
-check('Driver online update is scoped to the authenticated UID', driverOnlineBlock.includes('.bind(online, lat, lng, lat, lng, auth.user.localId).run()'));
+check('Driver online update binds the authenticated UID, requested state, and active-trip guard', driverOnlineBlock.includes('.bind(online, lat, lng, lat, lng, auth.user.localId, online, auth.user.localId).run()'));
 check('Flutter online API requires both GPS coordinates when online', api.includes('(online && latitude == null)'));
 check('Flutter online API rejects non-finite and out-of-range GPS', api.includes('!latitude.isFinite') && api.includes('!longitude.isFinite') && api.includes('latitude < -90') && api.includes('longitude > 180'));
 check('Driver GPS stream failure marks the driver offline', app.includes('Stop advertising an old position as live while GPS is unavailable.') && app.includes('WorkerApi.setDriverOnline(online: false)'));
