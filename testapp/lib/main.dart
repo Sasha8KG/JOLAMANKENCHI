@@ -1403,6 +1403,11 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
         driverId == null ||
         orderId.isEmpty ||
         order.status != 'accepted') return;
+    final driver = order.assignedDriver!;
+    final gpsAge = driver.locationUpdatedAt == null
+        ? null
+        : DateTime.now().difference(driver.locationUpdatedAt!).inSeconds;
+    if (!driver.isOnline || gpsAge == null || gpsAge < 0 || gpsAge > 60) return;
     final key = '$orderId:$driverId:${driverPoint.latitude.toStringAsFixed(3)},${driverPoint.longitude.toStringAsFixed(3)}';
     if (_routeLoading) return;
     if (_lastRouteKey == key &&
@@ -1491,12 +1496,19 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
             _lastRouteKey = null;
             _routeError = null;
           }
+          order.assignedDriver = null;
           final raw = data['driver'];
           if (raw is Map) {
             final uid = (raw['uid'] ?? '').toString().trim();
             final lat = _readValidCoordinate(raw['latitude'], min: -90, max: 90);
             final lng = _readValidCoordinate(raw['longitude'], min: -180, max: 180);
             if (uid.isNotEmpty && lat != null && lng != null) {
+              final locationUpdatedAt = (raw['location_updated_at'] is num)
+                  ? DateTime.fromMillisecondsSinceEpoch((raw['location_updated_at'] as num).toInt() * 1000)
+                  : DateTime.tryParse((raw['location_updated_at'] ?? '').toString());
+              final gpsAge = locationUpdatedAt == null
+                  ? null
+                  : DateTime.now().difference(locationUpdatedAt).inSeconds;
               order.assignedDriver = DriverModel(
               id: uid,
               name: (raw['name'] ?? 'Водитель').toString(),
@@ -1506,11 +1518,9 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
               plateNumber: (raw['car_number'] ?? '').toString(),
               pinCode: '',
               currentLocation: LatLng(lat, lng),
-              locationUpdatedAt: (raw['location_updated_at'] is num)
-                  ? DateTime.fromMillisecondsSinceEpoch((raw['location_updated_at'] as num).toInt() * 1000)
-                  : DateTime.tryParse((raw['location_updated_at'] ?? '').toString()),
+              locationUpdatedAt: locationUpdatedAt,
               isApproved: true,
-              isOnline: true,
+              isOnline: gpsAge != null && gpsAge >= 0 && gpsAge <= 60,
               );
             }
           }
@@ -1535,7 +1545,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
       });
       final assigned = order.assignedDriver;
       // Once the taxi has arrived, stop recalculating the approach route.
-      if (assigned != null && order.status == 'accepted') {
+      if (assigned != null && assigned.isOnline && order.status == 'accepted') {
         unawaited(_loadApproachRoute(assigned.currentLocation));
       }
     } on WorkerApiException {
@@ -1598,6 +1608,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
     final gpsAgeSeconds = order?.assignedDriver?.locationUpdatedAt == null
         ? null
         : DateTime.now().difference(order!.assignedDriver!.locationUpdatedAt!).inSeconds;
+    final gpsIsFresh = gpsAgeSeconds != null && gpsAgeSeconds >= 0 && gpsAgeSeconds <= 60;
 
     return Scaffold(
       appBar: AppBar(
@@ -1625,9 +1636,9 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
                   urlTemplate: 'https://tile.openstreetmap.de/{z}/{x}/{y}.png',
                   userAgentPackageName: 'com.jolamankenchi.taxi',
                 ),
-                if (_approachRoute != null)
+                if (_approachRoute != null && gpsIsFresh)
                   PolylineLayer(polylines: [Polyline(points: _approachRoute!.points, color: Colors.blue, strokeWidth: 5)]),
-                if (_approachRoute == null && order?.assignedDriver != null)
+                if (_approachRoute == null && order?.assignedDriver != null && gpsIsFresh)
                   PolylineLayer(polylines: [Polyline(points: [order!.assignedDriver!.currentLocation, _pickupPoint], color: Colors.blueGrey, strokeWidth: 3, isDotted: true)]),
                 MarkerLayer(
                   markers: [
@@ -1638,7 +1649,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
                       child: const Icon(Icons.location_on,
                           color: Colors.red, size: 45),
                     ),
-                    if (order?.assignedDriver != null)
+                    if (order?.assignedDriver != null && gpsIsFresh)
                       Marker(
                         point: order!.assignedDriver!.currentLocation,
                         width: 44,
@@ -1649,7 +1660,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
                 ),
               ],
                 ),
-                if (order?.assignedDriver != null)
+                if (order?.assignedDriver != null && gpsIsFresh)
                   Positioned(
                     right: 14,
                     bottom: 14,
@@ -1672,16 +1683,16 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(_routeLoading ? 'Обновляем положение такси и маршрут…' : (_approachRoute != null ? 'Маршрут до вас: ${_approachRoute!.distanceLabel} · примерно ${_approachRoute!.etaLabel}' : (_routeError ?? 'Маршрут уточняется')), style: const TextStyle(fontWeight: FontWeight.w600)),
+                  Text(!gpsIsFresh ? 'Нет актуального GPS: положение машины и маршрут временно скрыты.' : (_routeLoading ? 'Обновляем положение такси и маршрут…' : (_approachRoute != null ? 'Маршрут до вас: ${_approachRoute!.distanceLabel} · примерно ${_approachRoute!.etaLabel}' : (_routeError ?? 'Маршрут уточняется'))), style: const TextStyle(fontWeight: FontWeight.w600)),
                   Text(
                     gpsAgeSeconds == null
                         ? 'Положение автомобиля получено; время GPS пока неизвестно.'
-                        : (gpsAgeSeconds > 60
+                        : (!gpsIsFresh
                             ? 'Внимание: GPS не обновлялся $gpsAgeSeconds сек. Проверьте связь с водителем.'
                             : 'GPS обновлён $gpsAgeSeconds сек. назад. Конечный адрес водитель уточнит у вас устно.'),
                     style: TextStyle(
                       fontSize: 12,
-                      color: gpsAgeSeconds != null && gpsAgeSeconds > 60 ? Colors.red : Colors.grey.shade700,
+                      color: !gpsIsFresh ? Colors.red : Colors.grey.shade700,
                     ),
                   ),
                   Text('Такси: ${order?.assignedDriver?.carBrand ?? ''} ${order?.assignedDriver?.plateNumber ?? ''}', style: const TextStyle(fontSize: 12)),
