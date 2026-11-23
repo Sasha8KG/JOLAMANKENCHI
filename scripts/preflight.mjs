@@ -594,6 +594,18 @@ check('Branded splash includes Kyrgyz ornament and checker motif', app.includes(
 check('Branded splash exposes an accessible semantic brand label', app.includes("label: 'Жол Аман Кенчи Такси'"));
 check('Widget test covers splash brand, slogan and service area', read('testapp/test/widget_test.dart').includes('Branded splash screen') && read('testapp/test/widget_test.dart').includes('shows the approved brand and Kyrgyz slogan'));
 
+
+check('Language switch offers Russian and Kyrgyz', app.includes("DropdownMenuItem(value: 'ru', child: Text('Русский'))") && app.includes("DropdownMenuItem(value: 'ky', child: Text('Кыргызча'))"));
+check('Language switch updates a shared app language notifier', app.includes("static final ValueNotifier<String> current") && app.includes("TaxiLanguage.current.value = value"));
+check('Role menu listens for language changes and rebuilds', app.includes("TaxiLanguage.current.addListener(_handleLanguageChanged)") && app.includes("removeListener(_handleLanguageChanged)"));
+check('Role menu passenger title is localized', app.includes("МЕН ЖҮРГҮНЧҮМҮН") && app.includes("Я ПАССАЖИР"));
+check('Role menu driver title is localized', app.includes("МЕН АЙДООЧУМУН") && app.includes("Я ВОДИТЕЛЬ"));
+check('Role menu passenger action is localized', app.includes("Унаа чакыруу") && app.includes("Заказать поездку"));
+check('Role menu driver action is localized', app.includes("Буйрутмалар жана айдоочу бөлмөсү"));
+check('Role menu slogan is localized', app.includes("Жолуңуз ар дайым шыдыр болсун!") && app.includes("Быстро • Надёжно • По-нашему"));
+check('Role menu service area is localized', app.includes("Кыргызстан • Баткен облусу"));
+check('Widget test covers switching between Russian and Kyrgyz', read('testapp/test/widget_test.dart').includes('Russian and Kyrgyz language switch'));
+
 for (const item of checks) {
   process.stdout.write(`${item.ok ? 'PASS' : 'FAIL'}  ${item.label}\n`);
 }

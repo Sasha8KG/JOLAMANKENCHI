@@ -1,11 +1,30 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:sulyukta_taxi/main.dart' show BrandedSplashGate;
+import 'package:sulyukta_taxi/main.dart' show BrandedSplashGate, RoleSelectionScreen, TaxiLanguage;
 import 'package:latlong2/latlong.dart';
 import 'package:sulyukta_taxi/services/firebase_service.dart';
 import 'package:sulyukta_taxi/services/route_service.dart';
 import 'package:sulyukta_taxi/services/gps_freshness.dart';
 
 void main() {
+  group('Russian and Kyrgyz language switch', () {
+    testWidgets('switches the role menu labels between Russian and Kyrgyz', (tester) async {
+      TaxiLanguage.current.value = 'ru';
+      await tester.pumpWidget(const MaterialApp(home: RoleSelectionScreen()));
+      expect(find.text('Русский'), findsOneWidget);
+      expect(find.text('Я ПАССАЖИР'), findsOneWidget);
+      expect(find.text('Заказать поездку'), findsOneWidget);
+      await tester.tap(find.text('Русский'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Кыргызча').last);
+      await tester.pumpAndSettle();
+      expect(find.text('МЕН ЖҮРГҮНЧҮМҮН'), findsOneWidget);
+      expect(find.text('Унаа чакыруу'), findsOneWidget);
+      expect(find.text('Кыргызстан • Баткен облусу'), findsOneWidget);
+      TaxiLanguage.current.value = 'ru';
+    });
+  });
+
   group('Branded splash screen', () {
     testWidgets('shows the approved brand and Kyrgyz slogan', (tester) async {
       await tester.pumpWidget(const MaterialApp(home: BrandedSplashGate()));

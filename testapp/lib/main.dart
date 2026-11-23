@@ -928,8 +928,60 @@ class _WalkieTalkieWidgetState extends State<WalkieTalkieWidget> {
   }
 }
 
-class RoleSelectionScreen extends StatelessWidget {
+class TaxiLanguage {
+  static final ValueNotifier<String> current = ValueNotifier<String>('ru');
+  static bool get isKyrgyz => current.value == 'ky';
+}
+class TaxiLanguageSwitcher extends StatelessWidget {
+  const TaxiLanguageSwitcher({super.key});
+  @override
+  Widget build(BuildContext context) => ValueListenableBuilder<String>(
+    valueListenable: TaxiLanguage.current,
+    builder: (context, language, _) => Align(
+      alignment: Alignment.centerRight,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+        decoration: BoxDecoration(color: const Color(0xFFFFD45A), borderRadius: BorderRadius.circular(24), border: Border.all(color: const Color(0xFF171F1D))),
+        child: DropdownButtonHideUnderline(child: DropdownButton<String>(
+          value: language, isDense: true,
+          icon: const Icon(Icons.language_rounded, color: Color(0xFF171F1D)),
+          dropdownColor: const Color(0xFFFFF8E7),
+          style: const TextStyle(color: Color(0xFF171F1D), fontWeight: FontWeight.w800),
+          items: const [DropdownMenuItem(value: 'ru', child: Text('Русский')), DropdownMenuItem(value: 'ky', child: Text('Кыргызча'))],
+          onChanged: (value) { if (value != null) TaxiLanguage.current.value = value; },
+        )),
+      ),
+    ),
+  );
+}
+class TaxiLocalizedText extends StatelessWidget {
+  const TaxiLocalizedText({super.key, required this.russian, required this.kyrgyz, this.style, this.textAlign});
+  final String russian, kyrgyz;
+  final TextStyle? style;
+  final TextAlign? textAlign;
+  @override
+  Widget build(BuildContext context) => ValueListenableBuilder<String>(
+    valueListenable: TaxiLanguage.current,
+    builder: (context, language, _) => Text(language == 'ky' ? kyrgyz : russian, style: style, textAlign: textAlign),
+  );
+}
+class RoleSelectionScreen extends StatefulWidget {
   const RoleSelectionScreen({super.key});
+  @override
+  State<RoleSelectionScreen> createState() => _RoleSelectionScreenState();
+}
+class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
+  @override
+  void initState() {
+    super.initState();
+    TaxiLanguage.current.addListener(_handleLanguageChanged);
+  }
+  void _handleLanguageChanged() { if (mounted) setState(() {}); }
+  @override
+  void dispose() {
+    TaxiLanguage.current.removeListener(_handleLanguageChanged);
+    super.dispose();
+  }
 
   void _showDispatcherAuth(BuildContext context) {
     final phoneController = TextEditingController();
@@ -1016,6 +1068,8 @@ class RoleSelectionScreen extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(18, 14, 18, 20),
                 child: Column(
                   children: [
+                    const TaxiLanguageSwitcher(),
+                    const SizedBox(height: 8),
                     const KyrgyzOrnamentHeader(),
                     const SizedBox(height: 18),
                     Container(
@@ -1055,17 +1109,17 @@ class RoleSelectionScreen extends StatelessWidget {
                           Container(height: 2, decoration: const BoxDecoration(
                             gradient: LinearGradient(colors: [Colors.transparent, gold, Colors.transparent]))),
                           const SizedBox(height: 13),
-                          const Text('Жолунуз ачык болсун!', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w600)),
+                          const TaxiLocalizedText(russian: 'Жолунуз ачык болсун!', kyrgyz: 'Жолуңуз ар дайым шыдыр болсун!', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w600)),
                           const SizedBox(height: 4),
-                          const Text('Быстро • Надёжно • По-нашему', style: TextStyle(color: Color(0xFFFFE8A0), fontSize: 13)),
+                          const TaxiLocalizedText(russian: 'Быстро • Надёжно • По-нашему', kyrgyz: 'Тез • Ишенимдүү • Өзүбүздүн такси', style: TextStyle(color: Color(0xFFFFE8A0), fontSize: 13)),
                         ],
                       ),
                     ),
                     const SizedBox(height: 20),
                     _roleButton(
                       icon: Icons.person_pin_circle_rounded,
-                      label: 'Я ПАССАЖИР',
-                      subtitle: 'Заказать поездку',
+                      label: TaxiLanguage.isKyrgyz ? 'МЕН ЖҮРГҮНЧҮМҮН' : 'Я ПАССАЖИР',
+                      subtitle: TaxiLanguage.isKyrgyz ? 'Унаа чакыруу' : 'Заказать поездку',
                       color: gold,
                       foreground: ink,
                       onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ClientAuthScreen())),
@@ -1073,8 +1127,8 @@ class RoleSelectionScreen extends StatelessWidget {
                     const SizedBox(height: 12),
                     _roleButton(
                       icon: Icons.local_taxi_rounded,
-                      label: 'Я ВОДИТЕЛЬ',
-                      subtitle: 'Заказы и рабочий кабинет',
+                      label: TaxiLanguage.isKyrgyz ? 'МЕН АЙДООЧУМУН' : 'Я ВОДИТЕЛЬ',
+                      subtitle: TaxiLanguage.isKyrgyz ? 'Буйрутмалар жана айдоочу бөлмөсү' : 'Заказы и рабочий кабинет',
                       color: const Color(0xFF202A27),
                       foreground: gold,
                       onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DriverEntryScreen())),
@@ -1083,13 +1137,13 @@ class RoleSelectionScreen extends StatelessWidget {
                     _roleButton(
                       icon: Icons.admin_panel_settings_rounded,
                       label: 'ДИСПЕТЧЕР',
-                      subtitle: 'Управление таксопарком',
+                      subtitle: TaxiLanguage.isKyrgyz ? 'Такси паркын башкаруу' : 'Управление таксопарком',
                       color: burgundy,
                       foreground: Colors.white,
                       onPressed: () => _showDispatcherAuth(context),
                     ),
                     const SizedBox(height: 16),
-                    const Text('Кыргызстан • Баткенская область', style: TextStyle(color: Color(0xFF4D302B), fontSize: 12, fontWeight: FontWeight.w700)),
+                    const TaxiLocalizedText(russian: 'Кыргызстан • Баткенская область', kyrgyz: 'Кыргызстан • Баткен облусу', style: TextStyle(color: Color(0xFF4D302B), fontSize: 12, fontWeight: FontWeight.w700)),
                   ],
                 ),
               ),
