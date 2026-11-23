@@ -1,12 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:sulyukta_taxi/main.dart' show BrandedSplashGate, RoleSelectionScreen, TaxiLanguage;
+import 'package:sulyukta_taxi/main.dart' show BrandedSplashGate, ClientAuthScreen, RoleSelectionScreen, TaxiLanguage;
 import 'package:latlong2/latlong.dart';
 import 'package:sulyukta_taxi/services/firebase_service.dart';
 import 'package:sulyukta_taxi/services/route_service.dart';
 import 'package:sulyukta_taxi/services/gps_freshness.dart';
 
 void main() {
+  group('Localized login screens', () {
+    testWidgets('client entry screen changes language without leaving the page', (tester) async {
+      TaxiLanguage.current.value = 'ru';
+      await tester.pumpWidget(const MaterialApp(home: ClientAuthScreen()));
+      expect(find.text('Клиентская панель'), findsOneWidget);
+      expect(find.text('Войти в аккаунт'), findsOneWidget);
+      await tester.tap(find.text('Русский'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Кыргызча').last);
+      await tester.pumpAndSettle();
+      expect(find.text('Кардардын панели'), findsOneWidget);
+      expect(find.text('Аккаунтка кирүү'), findsOneWidget);
+      expect(find.text('Жаңы кардарды каттоо'), findsOneWidget);
+      TaxiLanguage.current.value = 'ru';
+    });
+  });
+
   group('Russian and Kyrgyz language switch', () {
     testWidgets('switches the role menu labels between Russian and Kyrgyz', (tester) async {
       TaxiLanguage.current.value = 'ru';

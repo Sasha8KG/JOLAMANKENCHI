@@ -1187,8 +1187,23 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
   }
 }
 
-class ClientAuthScreen extends StatelessWidget {
+class ClientAuthScreen extends StatefulWidget {
   const ClientAuthScreen({super.key});
+  @override
+  State<ClientAuthScreen> createState() => _ClientAuthScreenState();
+}
+class _ClientAuthScreenState extends State<ClientAuthScreen> {
+  @override
+  void initState() {
+    super.initState();
+    TaxiLanguage.current.addListener(_handleLanguageChanged);
+  }
+  void _handleLanguageChanged() { if (mounted) setState(() {}); }
+  @override
+  void dispose() {
+    TaxiLanguage.current.removeListener(_handleLanguageChanged);
+    super.dispose();
+  }
 
   void _showLoginDialog(BuildContext context) {
     final phoneController = TextEditingController();
@@ -1197,7 +1212,7 @@ class ClientAuthScreen extends StatelessWidget {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Вход клиента'),
+        title: const TaxiLocalizedText(russian: 'Вход клиента', kyrgyz: 'Кардар катары кирүү'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1212,12 +1227,12 @@ class ClientAuthScreen extends StatelessWidget {
                 obscureText: true,
                 keyboardType: TextInputType.number,
                 decoration:
-                    const InputDecoration(labelText: 'Пароль (не менее 6 символов)')),
+                    const InputDecoration(labelText: TaxiLanguage.isKyrgyz ? 'Сырсөз (кеминде 6 белги)' : 'Пароль (не менее 6 символов)')),
           ],
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('Отмена')),
+              onPressed: () => Navigator.pop(ctx), child: const TaxiLocalizedText(russian: 'Отмена', kyrgyz: 'Жокко чыгаруу')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.amber),
             onPressed: () async {
@@ -1254,7 +1269,7 @@ class ClientAuthScreen extends StatelessWidget {
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Не удалось войти: $e')));
               }
             },
-            child: const Text('Войти'),
+            child: const TaxiLocalizedText(russian: 'Войти', kyrgyz: 'Кирүү'),
           ),
         ],
       ),
@@ -1274,7 +1289,7 @@ class ClientAuthScreen extends StatelessWidget {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Регистрация клиента'),
+        title: const TaxiLocalizedText(russian: 'Регистрация клиента', kyrgyz: 'Кардарды каттоо'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1282,13 +1297,13 @@ class ClientAuthScreen extends StatelessWidget {
                 controller: nameController,
                 maxLength: 80,
                 textCapitalization: TextCapitalization.words,
-                decoration: const InputDecoration(labelText: 'Ваше имя')),
+                decoration: const InputDecoration(labelText: TaxiLanguage.isKyrgyz ? 'Атыңыз' : 'Ваше имя')),
             const SizedBox(height: 10),
             TextField(
                 controller: phoneController,
                 keyboardType: TextInputType.phone,
                 decoration: const InputDecoration(
-                    labelText: 'Телефон (формат: 0700112233)')),
+                    labelText: TaxiLanguage.isKyrgyz ? 'Телефон (форматы: 0700112233)' : 'Телефон (формат: 0700112233)')),
             const SizedBox(height: 10),
             TextField(
                 controller: pinController,
@@ -1348,7 +1363,7 @@ class ClientAuthScreen extends StatelessWidget {
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Не удалось зарегистрироваться: $e')));
               }
             },
-            child: const Text('Зарегистрироваться'),
+            child: const TaxiLocalizedText(russian: 'Зарегистрироваться', kyrgyz: 'Катталуу'),
           ),
         ],
       ),
@@ -1365,8 +1380,9 @@ class ClientAuthScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-          title: const Text('Клиентская панель'),
-          backgroundColor: Colors.amber),
+          title: const TaxiLocalizedText(russian: 'Клиентская панель', kyrgyz: 'Кардардын панели'),
+          backgroundColor: Colors.amber,
+          actions: const [Padding(padding: EdgeInsets.only(right: 12), child: TaxiLanguageSwitcher())]),
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(20.0),
@@ -1381,7 +1397,7 @@ class ClientAuthScreen extends StatelessWidget {
                     backgroundColor: Colors.amber,
                     padding: const EdgeInsets.symmetric(vertical: 16)),
                 onPressed: () => _showLoginDialog(context),
-                child: const Text('Войти в аккаунт',
+                child: const TaxiLocalizedText(russian: 'Войти в аккаунт', kyrgyz: 'Аккаунтка кирүү',
                     style: TextStyle(fontWeight: FontWeight.bold)),
               ),
               const SizedBox(height: 16),
@@ -1389,7 +1405,7 @@ class ClientAuthScreen extends StatelessWidget {
                 style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16)),
                 onPressed: () => _showRegisterDialog(context),
-                child: const Text('Регистрация нового клиента',
+                child: const TaxiLocalizedText(russian: 'Регистрация нового клиента', kyrgyz: 'Жаңы кардарды каттоо',
                     style: TextStyle(fontWeight: FontWeight.bold)),
               ),
             ],
@@ -2141,12 +2157,20 @@ class DriverEntryScreen extends StatefulWidget {
 }
 
 class _DriverEntryScreenState extends State<DriverEntryScreen> {
+  @override
+  void initState() {
+    super.initState();
+    TaxiLanguage.current.addListener(_handleLanguageChanged);
+  }
+  void _handleLanguageChanged() { if (mounted) setState(() {}); }
+
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _busy = false;
 
   @override
   void dispose() {
+    TaxiLanguage.current.removeListener(_handleLanguageChanged);
     _phoneController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -2271,8 +2295,9 @@ class _DriverEntryScreenState extends State<DriverEntryScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Кабинет водителя'),
+        title: const TaxiLocalizedText(russian: 'Кабинет водителя', kyrgyz: 'Айдоочунун кабинети'),
         backgroundColor: Colors.amber,
+        actions: const [Padding(padding: EdgeInsets.only(right: 12), child: TaxiLanguageSwitcher())],
       ),
       body: Center(
         child: ConstrainedBox(
@@ -2288,7 +2313,7 @@ class _DriverEntryScreenState extends State<DriverEntryScreen> {
                   controller: _phoneController,
                   keyboardType: TextInputType.phone,
                   decoration: const InputDecoration(
-                    labelText: 'Телефон водителя',
+                    labelText: TaxiLanguage.isKyrgyz ? 'Айдоочунун телефону' : 'Телефон водителя',
                     border: OutlineInputBorder(),
                   ),
                 ),
@@ -2297,7 +2322,7 @@ class _DriverEntryScreenState extends State<DriverEntryScreen> {
                   controller: _passwordController,
                   obscureText: true,
                   decoration: const InputDecoration(
-                    labelText: 'Пароль',
+                    labelText: TaxiLanguage.isKyrgyz ? 'Сырсөз' : 'Пароль',
                     border: OutlineInputBorder(),
                   ),
                 ),
@@ -2308,14 +2333,14 @@ class _DriverEntryScreenState extends State<DriverEntryScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 16),
                   ),
                   onPressed: _busy ? null : _loginDriver,
-                  child: Text(_busy ? 'ПОДОЖДИТЕ...' : 'ВОЙТИ КАК ВОДИТЕЛЬ',
+                  child: TaxiLocalizedText(russian: _busy ? 'ПОДОЖДИТЕ...' : 'ВОЙТИ КАК ВОДИТЕЛЬ', kyrgyz: _busy ? 'КҮТҮҢҮЗ...' : 'АЙДООЧУ КАТАРЫ КИРҮҮ',
                       style: const TextStyle(fontWeight: FontWeight.bold)),
                 ),
                 const SizedBox(height: 12),
                 OutlinedButton.icon(
                   onPressed: _busy ? null : _showDriverRegistration,
                   icon: const Icon(Icons.assignment_ind),
-                  label: const Text('ПОДАТЬ ЗАЯВКУ ВОДИТЕЛЯ'),
+                  label: TaxiLocalizedText(russian: 'ПОДАТЬ ЗАЯВКУ ВОДИТЕЛЯ', kyrgyz: 'АЙДООЧУ БОЛУУГА ӨТҮНМӨ БЕРҮҮ'),
                 ),
               ],
             ),

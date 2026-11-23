@@ -606,6 +606,16 @@ check('Role menu slogan is localized', app.includes("Жолуңуз ар дай�
 check('Role menu service area is localized', app.includes("Кыргызстан • Баткен облусу"));
 check('Widget test covers switching between Russian and Kyrgyz', read('testapp/test/widget_test.dart').includes('Russian and Kyrgyz language switch'));
 
+
+check('Client login and registration titles are localized', app.includes("Кардар катары кирүү") && app.includes("Кардарды каттоо"));
+check('Client login and registration actions are localized', app.includes("Аккаунтка кирүү") && app.includes("Жаңы кардарды каттоо"));
+check('Client auth page exposes the language switcher', app.includes("title: const TaxiLocalizedText(russian: 'Клиентская панель', kyrgyz: 'Кардардын панели')") && app.includes("child: const TaxiLanguageSwitcher()"));
+check('Driver login page exposes the language switcher', app.includes("title: const TaxiLocalizedText(russian: 'Кабинет водителя', kyrgyz: 'Айдоочунун кабинети')") && app.includes("child: const TaxiLanguageSwitcher()"));
+check('Driver login title, fields and actions are localized', app.includes("Айдоочунун телефону") && app.includes("АЙДООЧУ КАТАРЫ КИРҮҮ") && app.includes("АЙДООЧУ БОЛУУГА ӨТҮНМӨ БЕРҮҮ"));
+check('Client login password field is localized', app.includes("Сырсөз (кеминде 6 белги)"));
+check('Client registration name field is localized', app.includes("Атыңыз"));
+check('Widget test covers client login language switching', read('testapp/test/widget_test.dart').includes('Localized login screens'));
+
 for (const item of checks) {
   process.stdout.write(`${item.ok ? 'PASS' : 'FAIL'}  ${item.label}\n`);
 }
