@@ -290,7 +290,7 @@ class WorkerApi {
     final hasAt = beforeAt != null;
     final normalizedId = beforeId?.trim();
     if (hasAt != (normalizedId != null && normalizedId.isNotEmpty) ||
-        (hasAt && (beforeAt! < 0 || beforeAt > 9007199254740991 ||
+        (hasAt && (beforeAt < 0 || beforeAt > 9007199254740991 ||
             normalizedId!.length > 128 ||
             RegExp(r'[\x00-\x1F\x7F]').hasMatch(normalizedId)))) {
       throw const WorkerApiException('Некорректный указатель истории отмен.');
