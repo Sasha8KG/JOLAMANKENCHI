@@ -1227,7 +1227,7 @@ class _ClientAuthScreenState extends State<ClientAuthScreen> {
                 obscureText: true,
                 keyboardType: TextInputType.number,
                 decoration:
-                    const InputDecoration(labelText: TaxiLanguage.isKyrgyz ? 'Сырсөз (кеминде 6 белги)' : 'Пароль (не менее 6 символов)')),
+                    InputDecoration(labelText: TaxiLanguage.isKyrgyz ? 'Сырсөз (кеминде 6 белги)' : 'Пароль (не менее 6 символов)')),
           ],
         ),
         actions: [
@@ -1297,12 +1297,12 @@ class _ClientAuthScreenState extends State<ClientAuthScreen> {
                 controller: nameController,
                 maxLength: 80,
                 textCapitalization: TextCapitalization.words,
-                decoration: const InputDecoration(labelText: TaxiLanguage.isKyrgyz ? 'Атыңыз' : 'Ваше имя')),
+                decoration: InputDecoration(labelText: TaxiLanguage.isKyrgyz ? 'Атыңыз' : 'Ваше имя')),
             const SizedBox(height: 10),
             TextField(
                 controller: phoneController,
                 keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                     labelText: TaxiLanguage.isKyrgyz ? 'Телефон (форматы: 0700112233)' : 'Телефон (формат: 0700112233)')),
             const SizedBox(height: 10),
             TextField(
@@ -2312,7 +2312,7 @@ class _DriverEntryScreenState extends State<DriverEntryScreen> {
                 TextField(
                   controller: _phoneController,
                   keyboardType: TextInputType.phone,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: TaxiLanguage.isKyrgyz ? 'Айдоочунун телефону' : 'Телефон водителя',
                     border: OutlineInputBorder(),
                   ),
@@ -2321,7 +2321,7 @@ class _DriverEntryScreenState extends State<DriverEntryScreen> {
                 TextField(
                   controller: _passwordController,
                   obscureText: true,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: TaxiLanguage.isKyrgyz ? 'Сырсөз' : 'Пароль',
                     border: OutlineInputBorder(),
                   ),
