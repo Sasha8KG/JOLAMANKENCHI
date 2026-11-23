@@ -3010,7 +3010,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
                   ? 'Подождите…'
                   : (!_driverWantsOnline
                       ? 'Не на линии'
-                      : (_driverGpsReady ? 'На линии' : 'GPS не подтверждён')),
+                      : (_driverGpsReady ? 'На линии' : 'GPS не подтверждён'))),
             ),
           ),
         ],

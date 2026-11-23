@@ -373,6 +373,7 @@ check('Manual online transition begins with unconfirmed GPS readiness', app.incl
 check('Driver UI no longer equates line intent with confirmed online status', app.includes("_driverGpsReady ? 'На линии' : 'GPS не подтверждён'"));
 check('Driver UI shows a GPS-specific icon before location confirmation', app.includes('_driverGpsReady ? Icons.toggle_on : Icons.gps_not_fixed'));
 check('Driver tooltip distinguishes pending GPS from confirmed online state', app.includes("_driverGpsReady ? 'Выйти с линии' : 'Отменить выход на линию'"));
+check('Driver availability label closes its nested Text expression', app.includes(": (_driverGpsReady ? 'На линии' : 'GPS не подтверждён'))),"));
 check('GPS readiness remains independent of desired online intent', app.includes('bool _driverWantsOnline = false;') && app.includes('bool _driverGpsReady = false;'));
 check('Location retry can leave the line label unconfirmed until server acknowledgement', app.includes('_setDriverGpsReady(false);') && app.includes('Future<void> _startLocationTracking() async'));
 check('A fresh successful stream update can restore the line label', app.includes('_setDriverGpsReady(published);'));
