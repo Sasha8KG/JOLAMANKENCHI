@@ -15,6 +15,7 @@ const firebase = JSON.parse(read('testapp/android/app/google-services.json'));
 const worker = read('backend/cloudflare-worker/worker.js');
 const api = read('testapp/lib/services/worker_api.dart');
 const app = read('testapp/lib/main.dart');
+const storageRules = read('backend/firebase-storage.rules');
 
 check('Android applicationId is com.jolamankenchi.taxi', /applicationId\s+["']com\.jolamankenchi\.taxi["']/.test(gradle));
 check('Release signing uses private keystore config', /signingConfig signingConfigs\.release/.test(gradle));
@@ -32,6 +33,11 @@ check('Worker has radio chat endpoint', worker.includes('"/radio/messages"'));
 check('Worker reads LiveKit secret only from environment', /env\.LIVEKIT_API_SECRET/.test(worker) && !/LIVEKIT_API_SECRET\s*=\s*["'][^"']+["']/.test(worker));
 check('Flutter API calls radio endpoints', api.includes("'/radio/token'") && api.includes("'/radio/messages'"));
 check('App includes shared radio UI', app.includes('ОБЩАЯ РАЦИЯ ТАКСОПАРКА'));
+const dispatcherUid = worker.match(/const DISPATCHER_UID = "([^"]+)";/)?.[1];
+const storageDispatcherUid = storageRules.match(/request\.auth\.uid == '([^']+)'/)?.[1];
+check('Firebase Storage dispatcher access matches Worker dispatcher', Boolean(dispatcherUid) && dispatcherUid === storageDispatcherUid);
+check('Firebase Storage accepts the full 8 MB app upload limit', /request\.resource\.size\s*<=\s*8\s*\*\s*1024\s*\*\s*1024/.test(storageRules));
+check('Android launcher label matches the approved app name', /android:label="«Жол Аман Кенчи» Такси"/.test(manifest));
 
 for (const item of checks) {
   process.stdout.write(`${item.ok ? 'PASS' : 'FAIL'}  ${item.label}\n`);
