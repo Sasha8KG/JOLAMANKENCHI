@@ -266,8 +266,8 @@ check('Open-order query returns only unassigned new orders', worker.includes("FR
 check('Open-order query excludes a driver with an active assigned trip', worker.includes("active.assigned_driver_uid=?") && worker.includes("active.status IN ('driver_assigned','arrived')"));
 check('Driver sees availability again after the active order disappears', app.includes('hadAssignedOrder && assigned.isEmpty') && app.includes('Вы снова можете принимать заказы.'));
 
-check('Driver screen keeps a user-controlled desired availability state', app.includes('bool _driverWantsOnline = true;'));
-check('Driver screen exposes an availability control in the app bar', app.includes('onPressed: _toggleDriverAvailability'));
+check('Driver screen keeps a user-controlled desired availability state with offline as the safe default', app.includes('bool _driverWantsOnline = false;'));
+check('Driver screen exposes a guarded availability control in the app bar', app.includes('onPressed: _availabilityChanging ? null : _toggleDriverAvailability'));
 check('Availability control labels the online action as going offline', app.includes("_driverWantsOnline ? 'Выйти с линии' : 'Выйти на линию'"));
 check('Availability control uses distinct online and offline icons', app.includes('Icons.toggle_on') && app.includes('Icons.toggle_off'));
 check('Driver availability toggle refuses to go offline during an active assigned order', app.includes('if (_serverAssignedOrders.isNotEmpty)') && app.includes('Сначала завершите активный заказ.'));
