@@ -145,7 +145,9 @@ async function finalizeExpiredOrders(env) {
     const rows = await env.DB.prepare(`SELECT r.driver_uid, r.requested_at, d.name, d.car_number, d.latitude, d.longitude, d.location_updated_at
       FROM order_responses r JOIN drivers d ON d.uid=r.driver_uid
       WHERE r.order_id=? AND d.approved=1 AND d.online=1 AND d.location_updated_at>=? AND d.location_updated_at<=?
-      AND NOT EXISTS (SELECT 1 FROM order_refusals x WHERE x.order_id=r.order_id AND x.driver_uid=r.driver_uid)`)
+      AND NOT EXISTS (SELECT 1 FROM order_refusals x WHERE x.order_id=r.order_id AND x.driver_uid=r.driver_uid)
+      AND NOT EXISTS (SELECT 1 FROM orders active WHERE active.assigned_driver_uid=r.driver_uid
+        AND active.status IN ('driver_assigned','arrived'))`)
       .bind(order.id, now - 60, now).all();
     const pickupLat = num(order.pickup_lat), pickupLng = num(order.pickup_lng);
     const candidates = (rows.results || []).filter(d => hasFreshValidDriverLocation(d, now) &&
@@ -161,8 +163,10 @@ async function finalizeExpiredOrders(env) {
     const winner = candidates[0];
     const assigned = await env.DB.prepare(`UPDATE orders SET status='driver_assigned',
       assigned_driver_uid=?, assigned_at=?, response_deadline=NULL
-      WHERE id=? AND status='new' AND response_deadline<=?`)
-      .bind(winner.driver_uid, now, order.id, now).run();
+      WHERE id=? AND status='new' AND response_deadline<=?
+        AND NOT EXISTS (SELECT 1 FROM orders active WHERE active.assigned_driver_uid=?
+          AND active.status IN ('driver_assigned','arrived'))`)
+      .bind(winner.driver_uid, now, order.id, now, winner.driver_uid).run();
     if (Number(assigned.meta?.changes || 0) === 1) {
       // Remove all competing responses only after this request wins the atomic assignment.
       await env.DB.prepare("DELETE FROM order_responses WHERE order_id=?").bind(order.id).run();
@@ -558,8 +562,10 @@ export default {
           .bind(orderId, driverUid).first();
         if (refused) return response({ status: "error", message: "Этот водитель ранее отказался от данного заказа" }, 409);
         const result = await env.DB.prepare(`UPDATE orders SET status='driver_assigned', assigned_driver_uid=?,
-          assigned_at=unixepoch(), response_deadline=NULL WHERE id=? AND status='new'`)
-          .bind(driverUid, orderId).run();
+          assigned_at=unixepoch(), response_deadline=NULL WHERE id=? AND status='new'
+          AND NOT EXISTS (SELECT 1 FROM orders active WHERE active.assigned_driver_uid=?
+            AND active.status IN ('driver_assigned','arrived'))`)
+          .bind(driverUid, orderId, driverUid).run();
         if (!result.meta || Number(result.meta.changes || 0) !== 1) {
           return response({ status: "error", message: "Заказ уже назначен, принят или больше недоступен" }, 409);
         }
@@ -676,8 +682,10 @@ export default {
         const open = await env.DB.prepare(`SELECT id, firebase_order_id, pickup_address, pickup_lat, pickup_lng,
           destination_address, destination_lat, destination_lng, passenger_count, payment_method, tariff_type, comment,
           created_at, response_deadline FROM orders o WHERE status='new'
+          AND NOT EXISTS (SELECT 1 FROM orders active WHERE active.assigned_driver_uid=?
+            AND active.status IN ('driver_assigned','arrived'))
           AND NOT EXISTS (SELECT 1 FROM order_refusals x WHERE x.order_id=o.id AND x.driver_uid=?)
-          ORDER BY created_at ASC LIMIT 100`).bind(auth.user.localId).all();
+          ORDER BY created_at ASC LIMIT 100`).bind(auth.user.localId, auth.user.localId).all();
         const assignedOrders = await env.DB.prepare(`SELECT id, firebase_order_id, pickup_address, pickup_lat, pickup_lng,
           destination_address, destination_lat, destination_lng, passenger_count, payment_method, tariff_type, comment,
           assigned_at, status FROM orders WHERE status IN ('driver_assigned','arrived') AND assigned_driver_uid=? ORDER BY assigned_at DESC LIMIT 5`)
@@ -797,6 +805,11 @@ export default {
         const auth = await requireApprovedDriver(request, env, true);
         const b = await request.json();
         const order = await env.DB.prepare("SELECT * FROM orders WHERE id=? AND status='new'").bind(String(b.order_id || "")).first();
+         const activeOrder = await env.DB.prepare("SELECT id FROM orders WHERE assigned_driver_uid=? AND status IN ('driver_assigned','arrived') LIMIT 1")
+           .bind(auth.user.localId).first();
+         if (activeOrder) {
+           return response({ status: "error", message: "Сначала завершите текущий заказ. Следующий станет доступен после его закрытия." }, 409);
+         }
         if (!order) return response({ status: "error", message: "Заказ уже принят другим водителем или недоступен" }, 409);
         const refused = await env.DB.prepare("SELECT 1 AS found FROM order_refusals WHERE order_id=? AND driver_uid=?")
           .bind(order.id, auth.user.localId).first();
