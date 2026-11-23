@@ -2292,6 +2292,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
   Timer? _ordersPollTimer;
   bool _ordersPollInProgress = false;
   bool _locationUpdateInProgress = false;
+  bool _heartbeatCheckInProgress = false;
   bool _locationStreamErrorShown = false;
   bool _locationTrackingStarting = false;
   Timer? _locationRetryTimer;
@@ -2551,7 +2552,8 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
     return latitude.isFinite && longitude.isFinite &&
         latitude >= -90 && latitude <= 90 &&
         longitude >= -180 && longitude <= 180 &&
-        accuracy.isFinite && accuracy >= 0 && accuracy <= 1000;
+        accuracy.isFinite && accuracy >= 0 && accuracy <= 1000 &&
+        isGpsTimestampFresh(position.timestamp);
   }
 
   Future<void> _publishDriverLocation(DriverModel driver) async {
@@ -2574,6 +2576,37 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
       // GPS tracking continues locally; the next GPS update or heartbeat retries.
     } finally {
       _locationUpdateInProgress = false;
+    }
+  }
+
+  Future<void> _refreshDriverHeartbeat(DriverModel driver) async {
+    if (!mounted || _positionSubscription == null ||
+        _heartbeatCheckInProgress ||
+        TaxiParkState.currentLoggedInDriver?.id != driver.id) return;
+    _heartbeatCheckInProgress = true;
+    try {
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 15),
+      );
+      if (!mounted || _positionSubscription == null ||
+          TaxiParkState.currentLoggedInDriver?.id != driver.id) return;
+      if (!_isUsableDriverPosition(position)) {
+        throw StateError('GPS не предоставил свежие и точные координаты.');
+      }
+      driver.currentLocation = LatLng(position.latitude, position.longitude);
+      setState(() {});
+      await _publishDriverLocation(driver);
+    } catch (_) {
+      if (!mounted || TaxiParkState.currentLoggedInDriver?.id != driver.id) return;
+      // Do not keep the driver advertised as online when fresh GPS cannot be confirmed.
+      _positionSubscription?.cancel();
+      _positionSubscription = null;
+      _stopLocationHeartbeat();
+      unawaited(WorkerApi.setDriverOnline(online: false).then<void>((_) {}).catchError((_) {}));
+      _scheduleLocationRetry();
+    } finally {
+      _heartbeatCheckInProgress = false;
     }
   }
 
@@ -2634,10 +2667,10 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
 
       // Avoid duplicate timers if tracking is restarted after a GPS interruption.
       _stopLocationHeartbeat();
-      // Refresh the server heartbeat only while the GPS stream remains active.
+      // Re-read the device GPS instead of refreshing the server with an old cached point.
       _heartbeatTimer = Timer.periodic(const Duration(seconds: 30), (_) {
         if (!mounted || _positionSubscription == null) return;
-        unawaited(_publishDriverLocation(driver));
+        unawaited(_refreshDriverHeartbeat(driver));
       });
       _positionSubscription = Geolocator.getPositionStream(
         locationSettings: const LocationSettings(
