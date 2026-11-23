@@ -210,10 +210,8 @@ check('Atomic automatic assignment preserves the active-trip exclusion', automat
 check('Atomic automatic assignment still requires the order response deadline', automaticAssignBlock.includes("response_deadline<=?"));
 
 
- // Keep the SQL's active-trip guard and driver-eligibility guard bound together atomically.
-const dispatcherAssignStart = worker.indexOf('if (url.pathname === "/orders/assign" && request.method === "POST")');
-const dispatcherAssignEnd = worker.indexOf('if (url.pathname === "/drivers/online" && request.method === "POST")', dispatcherAssignStart);
-const dispatcherAssignBlock = dispatcherAssignStart >= 0 && dispatcherAssignEnd > dispatcherAssignStart ? worker.slice(dispatcherAssignStart, dispatcherAssignEnd) : '';
+ // Reuse dispatcherAssignBlock and automaticAssignBlock extracted above so the
+ // structural assertions inspect the same route sections without redeclaring constants.
 const dispatcherUpdateStart = dispatcherAssignBlock.indexOf("UPDATE orders SET status='driver_assigned'");
 const dispatcherUpdateEnd = dispatcherAssignBlock.indexOf('.run();', dispatcherUpdateStart);
 const dispatcherUpdate = dispatcherUpdateStart >= 0 && dispatcherUpdateEnd > dispatcherUpdateStart ? dispatcherAssignBlock.slice(dispatcherUpdateStart, dispatcherUpdateEnd + 6) : '';
