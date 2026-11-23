@@ -336,6 +336,53 @@ void main() {
         17,
       );
     });
+
+    test('preserves fractional Unix seconds instead of truncating them', () {
+      expect(parseGpsTimestamp(1795435140.75), DateTime.fromMillisecondsSinceEpoch(1795435140750));
+    });
+
+    test('accepts Unix timestamps serialized as numeric strings', () {
+      expect(parseGpsTimestamp('1795435140'), DateTime.fromMillisecondsSinceEpoch(1795435140000));
+      expect(parseGpsTimestamp('1795435140.25'), DateTime.fromMillisecondsSinceEpoch(1795435140250));
+    });
+
+    test('rejects non-finite and out-of-range numeric timestamp strings', () {
+      expect(parseGpsTimestamp('NaN'), isNull);
+      expect(parseGpsTimestamp('Infinity'), isNull);
+      expect(parseGpsTimestamp('8640000000001'), isNull);
+    });
+
+    test('rejects excessively long timestamp strings before parsing', () {
+      expect(parseGpsTimestamp(List<String>.filled(65, '1').join()), isNull);
+    });
+
+    test('rejects a future GPS timestamp even when it is less than one second ahead', () {
+      expect(isGpsTimestampFresh(now.add(const Duration(milliseconds: 1)), now: now), isFalse);
+    });
+
+    test('accepts a zero-age GPS timestamp when the freshness limit is zero', () {
+      expect(isGpsTimestampFresh(now, now: now, maxAge: Duration.zero), isTrue);
+    });
+
+    test('rejects a timestamp older than a custom freshness limit by one millisecond', () {
+      expect(isGpsTimestampFresh(
+        now.subtract(const Duration(seconds: 5, milliseconds: 1)),
+        now: now, maxAge: const Duration(seconds: 5)), isFalse);
+    });
+
+    test('accepts a timestamp exactly at a custom freshness limit', () {
+      expect(isGpsTimestampFresh(now.subtract(const Duration(seconds: 5)),
+        now: now, maxAge: const Duration(seconds: 5)), isTrue);
+    });
+
+    test('rejects negative freshness limits', () {
+      expect(isGpsTimestampFresh(now, now: now, maxAge: const Duration(seconds: -1)), isFalse);
+    });
+
+    test('rejects a timestamp one millisecond in the future at a zero-age limit', () {
+      expect(isGpsTimestampFresh(now.add(const Duration(milliseconds: 1)),
+        now: now, maxAge: Duration.zero), isFalse);
+    });
   });
 
 }

@@ -14,6 +14,7 @@ const manifest = read('testapp/android/app/src/main/AndroidManifest.xml');
 const firebase = JSON.parse(read('testapp/android/app/google-services.json'));
 const worker = read('backend/cloudflare-worker/worker.js');
 const api = read('testapp/lib/services/worker_api.dart');
+const gps = read('testapp/lib/services/gps_freshness.dart');
 const app = read('testapp/lib/main.dart');
 const registration = read('testapp/lib/driver_registration_screen.dart');
 const storageRules = read('backend/firebase-storage.rules');
@@ -567,6 +568,23 @@ check('Phone syntax accepts local and international formatted examples', phoneSy
 check('Phone digit extraction accepts the supported local number', digitsOnly('0700 123-456') === '0700123456');
 check('Phone digit extraction accepts the supported international number', digitsOnly('+996 (700) 123-456') === '996700123456');
 check('Phone validation rejects letters, extensions and misplaced plus signs', !phoneSyntax.test('+996700123456 ext2') && !phoneSyntax.test('996+700123456'));
+
+check('GPS Unix seconds are converted with millisecond precision', gps.includes('milliseconds.round()') && gps.includes('seconds * 1000'));
+check('GPS numeric timestamps reject non-finite values', gps.includes('!seconds.isFinite'));
+check('GPS numeric timestamps enforce the DateTime millisecond range', gps.includes('_maxUnixTimestampMilliseconds') && gps.includes('milliseconds.abs() > _maxUnixTimestampMilliseconds'));
+check('GPS parser accepts numeric-string Unix seconds', gps.includes("RegExp(r'^[+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)
+  process.stdout.write(`${item.ok ? 'PASS' : 'FAIL'}  ${item.label}\n`);
+}
+const failed = checks.filter((item) => !item.ok);
+process.stdout.write(`\nPreflight: ${checks.length - failed.length}/${checks.length} checks passed.\n`);
+if (failed.length) process.exitCode = 1;
+)") && gps.includes('double.tryParse(text)'));
+check('GPS parser caps timestamp text length before parsing', gps.includes('text.length > 64'));
+check('GPS parser retains ISO timestamp compatibility', gps.includes('DateTime.tryParse(text)'));
+check('GPS freshness compares full Duration precision, not truncated seconds', gps.includes('!age.isNegative && age <= maxAge') && !gps.includes('ageSeconds >= 0'));
+check('GPS freshness rejects negative age limits', gps.includes('maxAge.isNegative'));
+check('GPS tests cover fractional and string Unix timestamps', read('testapp/test/widget_test.dart').includes('preserves fractional Unix seconds') && read('testapp/test/widget_test.dart').includes('serialized as numeric strings'));
+check('GPS tests cover sub-second future timestamps and exact custom age boundaries', read('testapp/test/widget_test.dart').includes('less than one second ahead') && read('testapp/test/widget_test.dart').includes('exactly at a custom freshness limit') && read('testapp/test/widget_test.dart').includes('negative freshness limits'));
 
 for (const item of checks) {
   process.stdout.write(`${item.ok ? 'PASS' : 'FAIL'}  ${item.label}\n`);
