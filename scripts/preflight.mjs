@@ -474,7 +474,7 @@ check('Cancellation endpoint rejects a cursor missing either field', cancellatio
 check('Cancellation endpoint accepts only canonical non-negative decimal timestamps', cancellationHistoryRoute.includes('/^(0|[1-9][0-9]*)$/.test(beforeAtRaw)'));
 check('Cancellation endpoint rejects unsafe timestamp values', cancellationHistoryRoute.includes('Number.isSafeInteger(beforeAt)'));
 check('Cancellation endpoint rejects control characters and oversized cursor IDs', cancellationHistoryRoute.includes('beforeId.length > 128') && cancellationHistoryRoute.includes('beforeIdRaw.trim()'));
-check('Flutter API rejects negative and unsafe cancellation timestamps', api.includes('beforeAt! < 0') && api.includes('beforeAt > 9007199254740991'));
+check('Flutter API rejects negative and unsafe cancellation timestamps', api.includes('beforeAt < 0') && api.includes('beforeAt > 9007199254740991'));
 check('Flutter API rejects oversized and control-character cancellation IDs', api.includes('normalizedId!.length > 128') && api.includes("RegExp(r'[\\x00-\\x1F\\x7F]')"));
 check('Dispatcher validates cancellation page response shape', app.includes('_parseCancellationPage') && app.includes('rawRows is! List || hasMore is! bool'));
 check('Dispatcher rejects empty and duplicate order IDs within a cancellation page', app.includes('orderId.isEmpty || !pageIds.add(orderId)'));
