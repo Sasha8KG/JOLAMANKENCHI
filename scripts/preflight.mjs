@@ -182,7 +182,7 @@ check("Dispatcher map parses GPS update timestamp", app.includes("parseGpsTimest
 check("Dispatcher map hides stale GPS positions", app.includes("!isGpsTimestampFresh(updatedAt)"));
 check("Dispatcher map creates markers from validated coordinates", app.includes("point: LatLng(latitude, longitude)"));
 check("Dispatcher map uses green taxi markers", app.includes("Icons.local_taxi, color: Colors.green"));
-check("Dispatcher map uses the shared dark CARTO layer", app.includes("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png") && app.includes("buildTaxiDarkMapLayers"));
+check("Dispatcher map uses the restored keyless OpenStreetMap DE layer", app.includes("https://tile.openstreetmap.de/{z}/{x}/{y}.png") && app.includes("buildTaxiDarkMapLayers"));
 check("Dispatcher refresh timer is cancelled on dispose", app.includes("_dispatcherRefreshTimer?.cancel()"));
 
  // Dispatcher background refresh resilience and fleet map centering checks.
@@ -204,7 +204,7 @@ check("Dispatcher fleet map chooses a zoom level for broad service areas", app.i
 check("Dispatcher fleet map uses a regional zoom for medium spread", app.includes("latitudeSpan > 0.1 || longitudeSpan > 0.1"));
 check("Dispatcher map centering only uses already validated markers", app.includes("final center = markers.isEmpty"));
 check("Dispatcher map continues to exclude stale GPS before calculating center", app.includes("!isGpsTimestampFresh(updatedAt)"));
-check("Dispatcher map retains shared dark layer and map attribution", app.includes("...buildTaxiDarkMapLayers()") && app.includes("© CARTO") && app.includes("© OpenStreetMap contributors"));
+check("Dispatcher map retains shared OpenStreetMap DE layer and attribution", app.includes("...buildTaxiDarkMapLayers()") && app.includes("OpenStreetMap DE") && app.includes("© OpenStreetMap contributors"));
 check("Dispatcher refresh timer is still cancelled on dispose", app.includes("_dispatcherRefreshTimer?.cancel()"));
 
 
@@ -535,7 +535,7 @@ check('Driver review only acts on a pending document submission', reviewRoute.in
 check('Driver review records reviewer identity and timestamp', reviewRoute.includes('reviewed_at=unixepoch(), reviewed_by=?'));
 check('Driver review updates the driver approval state and keeps driver offline', reviewRoute.includes('UPDATE drivers SET approved=?, online=0, updated_at=unixepoch()'));
 check('Legacy approval endpoint cannot bypass document review', approveRoute.includes('docs.review_status !== "approved"'));
-check('Dispatcher pending queue requires pending status and a licence document', app.includes("d['review_status'] ?? 'pending') == 'pending'") && app.includes("(d['license_url'] ?? '').toString().isNotEmpty"));
+check('Dispatcher pending queue includes every unapproved pending application', app.includes("d['review_status'] ?? 'pending').toString() == 'pending'") && app.includes("!(d['approved'] == true || d['approved'] == 1"));
 check('Dispatcher shows rejected driver applications separately', app.includes("d['review_status'] == 'rejected'"));
 check('Driver review screen explains that approval is required before going online', app.includes('До одобрения выход на линию недоступен.'));
 check('Rejected driver can submit replacement photos for another review', app.includes("if (rejected) ...[") && app.includes('_resubmit'));

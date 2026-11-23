@@ -3249,6 +3249,25 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
     );
   }
 
+  Future<void> _logoutDriver() async {
+    if (_availabilityChanging) return;
+    try {
+      // Stop offering this driver's account as available before signing out.
+      if (_driverWantsOnline) {
+        await _toggleDriverAvailability();
+      }
+      await FirebaseService.signOut().timeout(const Duration(seconds: 20));
+      TaxiParkState.currentLoggedInDriver = null;
+      if (mounted) Navigator.popUntil(context, (route) => route.isFirst);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Не удалось выйти: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final driver = TaxiParkState.currentLoggedInDriver;
@@ -3275,6 +3294,11 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
                       ? 'Не на линии'
                       : (_driverGpsReady ? 'На линии' : 'GPS не подтверждён'))),
             ),
+          ),
+          IconButton(
+            tooltip: 'Выйти из кабинета',
+            onPressed: _availabilityChanging ? null : _logoutDriver,
+            icon: const Icon(Icons.logout),
           ),
         ],
       ),
@@ -3541,6 +3565,20 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
       });
     } finally {
       _dispatcherLoadInProgress = false;
+    }
+  }
+
+  Future<void> _logoutDispatcher() async {
+    if (_working) return;
+    try {
+      await FirebaseService.signOut().timeout(const Duration(seconds: 20));
+      if (mounted) Navigator.popUntil(context, (route) => route.isFirst);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Не удалось выйти из кабинета: $e')),
+        );
+      }
     }
   }
 
@@ -4084,7 +4122,14 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
       appBar: AppBar(
         title: const Text('Диспетчер · ЖОЛ АМАН КЕНЧИ'),
         backgroundColor: Colors.amber,
-        actions: [IconButton(onPressed: _working ? null : _load, icon: const Icon(Icons.refresh), tooltip: 'Обновить')],
+        actions: [
+          IconButton(onPressed: _working ? null : _load, icon: const Icon(Icons.refresh), tooltip: 'Обновить'),
+          IconButton(
+            tooltip: 'Выйти из кабинета диспетчера',
+            onPressed: _working ? null : _logoutDispatcher,
+            icon: const Icon(Icons.logout),
+          ),
+        ],
       ),
       body: _loading
         ? const Center(child: CircularProgressIndicator())
