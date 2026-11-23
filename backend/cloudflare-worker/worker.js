@@ -207,6 +207,12 @@ export default {
       await env.DB.prepare(`CREATE TABLE IF NOT EXISTS order_refusals (
         order_id TEXT NOT NULL, driver_uid TEXT NOT NULL, refused_at INTEGER NOT NULL,
         PRIMARY KEY (order_id, driver_uid)
+      )`).run();      // Durable audit record for passenger no-show cancellations.
+      await env.DB.prepare(`CREATE TABLE IF NOT EXISTS order_cancellations (
+        order_id TEXT PRIMARY KEY NOT NULL,
+        reason TEXT NOT NULL CHECK(reason IN ('customer_not_found','customer_unreachable','customer_left_with_other_car')),
+        driver_uid TEXT NOT NULL,
+        cancelled_at INTEGER NOT NULL
       )`).run();
       // Independent ledger: no ALTER TABLE is required on the existing orders schema.
       await env.DB.prepare(`CREATE TABLE IF NOT EXISTS trip_finances (
@@ -600,8 +606,10 @@ export default {
         const orders = await env.DB.prepare(`SELECT o.id, o.firebase_order_id, o.pickup_address, o.pickup_lat, o.pickup_lng,
           o.destination_address, o.destination_lat, o.destination_lng, o.passenger_count, o.payment_method,
           o.tariff_type, o.comment, o.status, o.created_at, o.assigned_at, o.assigned_driver_uid,
-          d.name AS driver_name, d.car_number AS driver_car_number
+          d.name AS driver_name, d.car_number AS driver_car_number,
+          c.reason AS cancellation_reason, c.driver_uid AS cancellation_driver_uid, c.cancelled_at AS cancelled_at
           FROM orders o LEFT JOIN drivers d ON d.uid=o.assigned_driver_uid
+          LEFT JOIN order_cancellations c ON c.order_id=o.id
           ORDER BY o.created_at DESC LIMIT 100`).all();
         const todayDate = kgTodayDate();
         const todayBounds = kgDateBounds(todayDate);
@@ -918,11 +926,19 @@ export default {
           if (!allowedNoShowReasons.includes(reason)) {
             return response({ status: "error", message: "Выберите причину: пассажир не вышел, не отвечает или уехал на другой машине" }, 400);
           }
-          const noShow = await env.DB.prepare(`UPDATE orders SET status='cancelled_by_driver_no_show', response_deadline=NULL
-            WHERE id=? AND assigned_driver_uid=? AND status='arrived'
-            AND NOT EXISTS (SELECT 1 FROM trip_finances WHERE order_id=orders.id)`)
-            .bind(orderId, auth.user.localId).run();
-          if (!noShow.meta || Number(noShow.meta.changes || 0) !== 1) {
+          const noShowResults = await env.DB.batch([
+            env.DB.prepare(`UPDATE orders SET status='cancelled_by_driver_no_show', response_deadline=NULL
+              WHERE id=? AND assigned_driver_uid=? AND status='arrived'
+              AND NOT EXISTS (SELECT 1 FROM trip_finances WHERE order_id=orders.id)`)
+              .bind(orderId, auth.user.localId),
+            env.DB.prepare(`INSERT INTO order_cancellations (order_id,reason,driver_uid,cancelled_at)
+              SELECT ?,?,?,unixepoch()
+              WHERE EXISTS (SELECT 1 FROM orders WHERE id=? AND status='cancelled_by_driver_no_show' AND assigned_driver_uid=?)
+              AND NOT EXISTS (SELECT 1 FROM order_cancellations WHERE order_id=?)`)
+              .bind(orderId, reason, auth.user.localId, orderId, auth.user.localId, orderId)
+          ]);
+          if (Number(noShowResults?.[0]?.meta?.changes || 0) !== 1 ||
+              Number(noShowResults?.[1]?.meta?.changes || 0) !== 1) {
             return response({ status: "error", message: "Отмена невозможна: заказ уже изменён или закрыт диспетчером" }, 409);
           }
           return response({ status: "ok", cancelled: true, no_show: true, earned_som: 0,

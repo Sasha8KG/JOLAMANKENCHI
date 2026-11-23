@@ -3900,6 +3900,27 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
                         onPressed: _working ? null : () => _completeTrip(o),
                         icon: const Icon(Icons.check_circle), label: const Text('ЗАВЕРШИТЬ И ЗАПИСАТЬ ОПЛАТУ'))),
                     ])))),
+                _sectionTitle('Отмены после прибытия · неявка пассажира', Icons.person_off_outlined),
+                if (_orders.where((o) => o['status'] == 'cancelled_by_driver_no_show').isEmpty)
+                  const Text('Нет отмен по причине отсутствия пассажира.'),
+                ..._orders.where((o) => o['status'] == 'cancelled_by_driver_no_show').map((o) {
+                  final reason = switch ((o['cancellation_reason'] ?? '').toString()) {
+                    'customer_not_found' => 'Пассажир не вышел',
+                    'customer_unreachable' => 'Пассажир не отвечает',
+                    'customer_left_with_other_car' => 'Пассажир уехал на другой машине',
+                    _ => 'Причина не указана в старой записи',
+                  };
+                  final cancelledAt = (o['cancelled_at'] as num?)?.toInt();
+                  final cancelledTime = cancelledAt == null ? 'Время не указано' : DateTime.fromMillisecondsSinceEpoch(cancelledAt * 1000).toLocal().toString();
+                  return Card(child: Padding(padding: const EdgeInsets.all(12), child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text('Заказ №' + (o['id'] ?? '').toString(), style: const TextStyle(fontWeight: FontWeight.bold)),
+                      Text('Водитель: ' + (o['driver_name'] ?? 'не указан').toString() + ' · ' + (o['driver_car_number'] ?? '').toString()),
+                      Text('Причина: ' + reason),
+                      Text('Отменён: ' + cancelledTime),
+                      const Text('Поездка не засчитана · начисление: 0 сом'),
+                    ])));
+                }),
                 _sectionTitle('Финансовый итог за сегодня · $_businessDate', Icons.account_balance_wallet_outlined),
                 Card(child: Padding(padding: const EdgeInsets.all(14), child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start, children: [
