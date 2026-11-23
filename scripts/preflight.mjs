@@ -15,6 +15,7 @@ const firebase = JSON.parse(read('testapp/android/app/google-services.json'));
 const worker = read('backend/cloudflare-worker/worker.js');
 const api = read('testapp/lib/services/worker_api.dart');
 const app = read('testapp/lib/main.dart');
+const registration = read('testapp/lib/driver_registration_screen.dart');
 const storageRules = read('backend/firebase-storage.rules');
 
 check('Android applicationId is com.jolamankenchi.taxi', /applicationId\s+["']com\.jolamankenchi\.taxi["']/.test(gradle));
@@ -409,6 +410,62 @@ check('Location retry can leave the line label unconfirmed until server acknowle
 check('A fresh successful stream update can restore the line label', app.includes('_setDriverGpsReady(published);'));
 check('A successful heartbeat can restore the line label after reconnect', app.includes('_setDriverGpsReady(true);'));
 check('Offline status is not falsely presented as GPS-confirmed', app.includes("? 'Не на линии'") && app.includes("'GPS не подтверждён'"));
+
+ 
+// Driver registration, document upload and dispatcher approval regression checks.
+check('Driver registration requires all three identity and vehicle photos', registration.includes('_license == null || _driverPhoto == null || _carPhoto == null'));
+check('Driver upload accepts only the three supported document kinds', registration.includes("const allowedKinds = {'license', 'driver_photo', 'car_photo'};"));
+check('Each driver photo is limited to 8 MB before upload', registration.includes('expectedSize > 8 * 1024 * 1024'));
+check('Uploaded photo bytes are checked against the original file size', registration.includes('bytes.length != expectedSize'));
+check('Driver photo upload has a 90-second timeout', registration.includes('.timeout(const Duration(seconds: 90))'));
+check('Driver upload writes to the authenticated UID folder', registration.includes("child('drivers/$uid/$kind.jpg')"));
+check('Driver upload records owner UID metadata', registration.includes("'ownerUid': uid"));
+check('Driver upload records the document type metadata', registration.includes("'documentType': kind"));
+check('Driver upload verifies the final Storage path', registration.includes("uploadedPath != 'drivers/$uid/$kind.jpg'"));
+check('Driver account identity is rechecked before upload', registration.includes('_ensureActiveAccount(uid);'));
+check('Registration reuses an existing Firebase account after email-already-in-use', registration.includes("e.code != 'email-already-in-use'") && registration.includes('FirebaseService.signInWithPhone(phone: phone, password: password)'));
+check('Driver profile is saved before uploading identity documents', registration.includes('await WorkerApi.registerDriver(') && registration.indexOf('await WorkerApi.registerDriver(') < registration.indexOf("_upload(_license!, uid, 'license')"));
+check('Registration uploads the driving licence', registration.includes("_upload(_license!, uid, 'license')"));
+check('Registration uploads the driver portrait', registration.includes("_upload(_driverPhoto!, uid, 'driver_photo')"));
+check('Registration uploads the vehicle photo', registration.includes("_upload(_carPhoto!, uid, 'car_photo')"));
+check('Registration submits document paths only after all three uploads', registration.indexOf("_upload(_carPhoto!, uid, 'car_photo')") < registration.indexOf('await WorkerApi.saveDriverDocuments('));
+check('Registration signs out only after the document submission request', registration.indexOf('await WorkerApi.saveDriverDocuments(') < registration.indexOf('await FirebaseService.signOut()'));
+check('Storage document names are restricted to the three approved file names', ["'license.jpg'","'driver_photo.jpg'","'car_photo.jpg'"].every(name => storageRules.includes(name)));
+check('Storage reads are limited to the document owner or dispatcher', storageRules.includes('request.auth.uid == driverUid || isDispatcher()'));
+check('Storage writes are limited to the authenticated document owner', storageRules.includes('request.auth.uid == driverUid') && storageRules.includes('allow create, update:'));
+check('Storage upload limit is 8 MB', storageRules.includes('request.resource.size <= 8 * 1024 * 1024'));
+check('Storage accepts only image MIME types', storageRules.includes("request.resource.contentType.matches('image/(jpeg|png|webp)')"));
+check('Storage deletion is limited to the document owner', storageRules.includes('allow delete: if signedIn()') && storageRules.includes('request.auth.uid == driverUid'));
+const documentsStart = worker.indexOf('if (url.pathname === "/drivers/documents" && request.method === "POST")');
+const documentsEnd = worker.indexOf('if (url.pathname === "/drivers/review" && request.method === "POST")', documentsStart);
+const documentsRoute = documentsStart >= 0 && documentsEnd > documentsStart ? worker.slice(documentsStart, documentsEnd) : '';
+const reviewStart = worker.indexOf('if (url.pathname === "/drivers/review" && request.method === "POST")');
+const reviewEnd = worker.indexOf('if (url.pathname === "/drivers/approve" && request.method === "POST")', reviewStart);
+const reviewRoute = reviewStart >= 0 && reviewEnd > reviewStart ? worker.slice(reviewStart, reviewEnd) : '';
+const approveStart = worker.indexOf('if (url.pathname === "/drivers/approve" && request.method === "POST")');
+const approveEnd = worker.indexOf('if (url.pathname === "/tariffs" && request.method === "GET")', approveStart);
+const approveRoute = approveStart >= 0 && approveEnd > approveStart ? worker.slice(approveStart, approveEnd) : '';
+check('Document submission requires Firebase authentication', documentsRoute.includes('await verifyFirebaseUser(request)'));
+check('Document submission requires an existing driver profile', documentsRoute.includes('if (!driver)'));
+check('Document submission constructs paths under the authenticated UID', documentsRoute.includes('`drivers/${auth.user.localId}/license.jpg`') && documentsRoute.includes('`drivers/${auth.user.localId}/driver_photo.jpg`') && documentsRoute.includes('`drivers/${auth.user.localId}/car_photo.jpg`'));
+check('Document submission rejects paths in the wrong order or from another UID', documentsRoute.includes('paths.every((value, index) => value === expectedPaths[index])'));
+check('Document submission stores a pending review state', documentsRoute.includes("VALUES (?,?,?,?,unixepoch(),'pending',NULL,NULL,NULL)"));
+check('Resubmitted documents reset the review state to pending', documentsRoute.includes("review_status='pending'"));
+check('Document submission clears previous rejection details', documentsRoute.includes('rejection_reason=NULL, reviewed_at=NULL, reviewed_by=NULL'));
+check('Document submission immediately disables driver approval and online status', documentsRoute.includes('UPDATE drivers SET approved=0, online=0'));
+check('Driver review endpoint requires dispatcher authentication', reviewRoute.includes('await requireDispatcher(request)'));
+check('Driver review accepts only approved or rejected decisions', reviewRoute.includes('!["approved", "rejected"].includes(decision)'));
+check('Driver rejection requires a meaningful reason', reviewRoute.includes("decision === \"rejected\" && reason.length < 5"));
+check('Driver approval requires all three submitted documents', reviewRoute.includes('!docs.license_url || !docs.driver_photo_url || !docs.car_photo_url'));
+check('Driver review only acts on a pending document submission', reviewRoute.includes('docs.review_status !== "pending"'));
+check('Driver review records reviewer identity and timestamp', reviewRoute.includes('reviewed_at=unixepoch(), reviewed_by=?'));
+check('Driver review updates the driver approval state and keeps driver offline', reviewRoute.includes('UPDATE drivers SET approved=?, online=0, updated_at=unixepoch()'));
+check('Legacy approval endpoint cannot bypass document review', approveRoute.includes('docs.review_status !== "approved"'));
+check('Dispatcher pending queue requires pending status and a licence document', app.includes("d['review_status'] ?? 'pending') == 'pending'") && app.includes("(d['license_url'] ?? '').toString().isNotEmpty"));
+check('Dispatcher shows rejected driver applications separately', app.includes("d['review_status'] == 'rejected'"));
+check('Driver review screen explains that approval is required before going online', app.includes('До одобрения выход на линию недоступен.'));
+check('Rejected driver can submit replacement photos for another review', app.includes("if (rejected) ...[") && app.includes('_resubmit'));
+
 for (const item of checks) {
   process.stdout.write(`${item.ok ? 'PASS' : 'FAIL'}  ${item.label}\n`);
 }
