@@ -308,6 +308,27 @@ check('GPS startup checks desired state after server location publication', app.
 check('GPS startup rejects an unconfirmed online publication', app.includes("throw StateError('Не удалось подтвердить выход на линию на сервере.')"));
 check('Driver profile restoration continues to use the server online flag', app.includes("isOnline: _isEnabled(data['online'])"));
 
+check('Offline state retry timer is declared', app.includes('Timer? _offlineSyncRetryTimer;'));
+check('Offline state retry lock is declared', app.includes('bool _offlineSyncInProgress = false;'));
+check('Offline retry is scheduled after ten seconds', app.includes('Timer(const Duration(seconds: 10)'));
+check('Offline retry stops if driver wants online', app.includes('if (!mounted || _driverWantsOnline || _offlineSyncInProgress) return;'));
+check('Offline retry calls Worker API', app.includes('final result = await WorkerApi.setDriverOnline(online: false);'));
+check('Offline retry verifies false server response', app.includes("result['online'] != false"));
+check('Offline retry reschedules after request failure', app.includes('_scheduleOfflineStateRetry();'));
+check('Offline retry clears timer after confirmation', app.includes('_offlineSyncRetryTimer?.cancel();'));
+check('Manual offline failure informs user of retry', app.includes('Приложение повторит отключение автоматически.'));
+check('Manual offline transition validates server response', app.includes('Сервер не подтвердил отключение водителя.'));
+check('Going online cancels pending offline retry', app.includes('setState(() => _driverWantsOnline = true);'));
+check('Availability change is blocked during offline sync', app.includes('if (_offlineSyncInProgress) {'));
+check('Offline retry timer is cancelled on dispose', app.includes('_offlineSyncRetryTimer?.cancel();'));
+check('Offline retry uses a dedicated async method', app.includes('Future<void> _retryOfflineStateSync() async'));
+check('Offline retry lock releases in finally', app.includes('_offlineSyncInProgress = false;'));
+check('Manual offline state clears order offers', app.includes('_driverWantsOnline = false;'));
+check('Offline retry method is separate from GPS startup', !app.slice(app.indexOf('Future<void> _retryOfflineStateSync'), app.indexOf('Future<void> _toggleDriverAvailability')).includes('_startLocationTracking'));
+check('Offline retry has mounted guard', app.includes('if (!mounted || _driverWantsOnline || _offlineSyncInProgress) return;'));
+check('GPS retry timer remains separate', app.includes('Timer? _locationRetryTimer;') && app.includes('Timer? _offlineSyncRetryTimer;'));
+check('Offline retry timer is cleared before returning online', app.includes('_offlineSyncRetryTimer = null;'));
+
 for (const item of checks) {
   process.stdout.write(`${item.ok ? 'PASS' : 'FAIL'}  ${item.label}\n`);
 }

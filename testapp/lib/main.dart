@@ -2368,6 +2368,8 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
   DateTime? _driverRouteRetryAfter;
   bool _driverWantsOnline = false;
   bool _availabilityChanging = false;
+  bool _offlineSyncInProgress = false;
+  Timer? _offlineSyncRetryTimer;
 
   @override
   void initState() {
@@ -2827,8 +2829,37 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
     }
   }
 
+  void _scheduleOfflineStateRetry() {
+    if (!mounted || _driverWantsOnline || _offlineSyncRetryTimer?.isActive == true) return;
+    _offlineSyncRetryTimer = Timer(const Duration(seconds: 10), () {
+      _offlineSyncRetryTimer = null;
+      unawaited(_retryOfflineStateSync());
+    });
+  }
+
+  Future<void> _retryOfflineStateSync() async {
+    if (!mounted || _driverWantsOnline || _offlineSyncInProgress) return;
+    _offlineSyncInProgress = true;
+    try {
+      final result = await WorkerApi.setDriverOnline(online: false);
+      if (result['online'] != false) {
+        throw StateError('Сервер не подтвердил отключение водителя.');
+      }
+      _offlineSyncRetryTimer?.cancel();
+      _offlineSyncRetryTimer = null;
+    } catch (_) {
+      _scheduleOfflineStateRetry();
+    } finally {
+      _offlineSyncInProgress = false;
+    }
+  }
+
   Future<void> _toggleDriverAvailability() async {
     if (!mounted || _availabilityChanging) return;
+    if (_offlineSyncInProgress) {
+      _showLocationMessage('Подождите подтверждения предыдущего изменения статуса.');
+      return;
+    }
     if (_serverAssignedOrders.isNotEmpty) {
       _showLocationMessage('Сначала завершите активный заказ. Во время поездки нельзя уходить с линии.');
       return;
@@ -2849,12 +2880,20 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
         _positionSubscription = null;
         _stopLocationHeartbeat();
         try {
-          await WorkerApi.setDriverOnline(online: false);
+          final result = await WorkerApi.setDriverOnline(online: false);
+          if (result['online'] != false) {
+            throw StateError('Сервер не подтвердил отключение водителя.');
+          }
+          _offlineSyncRetryTimer?.cancel();
+          _offlineSyncRetryTimer = null;
           if (mounted) _showLocationMessage('Вы вышли с линии. Новые заказы поступать не будут.');
         } catch (_) {
-          if (mounted) _showLocationMessage('Не удалось подтвердить выход с линии. Проверьте интернет.');
+          _scheduleOfflineStateRetry();
+          if (mounted) _showLocationMessage('Нет подтверждения от сервера. Приложение повторит отключение автоматически.');
         }
       } else {
+        _offlineSyncRetryTimer?.cancel();
+        _offlineSyncRetryTimer = null;
         setState(() => _driverWantsOnline = true);
         await _startLocationTracking();
         if (mounted) unawaited(_pollServerOrders());
@@ -2875,6 +2914,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
     _positionSubscription?.cancel();
     _heartbeatTimer?.cancel();
     _locationRetryTimer?.cancel();
+    _offlineSyncRetryTimer?.cancel();
     _ordersPollTimer?.cancel();
     // Mark the driver offline when leaving the live driver screen.
     unawaited(WorkerApi.setDriverOnline(online: false).then<void>((_) {}).catchError((_) {}));
