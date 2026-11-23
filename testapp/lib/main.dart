@@ -2343,6 +2343,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
       final open = _normalizeServerOrders(data['orders']);
       final assigned = _normalizeServerOrders(data['assignedOrders']);
       if (!mounted) return;
+      final hadAssignedOrder = _serverAssignedOrders.isNotEmpty;
       final activeAssignedId = assigned.isEmpty ? null : _serverOrderId(assigned.first);
       setState(() {
         _serverOpenOrders = open;
@@ -2364,6 +2365,11 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
           _driverRouteRetryAfter = null;
         }
       });
+      if (hadAssignedOrder && assigned.isEmpty && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Активный заказ закрыт или снят. Вы снова можете принимать заказы.'),
+        ));
+      }
       if (assigned.isNotEmpty) unawaited(_loadDriverApproachRoute());
     } on WorkerApiException catch (e) {
       // Пока водитель не одобрен или не вышел на линию, список заказов недоступен.
