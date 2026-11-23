@@ -87,8 +87,8 @@ check('Route retries respect the retry cooldown', /_driverRouteRetryAfter != nul
 check('A previous route is cleared when a new route is requested', /_driverApproachRoute = null;\s*_driverRouteOrderId = id;\s*_driverRouteError = null;/.test(app));
 check('Route loading state is published through setState', /setState\(\(\) \{\s*_driverRouteLoading = true;/.test(app));
 check('Route response verifies the current driver identity', /TaxiParkState\.currentLoggedInDriver\?\.id != driver\.id/.test(app));
-check('Route response verifies the assigned order is unchanged', /_serverOrderId\(_serverAssignedOrders\.first\)\s*;[\s\S]{0,100}if \(latestAssignedId != id\) return;/.test(app));
-check('Route response rejects a stale driver GPS position', /if \(latestRouteKey != routeKey\) \{\s*refreshAfterRoute = true;/.test(app));
+check('Route response verifies the assigned order is unchanged', /final latestAssignedId = _serverAssignedOrders\.isEmpty[\s\S]{0,120}if \(latestAssignedId != id\) \{\s*refreshAfterRoute = latestAssignedId\.isNotEmpty;\s*return;/.test(app));
+check('Route response rejects a stale driver GPS position', /if \(latestRouteKey != routeKey\) \{\s*refreshAfterRoute = latestRouteKey != null;\s*return;/.test(app));
 check('Driver order polling requires both server order arrays', app.includes("if (rawOpen is! List || rawAssigned is! List)"));
 check('Driver order polling preserves previous data when the response is malformed', app.includes('Сохраняем предыдущие данные и повторим обновление.'));
 check('Driver order IDs are restricted to safe 1-128 character identifiers', app.includes("RegExp(r'^[A-Za-z0-9_-]{1,128}$')"));
