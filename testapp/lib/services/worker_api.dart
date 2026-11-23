@@ -505,6 +505,9 @@ class WorkerApi {
     return _request('/orders/sync', method: 'POST', body: {'orders': orders});
   }
 
+  static Future<Map<String, dynamic>> nearbyDrivers() =>
+      _request('/drivers/nearby');
+
   static Future<Map<String, dynamic>> openOrders() => _request('/orders/open');
 
   static Future<Map<String, dynamic>> orderStatus(String orderId) {

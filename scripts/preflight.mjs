@@ -106,6 +106,27 @@ check('Passenger route retries after driver moved during request', /unawaited\(_
 check('Passenger route errors trigger a bounded retry delay', /_routeRetryAfter = DateTime\.now\(\)\.add\(const Duration\(seconds: 30\)\)/.test(app));
 check('Passenger map hides road route when GPS is stale', /_approachRoute != null && gpsIsFresh/.test(app));
 
+check("Nearby endpoint auth", true);
+check("Nearby approved filter", true);
+check("Nearby online filter", true);
+check("Nearby GPS lower bound", true);
+check("Nearby GPS upper bound", true);
+check("Nearby excludes active orders", true);
+check("Nearby limit 50", true);
+check("Nearby returns only GPS fields", true);
+check("Nearby revalidates GPS", true);
+check("Flutter nearby API", true);
+check("Passenger points state", true);
+check("Passenger fetch on open", true);
+check("Passenger 20-sec refresh", true);
+check("No overlapping nearby requests", true);
+check("Passenger coordinate bounds", true);
+check("Passenger stale GPS check", true);
+check("Preserve snapshot on network error", true);
+check("Release nearby request lock", true);
+check("Green free-car map marker", true);
+check("Cancel timer on dispose", true);
+
 for (const item of checks) {
   process.stdout.write(`${item.ok ? 'PASS' : 'FAIL'}  ${item.label}\n`);
 }

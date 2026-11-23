@@ -667,6 +667,20 @@ export default {
         return response({ status: "ok", synced: items.filter(Boolean).length });
       }
 
+      if (url.pathname === "/drivers/nearby" && request.method === "GET") {
+        await verifyFirebaseUser(request);
+        const now = Math.floor(Date.now() / 1000);
+        const rows = await env.DB.prepare(`SELECT latitude, longitude, location_updated_at
+          FROM drivers d WHERE approved=1 AND online=1
+            AND location_updated_at>=? AND location_updated_at<=?
+            AND NOT EXISTS (SELECT 1 FROM orders active
+              WHERE active.assigned_driver_uid=d.uid
+                AND active.status IN ('driver_assigned','arrived'))
+          ORDER BY location_updated_at DESC LIMIT 50`).bind(now - 60, now).all();
+        const drivers = (rows.results || []).filter(d => hasFreshValidDriverLocation(d, now));
+        return response({ status: "ok", drivers });
+      }
+
       if (url.pathname === "/orders/open" && request.method === "GET") {
         const auth = await requireApprovedDriver(request, env, true);
         await finalizeExpiredOrders(env);

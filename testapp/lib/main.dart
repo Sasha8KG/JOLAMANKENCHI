@@ -1256,12 +1256,51 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
   String? _routeError;
   String? _lastRouteKey;
   DateTime? _routeRetryAfter;
+  final List<LatLng> _nearbyDriverPoints = <LatLng>[];
+  Timer? _nearbyDriversTimer;
+  bool _nearbyDriversRequestInProgress = false;
   final MapController _clientMapController = MapController();
 
   @override
   void initState() {
     super.initState();
     _loadTariffs();
+    unawaited(_refreshNearbyDrivers());
+    _nearbyDriversTimer = Timer.periodic(const Duration(seconds: 20), (_) {
+      unawaited(_refreshNearbyDrivers());
+    });
+  }
+
+  Future<void> _refreshNearbyDrivers() async {
+    if (!mounted || _nearbyDriversRequestInProgress) return;
+    _nearbyDriversRequestInProgress = true;
+    try {
+      final data = await WorkerApi.nearbyDrivers();
+      final rawDrivers = data['drivers'];
+      final points = <LatLng>[];
+      if (rawDrivers is List) {
+        for (final raw in rawDrivers.whereType<Map>()) {
+          final lat = double.tryParse((raw['latitude'] ?? '').toString());
+          final lng = double.tryParse((raw['longitude'] ?? '').toString());
+          final updatedAt = parseGpsTimestamp(raw['location_updated_at']);
+          if (lat == null || lng == null || !lat.isFinite || !lng.isFinite ||
+              lat < -90 || lat > 90 || lng < -180 || lng > 180 ||
+              !isGpsTimestampFresh(updatedAt)) continue;
+          points.add(LatLng(lat, lng));
+        }
+      }
+      if (mounted) {
+        setState(() {
+          _nearbyDriverPoints
+            ..clear()
+            ..addAll(points);
+        });
+      }
+    } catch (_) {
+      // Keep the last successful snapshot; stale markers are hidden by GPS age.
+    } finally {
+      _nearbyDriversRequestInProgress = false;
+    }
   }
 
   int _parseFare(dynamic value) {
@@ -1648,6 +1687,12 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
                   PolylineLayer(polylines: [Polyline(points: [order!.assignedDriver!.currentLocation, _pickupPoint], color: Colors.blueGrey, strokeWidth: 3, isDotted: true)]),
                 MarkerLayer(
                   markers: [
+                    ..._nearbyDriverPoints.map((point) => Marker(
+                      point: point,
+                      width: 38,
+                      height: 38,
+                      child: const Icon(Icons.local_taxi, color: Colors.green, size: 30),
+                    )),
                     Marker(
                       point: _pickupPoint,
                       width: 50,
@@ -1816,6 +1861,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
   @override
   void dispose() {
     _orderStatusTimer?.cancel();
+    _nearbyDriversTimer?.cancel();
     _destinationController.dispose();
     super.dispose();
   }
