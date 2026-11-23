@@ -439,6 +439,11 @@ check('A successful heartbeat can restore the line label after reconnect', app.i
 check('Offline status is not falsely presented as GPS-confirmed', app.includes("? 'Не на линии'") && app.includes("'GPS не подтверждён'"));
 
  
+// Complete paginated dispatcher audit history for passenger no-show cancellations.
+const cancellationHistoryStart = worker.indexOf('if (url.pathname === "/dispatcher/cancellations"');
+const cancellationHistoryEnd = worker.indexOf('if (url.pathname === "/dispatcher/overview"', cancellationHistoryStart);
+const cancellationHistoryRoute = cancellationHistoryStart >= 0 && cancellationHistoryEnd > cancellationHistoryStart
+  ? worker.slice(cancellationHistoryStart, cancellationHistoryEnd) : '';
 // Durable passenger no-show cancellation history and dispatcher visibility.
 const noShowStart = worker.indexOf('if (order.status === "arrived")', worker.indexOf('url.pathname === "/orders/cancel"'));
 const noShowEnd = worker.indexOf('if (order.status !== "driver_assigned")', noShowStart);
@@ -456,11 +461,7 @@ check('Dispatcher translates all three cancellation reason codes', ['Пасса�
 check('Dispatcher cancellation history displays driver and timestamp', app.includes("o['driver_name']") && app.includes("o['cancelled_at']") && app.includes('Отменён: '));
 check('No-show cancellation history explicitly records zero earnings', app.includes('начисление: 0 сом'));
 check('Driver no-show cancellation action remains available after arrival', app.includes('_cancelArrivedNoShowOrder') && app.includes('ПАССАЖИР НЕ ВЫШЕЛ'));
-// Complete paginated dispatcher audit history for passenger no-show cancellations.
-const cancellationHistoryStart = worker.indexOf('if (url.pathname === "/dispatcher/cancellations"');
-const cancellationHistoryEnd = worker.indexOf('if (url.pathname === "/dispatcher/overview"', cancellationHistoryStart);
-const cancellationHistoryRoute = cancellationHistoryStart >= 0 && cancellationHistoryEnd > cancellationHistoryStart
-  ? worker.slice(cancellationHistoryStart, cancellationHistoryEnd) : '';
+
 check('Cancellation audit history has a dedicated dispatcher-only endpoint', cancellationHistoryRoute.includes('await requireDispatcher(request)'));
 check('Cancellation history includes all no-show statuses, not only recent dashboard orders', cancellationHistoryRoute.includes("WHERE o.status='cancelled_by_driver_no_show'"));
 check('Cancellation history retains legacy rows without a reason audit record', cancellationHistoryRoute.includes('LEFT JOIN order_cancellations c'));
