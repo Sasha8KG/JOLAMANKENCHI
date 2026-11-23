@@ -3062,6 +3062,7 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
   int _intercityFareSom = 0;
   bool _working = false;
   bool _dispatcherLoadInProgress = false;
+  String? _dispatcherRefreshError;
   Timer? _dispatcherRefreshTimer;
 
   @override
@@ -3109,11 +3110,19 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
         _closedShifts = (data['closed_shifts'] as List? ?? [])
             .whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
         _businessDate = (data['business_date'] ?? '').toString();
+        _dispatcherRefreshError = null;
         _loading = false;
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() { _loading = false; _error = e.toString(); });
+      setState(() {
+        _loading = false;
+        if (showLoading) {
+          _error = e.toString();
+        } else {
+          _dispatcherRefreshError = e.toString();
+        }
+      });
     } finally {
       _dispatcherLoadInProgress = false;
     }
@@ -3142,13 +3151,22 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
         ),
       ));
     }
+    final center = markers.isEmpty
+        ? TaxiParkState.sulyuktaCenter
+        : LatLng(
+            markers.map((marker) => marker.point.latitude).reduce((a, b) => a + b) / markers.length,
+            markers.map((marker) => marker.point.longitude).reduce((a, b) => a + b) / markers.length,
+          );
+    final latitudeSpan = markers.isEmpty ? 0.0 : markers.map((marker) => marker.point.latitude).reduce((a, b) => a > b ? a : b) - markers.map((marker) => marker.point.latitude).reduce((a, b) => a < b ? a : b);
+    final longitudeSpan = markers.isEmpty ? 0.0 : markers.map((marker) => marker.point.longitude).reduce((a, b) => a > b ? a : b) - markers.map((marker) => marker.point.longitude).reduce((a, b) => a < b ? a : b);
+    final fleetZoom = markers.length < 2 ? 12.0 : (latitudeSpan > 0.5 || longitudeSpan > 0.5 ? 8.0 : (latitudeSpan > 0.1 || longitudeSpan > 0.1 ? 10.0 : 12.0));
     return Card(child: Padding(
       padding: const EdgeInsets.all(12),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text('На линии с актуальным GPS: ${markers.length}', style: const TextStyle(fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
         SizedBox(height: 260, child: FlutterMap(
-          options: MapOptions(initialCenter: TaxiParkState.sulyuktaCenter, initialZoom: 12),
+          options: MapOptions(initialCenter: center, initialZoom: fleetZoom),
           children: [
             TileLayer(
               urlTemplate: 'https://tile.openstreetmap.de/{z}/{x}/{y}.png',
@@ -3509,6 +3527,16 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
               ])))
           : RefreshIndicator(onRefresh: _load, child: ListView(
               padding: const EdgeInsets.all(16), children: [
+                if (_dispatcherRefreshError != null)
+                  Card(color: Colors.orange.shade100, child: Padding(
+                    padding: const EdgeInsets.all(10),
+                    child: Row(children: [
+                      const Icon(Icons.wifi_off, size: 18),
+                      const SizedBox(width: 8),
+                      const Expanded(child: Text('Нет связи с сервером. Показаны последние загруженные данные; повторное обновление будет выполнено автоматически.', style: TextStyle(fontSize: 12))),
+                      IconButton(tooltip: 'Скрыть сообщение', onPressed: () => setState(() => _dispatcherRefreshError = null), icon: const Icon(Icons.close, size: 18)),
+                    ]),
+                  )),
                 Card(color: Colors.amber.shade100, child: Padding(
                   padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     const Text('Сводка за сегодня', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),

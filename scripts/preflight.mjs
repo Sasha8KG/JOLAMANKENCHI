@@ -156,6 +156,28 @@ check("Dispatcher map uses green taxi markers", app.includes("Icons.local_taxi, 
 check("Dispatcher map uses the configured OpenStreetMap layer", app.includes("https://tile.openstreetmap.de/{z}/{x}/{y}.png"));
 check("Dispatcher refresh timer is cancelled on dispose", app.includes("_dispatcherRefreshTimer?.cancel()"));
 
+ // Dispatcher background refresh resilience and fleet map centering checks.
+check("Dispatcher keeps a separate background refresh error state", app.includes("String? _dispatcherRefreshError;"));
+check("Dispatcher clears refresh error after successful overview load", app.includes("_dispatcherRefreshError = null;"));
+check("Foreground dispatcher load still reports authentication and initial load errors", app.includes("if (showLoading) {") && app.includes("_error = e.toString();"));
+check("Background refresh failure does not replace the full-screen error state", app.includes("_dispatcherRefreshError = e.toString();"));
+check("Background refresh failure preserves the last loaded driver data", /else \{\s*_dispatcherRefreshError = e\.toString\(\);\s*\}/.test(app));
+check("Dispatcher shows a non-blocking offline refresh notice", app.includes("Показаны последние загруженные данные"));
+check("Dispatcher refresh notice can be dismissed", app.includes("onPressed: () => setState(() => _dispatcherRefreshError = null)"));
+check("Dispatcher refresh still retries on its periodic timer", app.includes("Timer.periodic(const Duration(seconds: 15)"));
+check("Dispatcher load lock still prevents overlapping refresh calls", app.includes("if (_dispatcherLoadInProgress) return;"));
+check("Dispatcher load lock is released even after request errors", app.includes("_dispatcherLoadInProgress = false;"));
+check("Dispatcher fleet map falls back to Sulyukta when no fresh cars exist", app.includes("markers.isEmpty") && app.includes("TaxiParkState.sulyuktaCenter"));
+check("Dispatcher fleet map calculates latitude center from fresh markers", app.includes("marker.point.latitude).reduce"));
+check("Dispatcher fleet map calculates longitude center from fresh markers", app.includes("marker.point.longitude).reduce"));
+check("Dispatcher fleet map averages coordinates for initial center", app.includes("initialCenter: center"));
+check("Dispatcher fleet map chooses a zoom level for broad service areas", app.includes("latitudeSpan > 0.5 || longitudeSpan > 0.5"));
+check("Dispatcher fleet map uses a regional zoom for medium spread", app.includes("latitudeSpan > 0.1 || longitudeSpan > 0.1"));
+check("Dispatcher map centering only uses already validated markers", app.includes("final center = markers.isEmpty"));
+check("Dispatcher map continues to exclude stale GPS before calculating center", app.includes("!isGpsTimestampFresh(updatedAt)"));
+check("Dispatcher map retains the configured OSM tile layer", app.includes("https://tile.openstreetmap.de/{z}/{x}/{y}.png"));
+check("Dispatcher refresh timer is still cancelled on dispose", app.includes("_dispatcherRefreshTimer?.cancel()"));
+
 for (const item of checks) {
   process.stdout.write(`${item.ok ? 'PASS' : 'FAIL'}  ${item.label}\n`);
 }
