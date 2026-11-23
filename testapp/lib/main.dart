@@ -478,49 +478,76 @@ class _BrandedSplashGateState extends State<BrandedSplashGate>
     const ink = Color(0xFF171717);
     const gold = Color(0xFFFFD400);
     return Scaffold(
-      backgroundColor: gold,
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 32),
-            child: FadeTransition(
-              opacity: _fade,
-              child: ScaleTransition(
-                scale: _scale,
-                child: Semantics(
-                  label: 'Жол Аман Кенчи Такси',
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text('❧  ✥  ❧  ✥  ❧', style: TextStyle(color: ink, fontSize: 27, fontWeight: FontWeight.w900, letterSpacing: 3)),
-                      const SizedBox(height: 22),
-                      const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
+      backgroundColor: ink,
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFF090909), Color(0xFF252525), Color(0xFF5A4300)],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+        ),
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 32),
+              child: FadeTransition(
+                opacity: _fade,
+                child: ScaleTransition(
+                  scale: _scale,
+                  child: Semantics(
+                    label: 'Жол Аман Кенчи Такси',
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 28),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF101010),
+                        borderRadius: BorderRadius.circular(34),
+                        border: Border.all(color: gold, width: 3),
+                        boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 24, offset: Offset(0, 12))],
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          _TaxiCheckSquare(), _TaxiCheckSquare(dark: true),
-                          _TaxiCheckSquare(), _TaxiCheckSquare(dark: true),
-                          _TaxiCheckSquare(), _TaxiCheckSquare(dark: true),
-                          _TaxiCheckSquare(),
+                          const Text('❧  ✥  ❧  ✥  ❧', style: TextStyle(color: gold, fontSize: 27, fontWeight: FontWeight.w900, letterSpacing: 3)),
+                          const SizedBox(height: 18),
+                          const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              _TaxiCheckSquare(), _TaxiCheckSquare(dark: true),
+                              _TaxiCheckSquare(), _TaxiCheckSquare(dark: true),
+                              _TaxiCheckSquare(), _TaxiCheckSquare(dark: true),
+                              _TaxiCheckSquare(),
+                            ],
+                          ),
+                          const SizedBox(height: 20),
+                          Container(
+                            width: 142, height: 142,
+                            decoration: BoxDecoration(
+                              color: gold,
+                              borderRadius: BorderRadius.circular(32),
+                              border: Border.all(color: const Color(0xFFFFF0A6), width: 3),
+                            ),
+                            child: const Icon(Icons.local_taxi_rounded, size: 94, color: ink),
+                          ),
+                          const SizedBox(height: 18),
+                          const Text('ЖОЛ АМАН КЕНЧИ', textAlign: TextAlign.center,
+                            style: TextStyle(color: gold, fontSize: 30, height: 1.0, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+                          const SizedBox(height: 12),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 7),
+                            decoration: BoxDecoration(color: gold, borderRadius: BorderRadius.circular(28)),
+                            child: const Text('Такси', style: TextStyle(color: ink, fontSize: 25, fontWeight: FontWeight.w800, fontStyle: FontStyle.italic)),
+                          ),
+                          const SizedBox(height: 24),
+                          const Text('Жолуңуз ар дайым шыдыр болсун!', textAlign: TextAlign.center,
+                            style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
+                          const SizedBox(height: 18),
+                          const Text('СҮЛҮКТҮ  •  ЛЕЙЛЕК  •  БАТКЕН',
+                            style: TextStyle(color: gold, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.2)),
                         ],
                       ),
-                      const SizedBox(height: 20),
-                      const Icon(Icons.local_taxi_rounded, size: 94, color: ink),
-                      const SizedBox(height: 12),
-                      const Text('ЖОЛ АМАН КЕНЧИ', textAlign: TextAlign.center,
-                        style: TextStyle(color: ink, fontSize: 30, height: 1.0, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
-                      const SizedBox(height: 12),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 7),
-                        decoration: BoxDecoration(color: ink, borderRadius: BorderRadius.circular(28)),
-                        child: const Text('Такси', style: TextStyle(color: Colors.white, fontSize: 25, fontWeight: FontWeight.w800, fontStyle: FontStyle.italic)),
-                      ),
-                      const SizedBox(height: 24),
-                      const Text('Жолуңуз ар дайым шыдыр болсун!', textAlign: TextAlign.center,
-                        style: TextStyle(color: ink, fontSize: 16, fontWeight: FontWeight.w700)),
-                      const SizedBox(height: 18),
-                      const Text('СҮЛҮКТҮ  •  ЛЕЙЛЕК  •  БАТКЕН',
-                        style: TextStyle(color: ink, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.2)),
-                    ],
+                    ),
                   ),
                 ),
               ),
@@ -557,14 +584,14 @@ class SulyuktaTaxiApp extends StatelessWidget {
           secondary: const Color(0xFF8A3028),
           surface: const Color(0xFFFFFCF5),
         ),
-        scaffoldBackgroundColor: const Color(0xFFF6F2E9),
+        scaffoldBackgroundColor: const Color(0xFFF5F1E7),
         appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFF202522),
-          foregroundColor: Color(0xFFFFD45A),
+          backgroundColor: Color(0xFFFFD400),
+          foregroundColor: Color(0xFF171717),
           centerTitle: true,
           elevation: 0,
           titleTextStyle: TextStyle(
-            color: Color(0xFFFFD45A),
+            color: Color(0xFF171717),
             fontSize: 19,
             fontWeight: FontWeight.w800,
             letterSpacing: 0.4,
@@ -572,18 +599,18 @@ class SulyuktaTaxiApp extends StatelessWidget {
         ),
         cardTheme: CardTheme(
           color: const Color(0xFFFFFEFA),
-          elevation: 2,
+          elevation: 3,
           margin: const EdgeInsets.symmetric(vertical: 7, horizontal: 10),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
-            side: const BorderSide(color: Color(0xFFE9DFC9)),
+            side: const BorderSide(color: Color(0xFFE6A900), width: 1.2),
           ),
         ),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFFE6A900),
-            foregroundColor: const Color(0xFF202522),
-            minimumSize: const Size(0, 54),
+            backgroundColor: const Color(0xFF171717),
+            foregroundColor: const Color(0xFFFFD400),
+            minimumSize: const Size(0, 58),
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
             textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -591,7 +618,7 @@ class SulyuktaTaxiApp extends StatelessWidget {
         ),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
-          fillColor: const Color(0xFFFFFEFA),
+          fillColor: const Color(0xFFFFFFFF),
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(15),
@@ -603,7 +630,7 @@ class SulyuktaTaxiApp extends StatelessWidget {
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(15),
-            borderSide: const BorderSide(color: Color(0xFFE6A900), width: 2),
+            borderSide: const BorderSide(color: Color(0xFF171717), width: 2),
           ),
         ),
       ),

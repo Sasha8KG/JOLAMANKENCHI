@@ -592,6 +592,12 @@ check('Branded splash shows the approved taxi fleet brand', app.includes('ЖОЛ
 check('Branded splash includes the requested Kyrgyz slogan', app.includes('Жолуңуз ар дайым шыдыр болсун!'));
 check('Branded splash includes Kyrgyz ornament and checker motif', app.includes('❧  ✥  ❧  ✥  ❧') && app.includes('class _TaxiCheckSquare'));
 check('Branded splash exposes an accessible semantic brand label', app.includes("label: 'Жол Аман Кенчи Такси'"));
+check('Branded splash uses a dark premium background with gold brand accents', app.includes('Color(0xFF090909), Color(0xFF252525), Color(0xFF5A4300)') && app.includes('border: Border.all(color: gold, width: 3)'));
+check('Branded splash keeps the taxi emblem inside a high-contrast badge', app.includes('width: 142, height: 142') && app.includes('Icons.local_taxi_rounded, size: 94, color: ink'));
+check('Global app bars use the gold and black brand palette', app.includes('backgroundColor: Color(0xFFFFD400)') && app.includes('foregroundColor: Color(0xFF171717)'));
+check('Primary buttons use black surfaces with gold labels', app.includes('backgroundColor: const Color(0xFF171717)') && app.includes('foregroundColor: const Color(0xFFFFD400)'));
+check('Cards use gold brand borders', app.includes('BorderSide(color: Color(0xFFE6A900), width: 1.2)'));
+check('Map tile source remains keyless OpenStreetMap DE', app.includes('https://tile.openstreetmap.de/{z}/{x}/{y}.png'));
 check('Widget test covers splash brand, slogan and service area', read('testapp/test/widget_test.dart').includes('Branded splash screen') && read('testapp/test/widget_test.dart').includes('shows the approved brand and Kyrgyz slogan'));
 
 
