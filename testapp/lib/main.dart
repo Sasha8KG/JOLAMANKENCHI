@@ -2366,13 +2366,19 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
   String? _driverRouteError;
   String? _driverRouteKey;
   DateTime? _driverRouteRetryAfter;
-  bool _driverWantsOnline = true;
+  bool _driverWantsOnline = false;
+  bool _availabilityChanging = false;
 
   @override
   void initState() {
     super.initState();
-    _startLocationTracking();
-    unawaited(_pollServerOrders());
+    // Restore the server-confirmed line state. A driver who explicitly went
+    // offline must stay offline after closing and reopening the app.
+    _driverWantsOnline = TaxiParkState.currentLoggedInDriver?.isOnline ?? false;
+    if (_driverWantsOnline) {
+      _startLocationTracking();
+      unawaited(_pollServerOrders());
+    }
     _ordersPollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       _pollServerOrders();
     });
@@ -2763,9 +2769,12 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
       }
       driver.currentLocation = LatLng(firstPosition.latitude, firstPosition.longitude);
       if (mounted) setState(() {});
-      // A temporary API outage must not prevent the phone from starting GPS tracking.
-      await _publishDriverLocation(driver);
-      if (!mounted) return;
+      // A temporary API outage must not advertise a driver without a confirmed location.
+      final published = await _publishDriverLocation(driver);
+      if (!mounted || !_driverWantsOnline) return;
+      if (!published) {
+        throw StateError('Не удалось подтвердить выход на линию на сервере.');
+      }
 
       // Avoid duplicate timers if tracking is restarted after a GPS interruption.
       _stopLocationHeartbeat();
@@ -2819,35 +2828,40 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
   }
 
   Future<void> _toggleDriverAvailability() async {
-    if (!mounted) return;
+    if (!mounted || _availabilityChanging) return;
     if (_serverAssignedOrders.isNotEmpty) {
       _showLocationMessage('Сначала завершите активный заказ. Во время поездки нельзя уходить с линии.');
       return;
     }
-    if (_driverWantsOnline) {
-      setState(() {
-        _driverWantsOnline = false;
-        _serverOpenOrders = [];
-        if (TaxiParkState.currentLoggedInDriver != null) {
-          TaxiParkState.currentLoggedInDriver!.isOnline = false;
+    setState(() => _availabilityChanging = true);
+    try {
+      if (_driverWantsOnline) {
+        setState(() {
+          _driverWantsOnline = false;
+          _serverOpenOrders = [];
+          if (TaxiParkState.currentLoggedInDriver != null) {
+            TaxiParkState.currentLoggedInDriver!.isOnline = false;
+          }
+        });
+        _locationRetryTimer?.cancel();
+        _locationRetryTimer = null;
+        await _positionSubscription?.cancel();
+        _positionSubscription = null;
+        _stopLocationHeartbeat();
+        try {
+          await WorkerApi.setDriverOnline(online: false);
+          if (mounted) _showLocationMessage('Вы вышли с линии. Новые заказы поступать не будут.');
+        } catch (_) {
+          if (mounted) _showLocationMessage('Не удалось подтвердить выход с линии. Проверьте интернет.');
         }
-      });
-      _locationRetryTimer?.cancel();
-      _locationRetryTimer = null;
-      await _positionSubscription?.cancel();
-      _positionSubscription = null;
-      _stopLocationHeartbeat();
-      try {
-        await WorkerApi.setDriverOnline(online: false);
-        if (mounted) _showLocationMessage('Вы вышли с линии. Новые заказы поступать не будут.');
-      } catch (_) {
-        if (mounted) _showLocationMessage('Не удалось подтвердить выход с линии. Проверьте интернет.');
+      } else {
+        setState(() => _driverWantsOnline = true);
+        await _startLocationTracking();
+        if (mounted) unawaited(_pollServerOrders());
       }
-      return;
+    } finally {
+      if (mounted) setState(() => _availabilityChanging = false);
     }
-    setState(() => _driverWantsOnline = true);
-    await _startLocationTracking();
-    if (mounted) unawaited(_pollServerOrders());
   }
 
   void _showLocationMessage(String message) {
@@ -2923,10 +2937,15 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
             'Водитель: ${driver?.name ?? ""} (${driver?.fullCarInfo ?? ""})'),
         backgroundColor: Colors.amber,
         actions: [
-          IconButton(
-            tooltip: _driverWantsOnline ? 'Выйти с линии' : 'Выйти на линию',
-            icon: Icon(_driverWantsOnline ? Icons.toggle_on : Icons.toggle_off),
-            onPressed: _toggleDriverAvailability,
+          Tooltip(
+            message: _driverWantsOnline ? 'Выйти с линии' : 'Выйти на линию',
+            child: TextButton.icon(
+              onPressed: _availabilityChanging ? null : _toggleDriverAvailability,
+              icon: Icon(_driverWantsOnline ? Icons.toggle_on : Icons.toggle_off),
+              label: Text(_availabilityChanging
+                  ? 'Подождите…'
+                  : (_driverWantsOnline ? 'На линии' : 'Не на линии')),
+            ),
           ),
         ],
       ),
