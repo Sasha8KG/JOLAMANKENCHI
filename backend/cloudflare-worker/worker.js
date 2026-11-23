@@ -353,9 +353,13 @@ export default {
         if (!driver) return response({ status: "error", message: "Сначала отправьте анкету водителя" }, 409);
         const b = await request.json();
         const paths = [b.license_url, b.driver_photo_url, b.car_photo_url].map(v => String(v || ""));
-        const ownedPrefix = `drivers/${auth.user.localId}/`;
-        const valid = paths.every(v => v.startsWith(ownedPrefix) && v.length <= 500 && !v.includes("..") && !v.includes("?"));
-        if (!valid) return response({ status: "error", message: "Укажите пути трёх файлов в личной папке Firebase Storage" }, 400);
+        const expectedPaths = [
+          `drivers/${auth.user.localId}/license.jpg`,
+          `drivers/${auth.user.localId}/driver_photo.jpg`,
+          `drivers/${auth.user.localId}/car_photo.jpg`
+        ];
+        const valid = paths.every((value, index) => value === expectedPaths[index]);
+        if (!valid) return response({ status: "error", message: "Укажите три документа в правильном порядке из личной папки Firebase Storage" }, 400);
         await env.DB.prepare(`INSERT INTO driver_documents (driver_uid,license_url,driver_photo_url,car_photo_url,submitted_at,review_status,rejection_reason,reviewed_at,reviewed_by)
           VALUES (?,?,?,?,unixepoch(),'pending',NULL,NULL,NULL) ON CONFLICT(driver_uid) DO UPDATE SET
           license_url=excluded.license_url, driver_photo_url=excluded.driver_photo_url,
