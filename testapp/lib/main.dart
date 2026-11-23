@@ -2557,12 +2557,19 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
   }
 
   Future<bool> _publishDriverLocation(DriverModel driver) async {
-    // A single in-flight request is shared by GPS updates and the heartbeat.
-    // This prevents slow mobile networks from accumulating location requests.
-    final point = driver.currentLocation;
+    // Serialize GPS stream updates and heartbeat publications. A heartbeat
+    // must wait for an earlier request instead of mistaking it for a failure.
+    final waitUntil = DateTime.now().add(const Duration(seconds: 42));
+    while (_locationUpdateInProgress && DateTime.now().isBefore(waitUntil)) {
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      if (!mounted ||
+          TaxiParkState.currentLoggedInDriver?.id != driver.id) return false;
+    }
     if (!mounted || _locationUpdateInProgress ||
-        TaxiParkState.currentLoggedInDriver?.id != driver.id ||
-        !point.latitude.isFinite || !point.longitude.isFinite ||
+        TaxiParkState.currentLoggedInDriver?.id != driver.id) return false;
+    // Read the latest point only after the previous request has completed.
+    final point = driver.currentLocation;
+    if (!point.latitude.isFinite || !point.longitude.isFinite ||
         point.latitude < -90 || point.latitude > 90 ||
         point.longitude < -180 || point.longitude > 180) return false;
     _locationUpdateInProgress = true;
