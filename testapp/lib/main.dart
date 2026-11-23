@@ -15,6 +15,21 @@ import 'services/worker_api.dart';
 import 'services/route_service.dart';
 import 'services/gps_freshness.dart';
 
+// Shared dark navigation map used by passenger, driver and dispatcher screens.
+List<Widget> buildTaxiDarkMapLayers() => [
+  TileLayer(
+    urlTemplate: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    subdomains: const ['a', 'b', 'c', 'd'],
+    userAgentPackageName: 'com.jolamankenchi.taxi',
+  ),
+  RichAttributionWidget(
+    attributions: [
+      TextSourceAttribution('© OpenStreetMap contributors'),
+      TextSourceAttribution('© CARTO'),
+    ],
+  ),
+];
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
@@ -1676,7 +1691,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
               mapController: _clientMapController,
               options: MapOptions(
                 initialCenter: _pickupPoint,
-                initialZoom: 14.0,
+                initialZoom: 14.5,
                 onTap: (tapPosition, point) {
                   if (TaxiParkState.activeOrder == null) {
                     setState(() => _pickupPoint = point);
@@ -1684,12 +1699,9 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
                 },
               ),
               children: [
-                TileLayer(
-                  urlTemplate: 'https://tile.openstreetmap.de/{z}/{x}/{y}.png',
-                  userAgentPackageName: 'com.jolamankenchi.taxi',
-                ),
+                ...buildTaxiDarkMapLayers(),
                 if (_approachRoute != null && gpsIsFresh)
-                  PolylineLayer(polylines: [Polyline(points: _approachRoute!.points, color: Colors.blue, strokeWidth: 5)]),
+                  PolylineLayer(polylines: [Polyline(points: _approachRoute!.points, color: Colors.cyanAccent, strokeWidth: 5)]),
                 if (_approachRoute == null && order?.assignedDriver != null && gpsIsFresh)
                   PolylineLayer(polylines: [Polyline(points: [order!.assignedDriver!.currentLocation, _pickupPoint], color: Colors.blueGrey, strokeWidth: 3, isDotted: true)]),
                 MarkerLayer(
@@ -3094,7 +3106,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
               options: MapOptions(
                   initialCenter:
                       driver?.currentLocation ?? TaxiParkState.sulyuktaCenter,
-                  initialZoom: 14.0,
+                  initialZoom: 14.5,
                   onMapReady: () {
                     _driverMapReady = true;
                     if (_driverApproachRoute != null && _serverAssignedOrders.isNotEmpty) {
@@ -3106,10 +3118,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
                     }
                   }),
               children: [
-                TileLayer(
-                  urlTemplate: 'https://tile.openstreetmap.de/{z}/{x}/{y}.png',
-                  userAgentPackageName: 'com.jolamankenchi.taxi',
-                ),
+                ...buildTaxiDarkMapLayers(),
                 if (_driverApproachRoute != null &&
                     _serverAssignedOrders.isNotEmpty &&
                     _driverRouteOrderId ==
@@ -3499,7 +3508,7 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
           );
     final latitudeSpan = markers.isEmpty ? 0.0 : markers.map((marker) => marker.point.latitude).reduce((a, b) => a > b ? a : b) - markers.map((marker) => marker.point.latitude).reduce((a, b) => a < b ? a : b);
     final longitudeSpan = markers.isEmpty ? 0.0 : markers.map((marker) => marker.point.longitude).reduce((a, b) => a > b ? a : b) - markers.map((marker) => marker.point.longitude).reduce((a, b) => a < b ? a : b);
-    final fleetZoom = markers.length < 2 ? 12.0 : (latitudeSpan > 0.5 || longitudeSpan > 0.5 ? 8.0 : (latitudeSpan > 0.1 || longitudeSpan > 0.1 ? 10.0 : 12.0));
+    final fleetZoom = markers.length < 2 ? 12.5 : (latitudeSpan > 0.5 || longitudeSpan > 0.5 ? 8.5 : (latitudeSpan > 0.1 || longitudeSpan > 0.1 ? 10.5 : 12.5));
     return Card(child: Padding(
       padding: const EdgeInsets.all(12),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -3508,10 +3517,7 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
         SizedBox(height: 260, child: FlutterMap(
           options: MapOptions(initialCenter: center, initialZoom: fleetZoom),
           children: [
-            TileLayer(
-              urlTemplate: 'https://tile.openstreetmap.de/{z}/{x}/{y}.png',
-              userAgentPackageName: 'com.jolamankenchi.taxi',
-            ),
+            ...buildTaxiDarkMapLayers(),
             MarkerLayer(markers: markers),
           ],
         )),
