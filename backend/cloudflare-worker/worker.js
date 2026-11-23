@@ -161,12 +161,19 @@ async function finalizeExpiredOrders(env) {
       continue;
     }
     const winner = candidates[0];
+    const assignmentNow = Math.floor(Date.now() / 1000);
     const assigned = await env.DB.prepare(`UPDATE orders SET status='driver_assigned',
       assigned_driver_uid=?, assigned_at=?, response_deadline=NULL
       WHERE id=? AND status='new' AND response_deadline<=?
         AND NOT EXISTS (SELECT 1 FROM orders active WHERE active.assigned_driver_uid=?
-          AND active.status IN ('driver_assigned','arrived'))`)
-      .bind(winner.driver_uid, now, order.id, now, winner.driver_uid).run();
+          AND active.status IN ('driver_assigned','arrived'))
+        AND EXISTS (SELECT 1 FROM drivers current_driver WHERE current_driver.uid=?
+          AND current_driver.approved=1 AND current_driver.online=1
+          AND current_driver.latitude BETWEEN -90 AND 90
+          AND current_driver.longitude BETWEEN -180 AND 180
+          AND current_driver.location_updated_at BETWEEN ? AND ?)`)
+      .bind(winner.driver_uid, assignmentNow, order.id, assignmentNow, winner.driver_uid,
+        winner.driver_uid, assignmentNow - 60, assignmentNow).run();
     if (Number(assigned.meta?.changes || 0) === 1) {
       // Remove all competing responses only after this request wins the atomic assignment.
       await env.DB.prepare("DELETE FROM order_responses WHERE order_id=?").bind(order.id).run();
@@ -555,7 +562,8 @@ export default {
         if (!orderId || !driverUid) return response({ status: "error", message: "Укажите заказ и водителя" }, 400);
         const driver = await env.DB.prepare("SELECT uid, approved, online, latitude, longitude, location_updated_at FROM drivers WHERE uid=?").bind(driverUid).first();
         if (!driver || Number(driver.approved) !== 1) return response({ status: "error", message: "Водитель не найден или не одобрен" }, 409);
-        if (Number(driver.online) !== 1 || !hasFreshValidDriverLocation(driver)) {
+        const assignmentNow = Math.floor(Date.now() / 1000);
+        if (Number(driver.online) !== 1 || !hasFreshValidDriverLocation(driver, assignmentNow)) {
           return response({ status: "error", message: "Назначить можно только водителя на линии с актуальной геолокацией. Попросите водителя выйти на линию и обновить GPS." }, 409);
         }
         const refused = await env.DB.prepare("SELECT 1 AS found FROM order_refusals WHERE order_id=? AND driver_uid=?")
@@ -564,8 +572,13 @@ export default {
         const result = await env.DB.prepare(`UPDATE orders SET status='driver_assigned', assigned_driver_uid=?,
           assigned_at=unixepoch(), response_deadline=NULL WHERE id=? AND status='new'
           AND NOT EXISTS (SELECT 1 FROM orders active WHERE active.assigned_driver_uid=?
-            AND active.status IN ('driver_assigned','arrived'))`)
-          .bind(driverUid, orderId, driverUid).run();
+            AND active.status IN ('driver_assigned','arrived'))
+          AND EXISTS (SELECT 1 FROM drivers current_driver WHERE current_driver.uid=?
+            AND current_driver.approved=1 AND current_driver.online=1
+            AND current_driver.latitude BETWEEN -90 AND 90
+            AND current_driver.longitude BETWEEN -180 AND 180
+            AND current_driver.location_updated_at BETWEEN ? AND ?)`)
+          .bind(driverUid, orderId, driverUid, driverUid, assignmentNow - 60, assignmentNow).run();
         if (!result.meta || Number(result.meta.changes || 0) !== 1) {
           return response({ status: "error", message: "Заказ уже назначен, принят или больше недоступен" }, 409);
         }

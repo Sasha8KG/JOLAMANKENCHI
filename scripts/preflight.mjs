@@ -178,6 +178,37 @@ check("Dispatcher map continues to exclude stale GPS before calculating center",
 check("Dispatcher map retains the configured OSM tile layer", app.includes("https://tile.openstreetmap.de/{z}/{x}/{y}.png"));
 check("Dispatcher refresh timer is still cancelled on dispose", app.includes("_dispatcherRefreshTimer?.cancel()"));
 
+
+ // Atomic eligibility rechecks: a driver must still be online with fresh GPS at commit time.
+const dispatcherAssignStart = worker.indexOf('if (url.pathname === "/orders/assign" && request.method === "POST")');
+const dispatcherAssignEnd = worker.indexOf('if (url.pathname === "/drivers/online" && request.method === "POST")', dispatcherAssignStart);
+const dispatcherAssignBlock = dispatcherAssignStart >= 0 && dispatcherAssignEnd > dispatcherAssignStart
+  ? worker.slice(dispatcherAssignStart, dispatcherAssignEnd) : '';
+const automaticAssignStart = worker.indexOf('const winner = candidates[0];');
+const automaticAssignEnd = worker.indexOf('if (Number(assigned.meta?.changes || 0) === 1)', automaticAssignStart);
+const automaticAssignBlock = automaticAssignStart >= 0 && automaticAssignEnd > automaticAssignStart
+  ? worker.slice(automaticAssignStart, automaticAssignEnd) : '';
+check('Dispatcher assignment captures one timestamp for its GPS freshness decision', dispatcherAssignBlock.includes('const assignmentNow = Math.floor(Date.now() / 1000);'));
+check('Dispatcher assignment validates GPS against that timestamp', dispatcherAssignBlock.includes('hasFreshValidDriverLocation(driver, assignmentNow)'));
+check('Dispatcher assignment rechecks the driver inside the atomic order update', dispatcherAssignBlock.includes('EXISTS (SELECT 1 FROM drivers current_driver'));
+check('Atomic dispatcher assignment requires approved driver state', dispatcherAssignBlock.includes('current_driver.approved=1'));
+check('Atomic dispatcher assignment requires online driver state', dispatcherAssignBlock.includes('current_driver.online=1'));
+check('Atomic dispatcher assignment rejects invalid latitude', dispatcherAssignBlock.includes('current_driver.latitude BETWEEN -90 AND 90'));
+check('Atomic dispatcher assignment rejects invalid longitude', dispatcherAssignBlock.includes('current_driver.longitude BETWEEN -180 AND 180'));
+check('Atomic dispatcher assignment rejects missing or stale GPS timestamp', dispatcherAssignBlock.includes('current_driver.location_updated_at BETWEEN ? AND ?'));
+check('Atomic dispatcher assignment uses the 60-second GPS lower bound', dispatcherAssignBlock.includes('assignmentNow - 60, assignmentNow'));
+check('Atomic dispatcher assignment retains active-trip exclusion', dispatcherAssignBlock.includes("active.status IN ('driver_assigned','arrived')"));
+check('Atomic dispatcher assignment only updates new orders', dispatcherAssignBlock.includes("WHERE id=? AND status='new'"));
+check('Automatic assignment captures a fresh timestamp immediately before update', automaticAssignBlock.includes('const assignmentNow = Math.floor(Date.now() / 1000);'));
+check('Automatic assignment rechecks the winner driver inside its atomic update', automaticAssignBlock.includes('EXISTS (SELECT 1 FROM drivers current_driver'));
+check('Atomic automatic assignment requires approved driver state', automaticAssignBlock.includes('current_driver.approved=1'));
+check('Atomic automatic assignment requires online driver state', automaticAssignBlock.includes('current_driver.online=1'));
+check('Atomic automatic assignment rejects invalid latitude', automaticAssignBlock.includes('current_driver.latitude BETWEEN -90 AND 90'));
+check('Atomic automatic assignment rejects invalid longitude', automaticAssignBlock.includes('current_driver.longitude BETWEEN -180 AND 180'));
+check('Atomic automatic assignment enforces the fresh GPS time window', automaticAssignBlock.includes('current_driver.location_updated_at BETWEEN ? AND ?'));
+check('Atomic automatic assignment preserves the active-trip exclusion', automaticAssignBlock.includes("active.status IN ('driver_assigned','arrived')"));
+check('Atomic automatic assignment still requires the order response deadline', automaticAssignBlock.includes("response_deadline<=?"));
+
 for (const item of checks) {
   process.stdout.write(`${item.ok ? 'PASS' : 'FAIL'}  ${item.label}\n`);
 }
