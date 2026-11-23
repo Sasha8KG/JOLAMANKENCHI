@@ -2389,7 +2389,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
 
   String _serverOrderId(Map<String, dynamic> order) {
     final id = (order['id'] ?? order['firebase_order_id'] ?? '').toString().trim();
-    return id.isNotEmpty && id.length <= 128 ? id : '';
+    return RegExp(r'^[A-Za-z0-9_-]{1,128}$').hasMatch(id) ? id : '';
   }
 
   List<Map<String, dynamic>> _normalizeServerOrders(dynamic value) {
@@ -2410,8 +2410,29 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
     _ordersPollInProgress = true;
     try {
       final data = await WorkerApi.openOrders();
-      final open = _normalizeServerOrders(data['orders']);
-      final assigned = _normalizeServerOrders(data['assignedOrders']);
+      final rawOpen = data['orders'];
+      final rawAssigned = data['assignedOrders'];
+      if (rawOpen is! List || rawAssigned is! List) {
+        throw const WorkerApiException('Сервер прислал неполный список заказов. Сохраняем предыдущие данные и повторим обновление.');
+      }
+      final open = _normalizeServerOrders(rawOpen);
+      final assigned = _normalizeServerOrders(rawAssigned);
+      if (open.length != rawOpen.length || assigned.length != rawAssigned.length) {
+        throw const WorkerApiException('Сервер прислал заказ с неверным номером или повторяющейся записью. Список не заменён.');
+      }
+      if (assigned.length > 1) {
+        throw const WorkerApiException('Обнаружено несколько активных заказов у одного водителя. Обратитесь к диспетчеру; список сохранён.');
+      }
+      if (open.any((item) => (item['status'] ?? '').toString() != 'new')) {
+        throw const WorkerApiException('В списке свободных заказов обнаружен неверный статус. Повторяем обновление.');
+      }
+      if (assigned.any((item) => !['driver_assigned', 'arrived'].contains((item['status'] ?? '').toString()))) {
+        throw const WorkerApiException('В активном списке обнаружен неверный статус заказа. Повторяем обновление.');
+      }
+      final openIds = open.map(_serverOrderId).toSet();
+      if (assigned.any((item) => openIds.contains(_serverOrderId(item)))) {
+        throw const WorkerApiException('Один заказ одновременно отмечен свободным и назначенным. Список не заменён.');
+      }
       if (!mounted) return;
       final hadAssignedOrder = _serverAssignedOrders.isNotEmpty;
       final activeAssignedId = assigned.isEmpty ? null : _serverOrderId(assigned.first);
@@ -2529,6 +2550,18 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
     return LatLng(lat, lng);
   }
 
+  String? _currentDriverRouteKey(String orderId) {
+    final driver = TaxiParkState.currentLoggedInDriver;
+    if (driver == null || _serverAssignedOrders.isEmpty ||
+        _serverOrderId(_serverAssignedOrders.first) != orderId) return null;
+    final pickup = _orderPickup(_serverAssignedOrders.first);
+    final point = driver.currentLocation;
+    if (pickup == null || !point.latitude.isFinite || !point.longitude.isFinite ||
+        point.latitude < -90 || point.latitude > 90 ||
+        point.longitude < -180 || point.longitude > 180) return null;
+    return '$orderId:${pickup.latitude.toStringAsFixed(5)},${pickup.longitude.toStringAsFixed(5)}:${point.latitude.toStringAsFixed(3)},${point.longitude.toStringAsFixed(3)}';
+  }
+
   Future<void> _loadDriverApproachRoute() async {
     final driver = TaxiParkState.currentLoggedInDriver;
     if (driver == null || _serverAssignedOrders.isEmpty || _driverRouteLoading) return;
@@ -2576,12 +2609,14 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
       final latestAssignedId = _serverAssignedOrders.isEmpty
           ? ''
           : _serverOrderId(_serverAssignedOrders.first);
-      if (latestAssignedId != id) return;
+      if (latestAssignedId != id) {
+        refreshAfterRoute = latestAssignedId.isNotEmpty;
+        return;
+      }
       final latestPoint = TaxiParkState.currentLoggedInDriver!.currentLocation;
-      final latestRouteKey =
-          '$id:${pickup.latitude.toStringAsFixed(5)},${pickup.longitude.toStringAsFixed(5)}:${latestPoint.latitude.toStringAsFixed(3)},${latestPoint.longitude.toStringAsFixed(3)}';
+      final latestRouteKey = _currentDriverRouteKey(id);
       if (latestRouteKey != routeKey) {
-        refreshAfterRoute = true;
+        refreshAfterRoute = latestRouteKey != null;
         return;
       }
       setState(() {
@@ -2596,12 +2631,14 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
       final latestAssignedId = _serverAssignedOrders.isEmpty
           ? ''
           : _serverOrderId(_serverAssignedOrders.first);
-      if (latestAssignedId != id) return;
+      if (latestAssignedId != id) {
+        refreshAfterRoute = latestAssignedId.isNotEmpty;
+        return;
+      }
       final latestPoint = TaxiParkState.currentLoggedInDriver!.currentLocation;
-      final latestRouteKey =
-          '$id:${pickup.latitude.toStringAsFixed(5)},${pickup.longitude.toStringAsFixed(5)}:${latestPoint.latitude.toStringAsFixed(3)},${latestPoint.longitude.toStringAsFixed(3)}';
+      final latestRouteKey = _currentDriverRouteKey(id);
       if (latestRouteKey != routeKey) {
-        refreshAfterRoute = true;
+        refreshAfterRoute = latestRouteKey != null;
         return;
       }
       setState(() {

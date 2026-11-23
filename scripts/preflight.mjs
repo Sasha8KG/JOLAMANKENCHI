@@ -89,6 +89,16 @@ check('Route loading state is published through setState', /setState\(\(\) \{\s*
 check('Route response verifies the current driver identity', /TaxiParkState\.currentLoggedInDriver\?\.id != driver\.id/.test(app));
 check('Route response verifies the assigned order is unchanged', /_serverOrderId\(_serverAssignedOrders\.first\)\s*;[\s\S]{0,100}if \(latestAssignedId != id\) return;/.test(app));
 check('Route response rejects a stale driver GPS position', /if \(latestRouteKey != routeKey\) \{\s*refreshAfterRoute = true;/.test(app));
+check('Driver order polling requires both server order arrays', app.includes("if (rawOpen is! List || rawAssigned is! List)"));
+check('Driver order polling preserves previous data when the response is malformed', app.includes('Сохраняем предыдущие данные и повторим обновление.'));
+check('Driver order IDs are restricted to safe 1-128 character identifiers', app.includes("RegExp(r'^[A-Za-z0-9_-]{1,128}$')"));
+check('Driver order polling rejects duplicate or malformed order rows', app.includes('open.length != rawOpen.length || assigned.length != rawAssigned.length'));
+check('Driver order polling enforces at most one active trip', app.includes('if (assigned.length > 1)'));
+check('Driver open-order feed contains only new orders', app.includes("item['status'] ?? '').toString() != 'new'"));
+check('Driver assigned-order feed contains only active statuses', app.includes("['driver_assigned', 'arrived'].contains((item['status'] ?? '').toString())"));
+check('Driver order polling rejects an order listed as both open and assigned', app.includes('assigned.any((item) => openIds.contains(_serverOrderId(item)))'));
+check('Driver route re-fetches after an in-flight request observes a replacement assignment', app.includes('refreshAfterRoute = latestAssignedId.isNotEmpty;'));
+check('Driver route response revalidates current pickup and GPS coordinates', app.includes('String? _currentDriverRouteKey(String orderId)') && app.includes('final latestRouteKey = _currentDriverRouteKey(id);'));
 check('A stale route request is refreshed after GPS movement', /if \(refreshAfterRoute && mounted\)\s*\{\s*unawaited\(_loadDriverApproachRoute\(\)\);/.test(app));
 check('Route loading state is reset through setState', /setState\(\(\) => _driverRouteLoading = false\)/.test(app));
 check('Driver map draws a route only for its assigned order', /_driverApproachRoute != null &&\s*_serverAssignedOrders\.isNotEmpty &&\s*_driverRouteOrderId ==/.test(app));
