@@ -15,17 +15,16 @@ import 'services/worker_api.dart';
 import 'services/route_service.dart';
 import 'services/gps_freshness.dart';
 
-// Shared dark navigation map used by passenger, driver and dispatcher screens.
+// Сохраняем проверенную карту OpenStreetMap DE: ей не нужен API-ключ.
 List<Widget> buildTaxiDarkMapLayers() => [
   TileLayer(
-    urlTemplate: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-    subdomains: const ['a', 'b', 'c', 'd'],
+    urlTemplate: 'https://tile.openstreetmap.de/{z}/{x}/{y}.png',
     userAgentPackageName: 'com.jolamankenchi.taxi',
   ),
   RichAttributionWidget(
     attributions: [
       TextSourceAttribution('© OpenStreetMap contributors'),
-      TextSourceAttribution('© CARTO'),
+      TextSourceAttribution('Карта OpenStreetMap DE'),
     ],
   ),
 ];
@@ -4073,7 +4072,7 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final pending = _drivers.where((d) => (d['review_status'] ?? 'pending') == 'pending' && (d['license_url'] ?? '').toString().isNotEmpty).toList();
+    final pending = _drivers.where((d) => (d['review_status'] ?? 'pending').toString() == 'pending' && !(d['approved'] == true || d['approved'] == 1 || d['approved'].toString() == '1')).toList();
     final rejected = _drivers.where((d) => d['review_status'] == 'rejected').toList();
     final activeOrders = _orders.where((o) => o['status'] == 'new').toList();
     final closedToday = _closedShifts.where((row) => row['shift_date'] == _businessDate).toList();
@@ -4143,6 +4142,14 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
                       _documentLink('Фото водителя', d['driver_photo_url']),
                       _documentLink('Фото авто', d['car_photo_url']),
                     ]),
+                    if ((d['license_url'] ?? '').toString().isEmpty ||
+                        (d['driver_photo_url'] ?? '').toString().isEmpty ||
+                        (d['car_photo_url'] ?? '').toString().isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 6),
+                        child: Text('Не все документы загружены. Проверьте заявку перед одобрением.',
+                          style: TextStyle(color: Colors.deepOrange, fontSize: 12)),
+                      ),
                     Row(children: [
                       Expanded(child: OutlinedButton.icon(onPressed: _working ? null : () => _review(d, 'rejected'), icon: const Icon(Icons.close, color: Colors.red), label: const Text('Отклонить'))),
                       const SizedBox(width: 8),
