@@ -359,8 +359,10 @@ check('Successful response reports the requested persisted online state', online
 
 // The driver-facing line label must reflect a confirmed, fresh GPS publication.
 check('Driver GPS readiness has a dedicated state separate from line intent', app.includes('bool _driverGpsReady = false;'));
-check('GPS readiness helper updates the driver model online flag', app.includes('if (driver != null) driver.isOnline = ready;'));
-check('GPS readiness helper avoids setState after disposal', app.includes('if (!mounted || _driverGpsReady == ready) return;'));
+check('GPS readiness helper updates the driver model only from confirmed readiness', app.includes('if (driver != null) driver.isOnline = confirmedReady;'));
+check('GPS readiness helper requires desired-online state and a mounted screen', app.includes('final confirmedReady = ready && mounted && _driverWantsOnline;'));
+check('GPS readiness helper avoids setState after disposal', app.includes('if (!mounted || _driverGpsReady == confirmedReady) return;'));
+check('GPS readiness helper applies only the guarded readiness value', app.includes('setState(() => _driverGpsReady = confirmedReady);'));
 check('Starting a new GPS session clears stale readiness', app.includes('_locationTrackingStarting = true;') && app.includes('_setDriverGpsReady(false);'));
 check('GPS readiness becomes true only after server location publication succeeds', app.includes('Не удалось подтвердить выход на линию на сервере.') && app.includes('_setDriverGpsReady(true);'));
 check('GPS stream publication result updates the readiness indicator', app.includes('_publishDriverLocation(driver).then<void>((published) {') && app.includes('_setDriverGpsReady(published);'));

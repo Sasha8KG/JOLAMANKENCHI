@@ -2730,10 +2730,12 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
   }
 
   void _setDriverGpsReady(bool ready) {
+    // A late GPS callback must never put an offline/disposed driver back on line.
+    final confirmedReady = ready && mounted && _driverWantsOnline;
     final driver = TaxiParkState.currentLoggedInDriver;
-    if (driver != null) driver.isOnline = ready;
-    if (!mounted || _driverGpsReady == ready) return;
-    setState(() => _driverGpsReady = ready);
+    if (driver != null) driver.isOnline = confirmedReady;
+    if (!mounted || _driverGpsReady == confirmedReady) return;
+    setState(() => _driverGpsReady = confirmedReady);
   }
 
   void _scheduleLocationRetry() {
