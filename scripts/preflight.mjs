@@ -469,6 +469,17 @@ check('Cancellation history uses stable timestamp and order ID cursor ordering',
 check('Cancellation history validates cursor timestamp and order ID', cancellationHistoryRoute.includes('Number.isSafeInteger(beforeAt)') && cancellationHistoryRoute.includes('beforeId.length > 128'));
 check('Cancellation history fetches one extra row to determine whether another page exists', cancellationHistoryRoute.includes('LIMIT 51') && cancellationHistoryRoute.includes('rows.length > 50'));
 check('Cancellation history returns the next cursor from the last visible row', cancellationHistoryRoute.includes('before_at: Number(last.sort_at)') && cancellationHistoryRoute.includes('before_id: String(last.order_id)'));
+check('Cancellation endpoint rejects repeated cursor query parameters', cancellationHistoryRoute.includes('beforeAtValues.length > 1') && cancellationHistoryRoute.includes('beforeIdValues.length > 1'));
+check('Cancellation endpoint rejects a cursor missing either field', cancellationHistoryRoute.includes('beforeAtRaw === null || beforeIdRaw === null'));
+check('Cancellation endpoint accepts only canonical non-negative decimal timestamps', cancellationHistoryRoute.includes('/^(0|[1-9][0-9]*)$/.test(beforeAtRaw)'));
+check('Cancellation endpoint rejects unsafe timestamp values', cancellationHistoryRoute.includes('Number.isSafeInteger(beforeAt)'));
+check('Cancellation endpoint rejects control characters and oversized cursor IDs', cancellationHistoryRoute.includes('beforeId.length > 128') && cancellationHistoryRoute.includes('beforeIdRaw.trim()'));
+check('Flutter API rejects negative and unsafe cancellation timestamps', api.includes('beforeAt! < 0') && api.includes('beforeAt > 9007199254740991'));
+check('Flutter API rejects oversized and control-character cancellation IDs', api.includes('normalizedId!.length > 128') && api.includes("RegExp(r'[\\x00-\\x1F\\x7F]')"));
+check('Dispatcher validates cancellation page response shape', app.includes('_parseCancellationPage') && app.includes('rawRows is! List || hasMore is! bool'));
+check('Dispatcher rejects empty and duplicate order IDs within a cancellation page', app.includes('orderId.isEmpty || !pageIds.add(orderId)'));
+check('Dispatcher rejects malformed or missing next-page cursors', app.includes('rawCursor is! Map || rows.isEmpty') && app.includes('rawAt % 1 != 0'));
+check('Dispatcher prevents a non-advancing cancellation pagination cursor', app.includes('nextAt == beforeAt && nextId == beforeId'));
 check('Dispatcher client requests the protected cancellation history endpoint', api.includes("return _request('/dispatcher/cancellations$query')"));
 check('Dispatcher can load subsequent cancellation pages without duplicate order IDs', app.includes('_loadMoreCancellationHistory') && app.includes('knownIds.contains'));
 check('Dispatcher history exposes refresh and load-more controls', app.includes('Обновить историю') && app.includes('Загрузить ещё'));

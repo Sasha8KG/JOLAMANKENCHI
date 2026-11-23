@@ -594,14 +594,23 @@ export default {
       // Complete, cursor-paginated audit history; never limited by the recent 100-order dashboard.
       if (url.pathname === "/dispatcher/cancellations" && request.method === "GET") {
         await requireDispatcher(request);
-        const beforeAtRaw = url.searchParams.get("before_at");
-        const beforeIdRaw = url.searchParams.get("before_id");
+        const beforeAtValues = url.searchParams.getAll("before_at");
+        const beforeIdValues = url.searchParams.getAll("before_id");
+        if (beforeAtValues.length > 1 || beforeIdValues.length > 1) {
+          return response({ status: "error", message: "Повторяющиеся параметры указателя истории отмен" }, 400);
+        }
+        const beforeAtRaw = beforeAtValues.length ? beforeAtValues[0] : null;
+        const beforeIdRaw = beforeIdValues.length ? beforeIdValues[0] : null;
         const hasCursor = beforeAtRaw !== null || beforeIdRaw !== null;
         let beforeAt = null;
         let beforeId = null;
         if (hasCursor) {
+          if (beforeAtRaw === null || beforeIdRaw === null ||
+              !/^(0|[1-9][0-9]*)$/.test(beforeAtRaw)) {
+            return response({ status: "error", message: "Неполный или некорректный указатель истории отмен" }, 400);
+          }
           beforeAt = Number(beforeAtRaw);
-          beforeId = String(beforeIdRaw || "").trim();
+          beforeId = beforeIdRaw.trim();
           if (!Number.isSafeInteger(beforeAt) || beforeAt < 0 || !beforeId ||
               beforeId.length > 128 || /[\u0000-\u001f\u007f]/.test(beforeId)) {
             return response({ status: "error", message: "Некорректный указатель истории отмен" }, 400);

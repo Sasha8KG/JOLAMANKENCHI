@@ -3355,26 +3355,65 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
     }
   }
 
+  Map<String, dynamic> _parseCancellationPage(Map<String, dynamic> data) {
+    final rawRows = data['cancellations'];
+    final hasMore = data['has_more'];
+    if (rawRows is! List || hasMore is! bool) {
+      throw const FormatException('Сервер вернул неверный формат истории отмен.');
+    }
+    final rows = <Map<String, dynamic>>[];
+    final pageIds = <String>{};
+    for (final raw in rawRows) {
+      if (raw is! Map) {
+        throw const FormatException('В истории отмен обнаружена неверная запись.');
+      }
+      final row = Map<String, dynamic>.from(raw);
+      final orderId = (row['order_id'] ?? '').toString().trim();
+      if (orderId.isEmpty || !pageIds.add(orderId)) {
+        throw const FormatException('В истории отмен обнаружен пустой или повторный номер заказа.');
+      }
+      row['order_id'] = orderId;
+      rows.add(row);
+    }
+    int? cursorAt;
+    String? cursorId;
+    final rawCursor = data['next_cursor'];
+    if (hasMore) {
+      if (rawCursor is! Map || rows.isEmpty) {
+        throw const FormatException('Сервер не передал указатель следующей страницы истории отмен.');
+      }
+      final cursor = Map<String, dynamic>.from(rawCursor);
+      final rawAt = cursor['before_at'];
+      final rawId = (cursor['before_id'] ?? '').toString().trim();
+      if (rawAt is! num || !rawAt.isFinite || rawAt < 0 ||
+          rawAt % 1 != 0 || rawAt > 9007199254740991 ||
+          rawId.isEmpty || rawId.length > 128 ||
+          RegExp(r'[\x00-\x1F\x7F]').hasMatch(rawId)) {
+        throw const FormatException('Сервер вернул неверный указатель следующей страницы истории отмен.');
+      }
+      cursorAt = rawAt.toInt();
+      cursorId = rawId;
+    }
+    return {
+      'rows': rows,
+      'has_more': hasMore,
+      'cursor_at': cursorAt,
+      'cursor_id': cursorId,
+    };
+  }
+
   Future<void> _refreshCancellationHistory({bool silent = false}) async {
     if (!mounted || _loadingMoreCancellations) return;
     setState(() => _loadingMoreCancellations = true);
     try {
       final data = await WorkerApi.dispatcherCancellations();
-      final rows = (data['cancellations'] as List? ?? [])
-          .whereType<Map>()
-          .map((item) => Map<String, dynamic>.from(item))
-          .toList();
-      final cursor = data['next_cursor'] is Map
-          ? Map<String, dynamic>.from(data['next_cursor'] as Map)
-          : null;
+      final page = _parseCancellationPage(data);
       if (!mounted) return;
       setState(() {
-        _cancellations = rows;
-        _hasMoreCancellations = data['has_more'] == true;
-        _cancellationCursorAt = cursor?['before_at'] is num
-            ? (cursor!['before_at'] as num).toInt()
-            : null;
-        _cancellationCursorId = cursor?['before_id']?.toString();
+        _cancellations = page['rows'] as List<Map<String, dynamic>>;
+        _hasMoreCancellations = page['has_more'] as bool;
+        _cancellationCursorAt = page['cursor_at'] as int?;
+        _cancellationCursorId = page['cursor_id'] as String?;
       });
     } catch (error) {
       if (!mounted) return;
@@ -3399,26 +3438,24 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
         beforeAt: beforeAt,
         beforeId: beforeId,
       );
-      final rows = (data['cancellations'] as List? ?? [])
-          .whereType<Map>()
-          .map((item) => Map<String, dynamic>.from(item))
-          .toList();
-      final cursor = data['next_cursor'] is Map
-          ? Map<String, dynamic>.from(data['next_cursor'] as Map)
-          : null;
+      final page = _parseCancellationPage(data);
+      final nextAt = page['cursor_at'] as int?;
+      final nextId = page['cursor_id'] as String?;
+      if (page['has_more'] == true &&
+          nextAt == beforeAt && nextId == beforeId) {
+        throw const FormatException('История отмен не перешла к следующей странице. Повторите обновление.');
+      }
       if (!mounted) return;
       setState(() {
         final knownIds = _cancellations
             .map((item) => (item['order_id'] ?? '').toString())
             .toSet();
-        _cancellations.addAll(rows.where(
+        _cancellations.addAll((page['rows'] as List<Map<String, dynamic>>).where(
           (item) => !knownIds.contains((item['order_id'] ?? '').toString()),
         ));
-        _hasMoreCancellations = data['has_more'] == true;
-        _cancellationCursorAt = cursor?['before_at'] is num
-            ? (cursor!['before_at'] as num).toInt()
-            : null;
-        _cancellationCursorId = cursor?['before_id']?.toString();
+        _hasMoreCancellations = page['has_more'] as bool;
+        _cancellationCursorAt = nextAt;
+        _cancellationCursorId = nextId;
       });
     } catch (error) {
       if (mounted) {
