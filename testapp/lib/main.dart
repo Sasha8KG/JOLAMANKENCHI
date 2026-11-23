@@ -1256,7 +1256,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
   String? _routeError;
   String? _lastRouteKey;
   DateTime? _routeRetryAfter;
-  final List<LatLng> _nearbyDriverPoints = <LatLng>[];
+  final List<MapEntry<LatLng, DateTime>> _nearbyDriverPoints = <MapEntry<LatLng, DateTime>>[];
   Timer? _nearbyDriversTimer;
   bool _nearbyDriversRequestInProgress = false;
   final MapController _clientMapController = MapController();
@@ -1277,7 +1277,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
     try {
       final data = await WorkerApi.nearbyDrivers();
       final rawDrivers = data['drivers'];
-      final points = <LatLng>[];
+      final points = <MapEntry<LatLng, DateTime>>[];
       if (rawDrivers is List) {
         for (final raw in rawDrivers.whereType<Map>()) {
           final lat = double.tryParse((raw['latitude'] ?? '').toString());
@@ -1286,7 +1286,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
           if (lat == null || lng == null || !lat.isFinite || !lng.isFinite ||
               lat < -90 || lat > 90 || lng < -180 || lng > 180 ||
               !isGpsTimestampFresh(updatedAt)) continue;
-          points.add(LatLng(lat, lng));
+          points.add(MapEntry(LatLng(lat, lng), updatedAt!));
         }
       }
       if (mounted) {
@@ -1299,6 +1299,13 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
     } catch (_) {
       // Keep the last successful snapshot; stale markers are hidden by GPS age.
     } finally {
+      if (mounted) {
+        setState(() {
+          _nearbyDriverPoints.removeWhere(
+            (entry) => !isGpsTimestampFresh(entry.value),
+          );
+        });
+      }
       _nearbyDriversRequestInProgress = false;
     }
   }
@@ -1687,8 +1694,8 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
                   PolylineLayer(polylines: [Polyline(points: [order!.assignedDriver!.currentLocation, _pickupPoint], color: Colors.blueGrey, strokeWidth: 3, isDotted: true)]),
                 MarkerLayer(
                   markers: [
-                    ..._nearbyDriverPoints.map((point) => Marker(
-                      point: point,
+                    ..._nearbyDriverPoints.map((entry) => Marker(
+                      point: entry.key,
                       width: 38,
                       height: 38,
                       child: const Icon(Icons.local_taxi, color: Colors.green, size: 30),

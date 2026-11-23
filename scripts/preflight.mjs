@@ -106,26 +106,26 @@ check('Passenger route retries after driver moved during request', /unawaited\(_
 check('Passenger route errors trigger a bounded retry delay', /_routeRetryAfter = DateTime\.now\(\)\.add\(const Duration\(seconds: 30\)\)/.test(app));
 check('Passenger map hides road route when GPS is stale', /_approachRoute != null && gpsIsFresh/.test(app));
 
-check("Nearby endpoint auth", true);
-check("Nearby approved filter", true);
-check("Nearby online filter", true);
-check("Nearby GPS lower bound", true);
-check("Nearby GPS upper bound", true);
-check("Nearby excludes active orders", true);
-check("Nearby limit 50", true);
-check("Nearby returns only GPS fields", true);
-check("Nearby revalidates GPS", true);
-check("Flutter nearby API", true);
-check("Passenger points state", true);
-check("Passenger fetch on open", true);
-check("Passenger 20-sec refresh", true);
-check("No overlapping nearby requests", true);
-check("Passenger coordinate bounds", true);
-check("Passenger stale GPS check", true);
-check("Preserve snapshot on network error", true);
-check("Release nearby request lock", true);
-check("Green free-car map marker", true);
-check("Cancel timer on dispose", true);
+check("Nearby endpoint requires Firebase authentication", /url\.pathname === "\/drivers\/nearby"[\s\S]{0,100}verifyFirebaseUser\(request\)/.test(worker));
+check("Nearby endpoint returns approved drivers only", /url\.pathname === "\/drivers\/nearby"[\s\S]{0,240}approved=1/.test(worker));
+check("Nearby endpoint returns online drivers only", /url\.pathname === "\/drivers\/nearby"[\s\S]{0,260}online=1/.test(worker));
+check("Nearby endpoint applies GPS age lower bound", /location_updated_at>=\?/.test(worker));
+check("Nearby endpoint rejects future GPS timestamps", /location_updated_at<=\?/.test(worker) && /ageSeconds >= 0 && ageSeconds <= 60/.test(worker));
+check("Nearby endpoint excludes drivers with active trips", /active\.status IN \('driver_assigned','arrived'\)/.test(worker));
+check("Nearby endpoint limits results to 50", /location_updated_at DESC LIMIT 50/.test(worker));
+check("Nearby endpoint selects only location fields", /SELECT latitude, longitude, location_updated_at/.test(worker));
+check("Nearby endpoint validates GPS records", /filter\(d => hasFreshValidDriverLocation\(d, now\)\)/.test(worker));
+check("Flutter API calls the nearby endpoint", /nearbyDrivers\(\) =>\s*_request\('\/drivers\/nearby'\)/.test(api));
+check("Passenger stores GPS timestamps with map points", /List<MapEntry<LatLng, DateTime>> _nearbyDriverPoints/.test(app));
+check("Passenger loads nearby cars when screen opens", /unawaited\(_refreshNearbyDrivers\(\)\)/.test(app));
+check("Passenger refreshes nearby cars every 20 seconds", /Timer\.periodic\(const Duration\(seconds: 20\)/.test(app));
+check("Nearby refresh prevents overlapping requests", /_nearbyDriversRequestInProgress\) return/.test(app));
+check("Passenger validates latitude and longitude bounds", /lat < -90 \|\| lat > 90 \|\| lng < -180 \|\| lng > 180/.test(app));
+check("Passenger rejects stale GPS responses", /!isGpsTimestampFresh\(updatedAt\)/.test(app));
+check("Passenger keeps previous markers only until GPS expires", /_nearbyDriverPoints\.removeWhere\([\s\S]{0,100}!isGpsTimestampFresh\(entry\.value\)/.test(app));
+check("Nearby request lock is released after completion", /_nearbyDriversRequestInProgress = false;/.test(app));
+check("Passenger map renders distinct green taxi markers", /_nearbyDriverPoints\.map\(\(entry\) => Marker\([\s\S]{0,100}Colors\.green/.test(app));
+check("Passenger cancels nearby timer when disposed", /_nearbyDriversTimer\?\.cancel\(\)/.test(app));
 
 for (const item of checks) {
   process.stdout.write(`${item.ok ? 'PASS' : 'FAIL'}  ${item.label}\n`);
