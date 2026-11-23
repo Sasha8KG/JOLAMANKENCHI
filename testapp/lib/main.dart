@@ -1877,8 +1877,15 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Клиент (${client?.name ?? "Гость"}): Сулюкта / Раззаков'),
-        backgroundColor: Colors.amber,
+        title: const Text('ЖОЛ АМАН КЕНЧИ • ТАКСИ',
+          style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 0.2)),
+        backgroundColor: const Color(0xFFFFD400),
+        foregroundColor: const Color(0xFF171717),
+        elevation: 3,
+        actions: const [Padding(
+          padding: EdgeInsets.only(right: 10),
+          child: TaxiLanguageSwitcher(),
+        )],
       ),
       body: Column(
         children: [
@@ -1969,7 +1976,12 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
             ),
           Container(
             padding: const EdgeInsets.all(16),
-            color: Colors.white,
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFFEFA),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              border: Border.all(color: const Color(0xFFE6A900), width: 1.5),
+              boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 12, offset: Offset(0, -3))],
+            ),
             child: order == null
                 ? Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1979,7 +1991,12 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
                           Expanded(
                             child: ChoiceChip(
                               label: Text(
-                                  'По городу (${_cityFareSom > 0 ? '$_cityFareSom сом' : 'цена не задана'})'),
+                                  'По городу (${_cityFareSom > 0 ? '$_cityFareSom сом' : 'цена не задана'})',
+                                  style: TextStyle(fontWeight: FontWeight.w800,
+                                    color: !_isIntercity ? const Color(0xFFFFD400) : const Color(0xFF171717))),
+                              selectedColor: const Color(0xFF171717),
+                              backgroundColor: const Color(0xFFF1EDE3),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                               selected: !_isIntercity,
                               onSelected: (val) =>
                                   setState(() => _isIntercity = false),
@@ -1988,7 +2005,12 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
                           const SizedBox(width: 8),
                           Expanded(
                             child: ChoiceChip(
-                              label: Text('Межгород (${_intercityFareSom > 0 ? '$_intercityFareSom сом' : 'цена не задана'})'),
+                              label: Text('Межгород (${_intercityFareSom > 0 ? '$_intercityFareSom сом' : 'цена не задана'})',
+                                  style: TextStyle(fontWeight: FontWeight.w800,
+                                    color: _isIntercity ? const Color(0xFFFFD400) : const Color(0xFF171717))),
+                              selectedColor: const Color(0xFF171717),
+                              backgroundColor: const Color(0xFFF1EDE3),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                               selected: _isIntercity,
                               onSelected: (val) =>
                                   setState(() => _isIntercity = true),
@@ -2014,9 +2036,17 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
                               setState(() => _isByContract = val),
                         ),
                       ],
-                      Row(
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF4F0E6),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
                         children: [
-                          const Text('Пассажиры: '),
+                          const Icon(Icons.people_alt_rounded, color: Color(0xFF171717)),
+                          const SizedBox(width: 6),
+                          const Text('Пассажиры: ', style: TextStyle(fontWeight: FontWeight.w800)),
                           DropdownButton<int>(
                             value: _passengerCount,
                             items: List.generate(4, (i) => DropdownMenuItem(
@@ -2036,6 +2066,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
                             ),
                         ],
                       ),
+                      ),
                       Text(
                         !_tariffsLoaded
                             ? 'Загружаем тарифы…'
@@ -2045,26 +2076,54 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
                         style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.brown),
                       ),
                       const SizedBox(height: 5),
-                      const Text('Точка подачи: нажмите на карту, чтобы передвинуть метку.',
-                          style: TextStyle(fontSize: 12, color: Colors.black54)),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFF3B0),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFE6A900)),
+                        ),
+                        child: const Row(children: [
+                          Icon(Icons.location_on_rounded, color: Color(0xFF171717)),
+                          SizedBox(width: 8),
+                          Expanded(child: Text('Точка подачи: нажмите на карту, чтобы передвинуть метку.',
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF171717)))),
+                        ]),
+                      ),
                       const SizedBox(height: 6),
                       TextField(
                         controller: _destinationController,
                         maxLength: 200,
                         textCapitalization: TextCapitalization.sentences,
                         textInputAction: TextInputAction.done,
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                             labelText: 'Куда едем? (Центр, Рынок, Раззаков...)',
-                            border: OutlineInputBorder()),
+                            prefixIcon: const Icon(Icons.flag_rounded, color: Color(0xFF171717)),
+                            filled: true,
+                            fillColor: Colors.white,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: const BorderSide(color: Color(0xFFE6A900), width: 1.4)),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: const BorderSide(color: Color(0xFF171717), width: 2))),
                       ),
                       const SizedBox(height: 10),
-                      ElevatedButton(
+                      ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.amber,
-                            padding: const EdgeInsets.symmetric(vertical: 14)),
+                          backgroundColor: const Color(0xFF171717),
+                          foregroundColor: const Color(0xFFFFD400),
+                          minimumSize: const Size.fromHeight(60),
+                          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 18),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          elevation: 4,
+                        ),
                         onPressed: _sendingOrder ? null : _createOrder,
-                        child: Text(_sendingOrder ? 'ОТПРАВКА...' : 'ВЫЗВАТЬ МАШИНУ',
-                            style: TextStyle(fontWeight: FontWeight.bold)),
+                        icon: const Icon(Icons.local_taxi_rounded, size: 27),
+                        label: Text(_sendingOrder ? 'ОТПРАВКА...' : 'ВЫЗВАТЬ МАШИНУ',
+                          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17, letterSpacing: 0.4)),
                       ),
                     ],
                   )

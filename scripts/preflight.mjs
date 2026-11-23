@@ -598,6 +598,13 @@ check('Global app bars use the gold and black brand palette', app.includes('back
 check('Primary buttons use black surfaces with gold labels', app.includes('backgroundColor: const Color(0xFF171717)') && app.includes('foregroundColor: const Color(0xFFFFD400)'));
 check('Cards use gold brand borders', app.includes('BorderSide(color: Color(0xFFE6A900), width: 1.2)'));
 check('Map tile source remains keyless OpenStreetMap DE', app.includes('https://tile.openstreetmap.de/{z}/{x}/{y}.png'));
+check('Passenger order screen uses branded yellow black app bar and language switcher', app.includes('ЖОЛ АМАН КЕНЧИ • ТАКСИ') && app.includes('child: TaxiLanguageSwitcher()'));
+check('Passenger order form is presented in a rounded gold bordered card', app.includes('BorderRadius.vertical(top: Radius.circular(24))') && app.includes('Border.all(color: const Color(0xFFE6A900), width: 1.5)'));
+check('Passenger city and intercity tariff chips use selected black and gold styling', app.includes('selectedColor: const Color(0xFF171717)') && app.includes('Color(0xFFFFD400)')));
+check('Passenger pickup instructions are highlighted with a location icon', app.includes('Точка подачи: нажмите на карту') && app.includes('Icons.location_on_rounded'));
+check('Passenger destination field has a flag icon and branded focus border', app.includes('Icons.flag_rounded') && app.includes('focusedBorder: OutlineInputBorder'));
+check('Passenger order action is a large taxi button with branded colors', app.includes('ElevatedButton.icon(') && app.includes('minimumSize: const Size.fromHeight(60)') && app.includes('ВЫЗВАТЬ МАШИНУ'));
+check('Passenger count controls are grouped in a readable surface', app.includes('Icons.people_alt_rounded') && app.includes('Пассажиры: '));
 check('Widget test covers splash brand, slogan and service area', read('testapp/test/widget_test.dart').includes('Branded splash screen') && read('testapp/test/widget_test.dart').includes('shows the approved brand and Kyrgyz slogan'));
 
 
