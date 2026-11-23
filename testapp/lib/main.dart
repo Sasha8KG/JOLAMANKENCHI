@@ -3376,10 +3376,47 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
     }
   }
 
+  bool _driverCanReceiveAssignment(Map<String, dynamic> driver) {
+    final approved = driver['approved'] == true || driver['approved'] == 1 ||
+        driver['approved']?.toString().trim().toLowerCase() == 'true' ||
+        driver['approved']?.toString().trim() == '1';
+    final online = driver['online'] == true || driver['online'] == 1 ||
+        driver['online']?.toString().trim().toLowerCase() == 'true' ||
+        driver['online']?.toString().trim() == '1';
+    final uid = (driver['uid'] ?? '').toString().trim();
+    final activeOrderId = (driver['active_order_id'] ?? '').toString().trim();
+    final latitude = double.tryParse((driver['latitude'] ?? '').toString());
+    final longitude = double.tryParse((driver['longitude'] ?? '').toString());
+    final gpsUpdatedAt = parseGpsTimestamp(driver['location_updated_at']);
+    return approved && online && uid.isNotEmpty && uid.length <= 128 &&
+        activeOrderId.isEmpty &&
+        latitude != null && longitude != null &&
+        latitude.isFinite && longitude.isFinite &&
+        latitude >= -90 && latitude <= 90 &&
+        longitude >= -180 && longitude <= 180 &&
+        isGpsTimestampFresh(gpsUpdatedAt);
+  }
+
   Future<void> _assign(Map<String, dynamic> order) async {
-    final available = _drivers.where((d) => d['approved'] == 1 || d['approved'] == true).toList();
+    final orderId = (order['id'] ?? '').toString().trim();
+    if (orderId.isEmpty || orderId.length > 128) {
+      _notice('Не удалось назначить заказ: неверный номер заявки.');
+      return;
+    }
+    if ((order['status'] ?? '').toString() != 'new') {
+      _notice('Этот заказ уже изменил статус. Обновите список заявок.');
+      await _load(showLoading: false);
+      return;
+    }
+    final available = _drivers.where(_driverCanReceiveAssignment).toList();
     if (available.isEmpty) {
-      _notice('Нет одобренных водителей. Сначала одобрите водителя.');
+      final approved = _drivers.any((d) =>
+          d['approved'] == true || d['approved'] == 1 ||
+          d['approved']?.toString().trim().toLowerCase() == 'true' ||
+          d['approved']?.toString().trim() == '1');
+      _notice(approved
+          ? 'Нет свободных водителей на линии с актуальной геолокацией. Проверьте, что водитель включил GPS и завершил предыдущую поездку.'
+          : 'Нет одобренных водителей. Сначала проверьте и одобрите документы водителя.');
       return;
     }
     String? selected = available.first['uid']?.toString();
@@ -3392,7 +3429,7 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
           isExpanded: true,
           items: available.map((d) => DropdownMenuItem<String>(
             value: d['uid'].toString(),
-            child: Text('${d['name'] ?? 'Водитель'} · ${d['car_number'] ?? 'без номера'}'),
+            child: Text('${d['name'] ?? 'Водитель'} · ${d['car_number'] ?? 'без номера'} · на линии'),
           )).toList(),
           onChanged: (v) => setDialog(() => selected = v),
         ),
@@ -3403,9 +3440,18 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
       )),
     );
     if (confirmed == null) return;
+    final selectedDriver = _drivers.firstWhere(
+      (driver) => (driver['uid'] ?? '').toString() == confirmed,
+      orElse: () => <String, dynamic>{},
+    );
+    if (!_driverCanReceiveAssignment(selectedDriver)) {
+      _notice('Водитель уже не готов принять заказ: он ушёл с линии, GPS устарел или выполняет другую поездку. Обновите список.');
+      await _load(showLoading: false);
+      return;
+    }
     setState(() => _working = true);
     try {
-      await WorkerApi.assignOrder(orderId: (order['id'] ?? '').toString(), driverUid: confirmed);
+      await WorkerApi.assignOrder(orderId: orderId, driverUid: confirmed);
       await _load();
       if (mounted) _notice('Заказ назначен водителю');
     } catch (e) {

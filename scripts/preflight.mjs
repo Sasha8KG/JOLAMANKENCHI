@@ -49,6 +49,13 @@ check('Open offers exclude drivers with an active order', worker.includes("activ
 check('Assigned orders are limited to active states', worker.includes("status IN ('driver_assigned','arrived') AND assigned_driver_uid=?"));
 check('Self-selection requires an approved online driver', worker.includes('url.pathname === "/orders/respond"') && worker.includes('requireApprovedDriver(request, env, true)'));
 check('Self-selection rejects a second active order', worker.includes('Сначала завершите текущий заказ.'));
+check('Dispatcher overview reports each driver active order for safe assignment filtering', worker.includes('AS active_order_id') && worker.includes("active.status IN ('driver_assigned','arrived')"));
+check('Dispatcher assignment picker excludes unapproved, offline, busy, stale-GPS and invalid-coordinate drivers', app.includes('_driverCanReceiveAssignment') && app.includes("driver['active_order_id']") && app.includes('isGpsTimestampFresh(gpsUpdatedAt)') && app.includes('latitude.isFinite && longitude.isFinite'));
+check('Dispatcher assignment validates the selected driver again after the dialog closes', app.includes('final selectedDriver = _drivers.firstWhere(') && app.includes('if (!_driverCanReceiveAssignment(selectedDriver))'));
+check('Dispatcher assignment rejects malformed or stale order IDs before opening the picker', app.includes('final orderId = (order[\'id\'] ?? \'\').toString().trim()') && app.includes('orderId.length > 128'));
+check('Dispatcher explains when no approved driver is eligible for a new assignment', app.includes('Нет свободных водителей на линии с актуальной геолокацией') && app.includes('Нет одобренных водителей.'));
+check('Dispatcher assignment uses the validated order ID and confirmed driver UID', app.includes('WorkerApi.assignOrder(orderId: orderId, driverUid: confirmed)'));
+check('Dispatcher driver choices are labeled as online and GPS-eligible', app.includes(' · на линии'), worker.includes('AS active_order_id'));
 check('Dispatcher assignment checks driver approval', worker.includes('Number(driver.approved) !== 1'));
 check('Dispatcher assignment checks driver online state', worker.includes('Number(driver.online) !== 1'));
 check('Dispatcher assignment requires fresh GPS', worker.includes('Назначить можно только водителя на линии с актуальной геолокацией'));

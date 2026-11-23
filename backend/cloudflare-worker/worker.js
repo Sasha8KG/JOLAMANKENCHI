@@ -590,6 +590,9 @@ export default {
         await requireDispatcher(request);
         const drivers = await env.DB.prepare(`SELECT d.uid, d.name, d.phone, d.car_model, d.car_number, d.approved, d.online,
           d.latitude, d.longitude, d.location_updated_at,
+          (SELECT active.id FROM orders active WHERE active.assigned_driver_uid=d.uid
+            AND active.status IN ('driver_assigned','arrived')
+            ORDER BY active.assigned_at DESC LIMIT 1) AS active_order_id,
           docs.license_url, docs.driver_photo_url, docs.car_photo_url, docs.submitted_at AS documents_submitted_at,
           docs.review_status, docs.rejection_reason, docs.reviewed_at
           FROM drivers d LEFT JOIN driver_documents docs ON docs.driver_uid=d.uid
