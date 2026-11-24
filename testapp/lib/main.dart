@@ -2657,8 +2657,10 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
     _driverWantsOnline = TaxiParkState.currentLoggedInDriver?.isOnline ?? false;
     if (_driverWantsOnline) {
       _startLocationTracking();
-      unawaited(_pollServerOrders());
     }
+    // Also restore an already assigned trip when the driver is temporarily offline.
+    // The server returns assigned trips separately and keeps the open queue empty.
+    unawaited(_pollServerOrders());
     _ordersPollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       _pollServerOrders();
     });
@@ -2683,7 +2685,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
 
   Future<void> _pollServerOrders() async {
     // Не допускаем наложения запросов, если сеть отвечает дольше интервала опроса.
-    if (!mounted || !_driverWantsOnline || _ordersPollInProgress) return;
+    if (!mounted || _ordersPollInProgress) return;
     _ordersPollInProgress = true;
     try {
       final data = await WorkerApi.openOrders();

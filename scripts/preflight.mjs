@@ -646,6 +646,20 @@ check("Driver panel title uses gold", driverUi.includes("Text('Заказы и �
 check("Assigned order heading uses gold", driverUi.includes("Text('ВАШ НАЗНАЧЕННЫЙ ЗАКАЗ'") && driverUi.includes('color: Color(0xFFFFD400)'));
 check("Dispatcher header uses dark gold styling", /backgroundColor: const Color\(0xFF171717\)/.test(dispatcherUi) && /foregroundColor: const Color\(0xFFFFD400\)/.test(dispatcherUi));
 
+
+// Offline drivers must still be able to restore an assigned trip; only the open queue
+// is restricted to online drivers with fresh GPS.
+check('Assigned-order endpoint permits approved offline drivers to restore active trips', /url\.pathname === "\/orders\/open"[\s\S]*?requireApprovedDriver\(request, env\);/.test(worker) && !/url\.pathname === "\/orders\/open"[\s\S]*?requireApprovedDriver\(request, env, true\)/.test(worker));
+check('Open-order query still requires the driver to be online', /status='new'[\s\S]*?available_driver\.online=1/.test(worker));
+check('Open-order query still requires fresh driver GPS', /available_driver\.location_updated_at BETWEEN \? AND \?/.test(worker));
+check('Assigned-order query is independent of driver online status', /const assignedOrders = await env\.DB\.prepare\([\s\S]*?status IN \('driver_assigned','arrived'\) AND assigned_driver_uid=\?/.test(worker));
+check('Driver screen restores orders immediately even when offline', /if \(_driverWantsOnline\) \{\s*_startLocationTracking\(\);\s*\}\s*\/\/ Also restore an already assigned trip[\s\S]*?unawaited\(_pollServerOrders\(\)\);/.test(app));
+check('Driver order polling does not stop solely because the driver is offline', app.includes('if (!mounted || _ordersPollInProgress) return;') && !app.includes('if (!mounted || !_driverWantsOnline || _ordersPollInProgress) return;'));
+check('Driver order polling remains protected against overlapping requests', app.includes('_ordersPollInProgress) return;') && app.includes('_ordersPollInProgress = true;') && app.includes('_ordersPollInProgress = false;'));
+check('Offline restore accepts only assigned and arrived active statuses', app.includes("!['driver_assigned', 'arrived'].contains((item['status'] ?? '').toString())"));
+check('Offline restore clears stale route when there is no active assignment', app.includes('if (assigned.isEmpty) {') && app.includes('_driverApproachRoute = null;') && app.includes('_driverRouteOrderId = null;'));
+check('Periodic order refresh continues to recover an assigned trip', app.includes('Timer.periodic(const Duration(seconds: 5), (_) {') && app.includes('_pollServerOrders();'));
+
 for (const item of checks) {
   process.stdout.write(`${item.ok ? 'PASS' : 'FAIL'}  ${item.label}\n`);
 }

@@ -846,7 +846,9 @@ export default {
       }
 
       if (url.pathname === "/orders/open" && request.method === "GET") {
-        const auth = await requireApprovedDriver(request, env, true);
+        // Offline approved drivers may still need to finish an assigned trip after reopening the app.
+        // The open-order query below independently requires online status and fresh GPS.
+        const auth = await requireApprovedDriver(request, env);
         await finalizeExpiredOrders(env);
         // Если этот водитель выиграл отбор, он сам обновляет соответствующую заявку в Firebase своим токеном.
         const assignedToSync = await env.DB.prepare("SELECT * FROM orders WHERE status='driver_assigned' AND assigned_driver_uid=? AND firebase_synced_at IS NULL")
