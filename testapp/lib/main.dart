@@ -21,6 +21,8 @@ import 'services/nearby_driver_filter.dart';
 import 'services/refresh_gate.dart';
 import 'services/server_order_snapshot.dart';
 import 'services/dispatcher_overview_snapshot.dart';
+import 'services/taxi_localization.dart';
+export 'services/taxi_localization.dart';
 
 // Use the exact bucket configured for the Firebase project. Relying on a
 // platform default can select an empty or legacy bucket on some installations.
@@ -424,13 +426,13 @@ class _SessionGateState extends State<SessionGate> {
               children: [
                 const Icon(Icons.cloud_off, size: 46, color: Colors.orange),
                 const SizedBox(height: 14),
-                const Text(
+                const TaxiText(
                   'Не удалось восстановить сохранённый вход',
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 8),
-                Text(_restoreError!, textAlign: TextAlign.center),
+                TaxiText(_restoreError!, textAlign: TextAlign.center),
                 const SizedBox(height: 18),
                 FilledButton.icon(
                   onPressed: _restoreInProgress ? null : _restoreSavedSession,
@@ -450,7 +452,7 @@ class _SessionGateState extends State<SessionGate> {
           children: [
             CircularProgressIndicator(),
             SizedBox(height: 14),
-            Text('Восстанавливаем сохранённый вход…'),
+            TaxiText('Восстанавливаем сохранённый вход…'),
           ],
         ),
       ),
@@ -585,7 +587,7 @@ class _BrandedSplashGateState extends State<BrandedSplashGate>
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Text('❧  ✥  ❧',
+                              const TaxiText('❧  ✥  ❧',
                                 style: TextStyle(color: gold, fontSize: 25, fontWeight: FontWeight.w900)),
                               const SizedBox(height: 12),
                               Container(
@@ -599,7 +601,7 @@ class _BrandedSplashGateState extends State<BrandedSplashGate>
                                 child: const Icon(Icons.local_taxi_rounded, size: 88, color: ink),
                               ),
                               const SizedBox(height: 17),
-                              const Text(
+                              const TaxiText(
                                 'ЖОЛ АМАН КЕНЧИ',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
@@ -610,7 +612,7 @@ class _BrandedSplashGateState extends State<BrandedSplashGate>
                                 ),
                               ),
                               const SizedBox(height: 8),
-                              const Text(
+                              const TaxiText(
                                 'Такси',
                                 style: TextStyle(color: gold, fontSize: 22, fontWeight: FontWeight.w900),
                               ),
@@ -630,7 +632,7 @@ class _BrandedSplashGateState extends State<BrandedSplashGate>
                     opacity: _sloganFade,
                     child: Column(
                       children: [
-                        const Text(
+                        const TaxiText(
                           'Ылдам, коопсуз, ишенимдүү',
                           textAlign: TextAlign.center,
                           style: TextStyle(
@@ -649,13 +651,13 @@ class _BrandedSplashGateState extends State<BrandedSplashGate>
                           decoration: BoxDecoration(color: gold, borderRadius: BorderRadius.circular(8)),
                         ),
                         const SizedBox(height: 16),
-                        const Text(
+                        const TaxiText(
                           'Жолуңуз ар дайым шыдыр болсун!',
                           textAlign: TextAlign.center,
                           style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700),
                         ),
                         const SizedBox(height: 12),
-                        const Text(
+                        const TaxiText(
                           'СҮЛҮКТҮ  •  ЛЕЙЛЕК  •  БАТКЕН',
                           style: TextStyle(color: gold, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.2),
                         ),
@@ -771,7 +773,7 @@ class KyrgyzOrnamentHeader extends StatelessWidget {
               11,
               (index) => Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 3),
-                child: Text(
+                child: TaxiText(
                   index % 2 == 0 ? '❧' : '✥',
                   style: const TextStyle(
                     color: Color(0xFFFFC928),
@@ -788,13 +790,13 @@ class KyrgyzOrnamentHeader extends StatelessWidget {
             children: [
               Icon(Icons.home_work_rounded, color: Color(0xFFFFD45A), size: 20),
               SizedBox(width: 8),
-              Text('ЖОЛ АМАН КЕНЧИ', style: TextStyle(
+              TaxiText('ЖОЛ АМАН КЕНЧИ', style: TextStyle(
                 color: Color(0xFFFFD45A), fontSize: 16,
                 fontWeight: FontWeight.w900, letterSpacing: 1.2)),
             ],
           ),
           const SizedBox(height: 5),
-          const Text('СУЛЮКТА  •  ЛЕЙЛЕК  •  БАТКЕН',
+          const TaxiText('СУЛЮКТА  •  ЛЕЙЛЕК  •  БАТКЕН',
             style: TextStyle(color: Colors.white70, fontSize: 10,
               letterSpacing: 1.4, fontWeight: FontWeight.w600)),
         ],
@@ -981,7 +983,7 @@ class _WalkieTalkieWidgetState extends State<WalkieTalkieWidget> {
 
   void _notice(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: TaxiText(message)));
   }
 
   @override
@@ -1011,18 +1013,18 @@ class _WalkieTalkieWidgetState extends State<WalkieTalkieWidget> {
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
           Icon(Icons.wifi_tethering, color: Colors.amber), SizedBox(width: 8),
-          Text('ОБЩАЯ РАЦИЯ ТАКСОПАРКА', style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold)),
+          TaxiText('ОБЩАЯ РАЦИЯ ТАКСОПАРКА', style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold)),
         ]),
         const SizedBox(height: 6),
         Row(mainAxisAlignment: MainAxisAlignment.center, children: [
           Icon(_connected ? Icons.wifi : Icons.wifi_off, size: 15, color: _connected ? Colors.greenAccent : Colors.orangeAccent),
           const SizedBox(width: 6),
-          Flexible(child: Text(_connected ? 'Голосовой канал подключён · Сулюкта / Лейлек' : (_connecting ? 'Подключение к голосовому каналу…' : 'Голосовой канал не подключён'),
+          Flexible(child: TaxiText(_connected ? 'Голосовой канал подключён · Сулюкта / Лейлек' : (_connecting ? 'Подключение к голосовому каналу…' : 'Голосовой канал не подключён'),
             style: const TextStyle(color: Colors.white70, fontSize: 11), textAlign: TextAlign.center)),
         ]),
         if (!_connected) ...[
-          if (_radioError != null) Padding(padding: const EdgeInsets.only(top: 5), child: Text(_radioError!, style: const TextStyle(color: Colors.orangeAccent, fontSize: 11), textAlign: TextAlign.center)),
-          TextButton.icon(onPressed: _connecting ? null : _connectRoom, icon: const Icon(Icons.wifi, color: Colors.amber), label: const Text('ПОДКЛЮЧИТЬ ГОЛОС', style: TextStyle(color: Colors.amber))),
+          if (_radioError != null) Padding(padding: const EdgeInsets.only(top: 5), child: TaxiText(_radioError!, style: const TextStyle(color: Colors.orangeAccent, fontSize: 11), textAlign: TextAlign.center)),
+          TextButton.icon(onPressed: _connecting ? null : _connectRoom, icon: const Icon(Icons.wifi, color: Colors.amber), label: const TaxiText('ПОДКЛЮЧИТЬ ГОЛОС', style: TextStyle(color: Colors.amber))),
         ],
         const SizedBox(height: 8),
         Center(child: GestureDetector(
@@ -1034,15 +1036,15 @@ class _WalkieTalkieWidgetState extends State<WalkieTalkieWidget> {
               boxShadow: const [BoxShadow(color: Colors.black45, blurRadius: 6, offset: Offset(0, 3))]),
             child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
               Icon(_speaking ? Icons.mic : Icons.mic_none, color: _speaking ? Colors.white : Colors.black, size: 30),
-              Text(_speaking ? 'ГОВОРИТЕ' : 'ЗАЖАТЬ', style: TextStyle(color: _speaking ? Colors.white : Colors.black, fontWeight: FontWeight.bold, fontSize: 11)),
+              TaxiText(_speaking ? 'ГОВОРИТЕ' : 'ЗАЖАТЬ', style: TextStyle(color: _speaking ? Colors.white : Colors.black, fontWeight: FontWeight.bold, fontSize: 11)),
             ]),
           ),
         )),
         const SizedBox(height: 4),
-        const Text('Удерживайте кнопку для передачи живого звука. Отпустите — микрофон выключится.', textAlign: TextAlign.center, style: TextStyle(color: Colors.white60, fontSize: 10)),
+        const TaxiText('Удерживайте кнопку для передачи живого звука. Отпустите — микрофон выключится.', textAlign: TextAlign.center, style: TextStyle(color: Colors.white60, fontSize: 10)),
         const Divider(color: Colors.white24, height: 18),
-        const Text('ОБЩИЙ ТЕКСТОВЫЙ ЧАТ', style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 12)),
-        if (!widget.allowText) const Padding(padding: EdgeInsets.symmetric(vertical: 6), child: Text('Отправка текста временно отключена во время выполнения заказа. Освободитесь от поездки, чтобы писать в чате.', style: TextStyle(color: Colors.orangeAccent, fontSize: 11))),
+        const TaxiText('ОБЩИЙ ТЕКСТОВЫЙ ЧАТ', style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 12)),
+        if (!widget.allowText) const Padding(padding: EdgeInsets.symmetric(vertical: 6), child: TaxiText('Отправка текста временно отключена во время выполнения заказа. Освободитесь от поездки, чтобы писать в чате.', style: TextStyle(color: Colors.orangeAccent, fontSize: 11))),
         Row(children: [
           Expanded(
             child: TextField(
@@ -1096,7 +1098,7 @@ class _WalkieTalkieWidgetState extends State<WalkieTalkieWidget> {
               final stamp = (m['created_at'] as num?)?.toInt() ?? 0;
               final dt = stamp > 0 ? DateTime.fromMillisecondsSinceEpoch(stamp * 1000).toLocal() : DateTime.now();
               final time = '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
-              return Padding(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), child: Text('[$time] ${m['sender_name'] ?? 'Участник'}: ${m['message'] ?? ''}', style: const TextStyle(color: Colors.amberAccent, fontSize: 12)));
+              return Padding(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), child: TaxiText('[$time] ${m['sender_name'] ?? 'Участник'}: ${m['message'] ?? ''}', style: const TextStyle(color: Colors.amberAccent, fontSize: 12)));
             },
           )),
       ]),
@@ -1104,173 +1106,6 @@ class _WalkieTalkieWidgetState extends State<WalkieTalkieWidget> {
   }
 }
 
-class TaxiLanguage {
-  static final ValueNotifier<String> current = ValueNotifier<String>('ru');
-  static bool get isKyrgyz => current.value == 'ky';
-  static String translate(String russian) => _translations[russian] ?? russian;
-  static const Map<String, String> _translations = <String, String>{
-    'Повторить': 'Кайталоо',
-    'Сообщения общего канала:': 'Жалпы каналдын билдирүүлөрү:',
-    'Сообщений пока нет': 'Азырынча билдирүү жок',
-    'Вход диспетчера': 'Диспетчердин кирүүсү',
-    'Доступ проверяется сервером. Старый локальный ПИН-код больше не используется.': 'Кирүү сервер аркылуу текшерилет. Эски жергиликтүү PIN-код колдонулбайт.',
-    'Отмена': 'Жокко чыгаруу',
-    'Введите правильный номер Кыргызстана и пароль.': 'Кыргызстандын туура телефон номерин жана сырсөздү киргизиңиз.',
-    'Войти': 'Кирүү',
-    'Клиентская панель': 'Кардардын панели',
-    'Войти в аккаунт': 'Аккаунтка кирүү',
-    'Регистрация нового клиента': 'Жаңы кардарды каттоо',
-    'Доступ к геолокации запрещён': 'Геолокацияга уруксат берилген жок',
-    'Позже': 'Кийинчерээк',
-    'Открыть настройки': 'Жөндөөлөрдү ачуу',
-    'Сначала определите своё местоположение кнопкой геолокации или отметьте точку подачи нажатием на карту.': 'Адегенде геолокация баскычы менен жайгашкан жериңизди аныктаңыз же картадан унаа келчү жерди белгилеңиз.',
-    'Не удалось определить точку подачи. Выберите её на карте ещё раз.': 'Унаа келчү жерди аныктоо мүмкүн болгон жок. Аны картадан кайра тандаңыз.',
-    'Количество пассажиров должно быть от 1 до 4.': 'Жүргүнчүлөрдүн саны 1ден 4кө чейин болушу керек.',
-    'Выберите допустимый способ оплаты.': 'Туура төлөм ыкмасын тандаңыз.',
-    'Диспетчер ещё не установил цену для этого тарифа. Заказ пока нельзя отправить.': 'Диспетчер бул тарифке баа коё элек. Азырынча буйрутма жөнөтүлбөйт.',
-    'Сначала войдите или зарегистрируйтесь как клиент.': 'Адегенде кардар катары кириңиз же катталыңыз.',
-    'Заказ отправлен на сервер. Водители могут его увидеть.': 'Буйрутма серверге жөнөтүлдү. Айдоочулар аны көрө алышат.',
-    'Выйти из аккаунта?': 'Аккаунттан чыгасызбы?',
-    'ОСТАТЬСЯ': 'КАЛУУ',
-    'ВЫЙТИ': 'ЧЫГУУ',
-    'Отменить заказ?': 'Буйрутманы жокко чыгарасызбы?',
-    'Вы можете отменить заказ, пока водитель не прибыл к месту подачи.': 'Айдоочу унаа келчү жерге жеткенге чейин буйрутманы жокко чыгара аласыз.',
-    'ОТМЕНИТЬ': 'ЖОККО ЧЫГАРУУ',
-    'ВЫБЕРИТЕ ТАРИФ': 'ТАРИФТИ ТАНДАҢЫЗ',
-    'Межгород': 'Шаар аралык',
-    'Пассажиры: ': 'Жүргүнчүлөр: ',
-    'Наличные': 'Накталай',
-    'Точка подачи: нажмите на карту, чтобы передвинуть метку.': 'Унаа келчү жер: белгини жылдыруу үчүн картаны басыңыз.',
-    'ОТПРАВКА...': 'ЖӨНӨТҮЛҮҮДӨ...',
-    'ВЫЗВАТЬ МАШИНУ': 'УНАА ЧАКЫРУУ',
-    'Заказ опубликован. Статус обновляется автоматически.': 'Буйрутма жарыяланды. Абалы автоматтык түрдө жаңыланат.',
-    'ОТМЕНЯЕМ...': 'ЖОККО ЧЫГАРЫЛУУДА...',
-    'ОТМЕНИТЬ ЗАКАЗ': 'БУЙРУТМАНЫ ЖОККО ЧЫГАРУУ',
-    'Машина назначена и едет к вам!': 'Унаа дайындалды жана сизге келе жатат!',
-    'Водитель прибыл на место подачи': 'Айдоочу унаа келчү жерге келди',
-    'Заказ отменён.': 'Буйрутма жокко чыгарылды.',
-    'СОЗДАТЬ НОВЫЙ ЗАКАЗ': 'ЖАҢЫ БУЙРУТМА ТҮЗҮҮ',
-    'Поездка завершена!': 'Жол жүрүү аяктады!',
-    'Новый заказ': 'Жаңы буйрутма',
-    'Добавить': 'Кошуу',
-    'Заменить': 'Алмаштыруу',
-    'Проверка анкеты': 'Анкетаны текшерүү',
-    'Заявка отклонена': 'Арыз четке кагылды',
-    'Документы ожидают проверки': 'Документтер текшерүүнү күтүүдө',
-    'Диспетчер проверит документы. До одобрения выход на линию недоступен.': 'Диспетчер документтерди текшерет. Бекитилгенге чейин линияга чыгууга болбойт.',
-    'Исправьте замечания и отправьте фотографии повторно:': 'Эскертүүлөрдү оңдоп, сүрөттөрдү кайра жөнөтүңүз:',
-    'ОТПРАВИТЬ ПОВТОРНО': 'КАЙРА ЖӨНӨТҮҮ',
-    'Пассажир не вышел': 'Жүргүнчү чыккан жок',
-    'Подтвердите ситуацию после прибытия к месту подачи. Выберите причину отмены:': 'Унаа келчү жерге жеткенден кийин жагдайды ырастаңыз. Жокко чыгаруу себебин тандаңыз:',
-    'НАЗАД': 'АРТКА',
-    'ПАССАЖИР НЕ ВЫШЕЛ': 'ЖҮРГҮНЧҮ ЧЫККАН ЖОК',
-    'НЕ ОТВЕЧАЕТ': 'ЖООП БЕРБЕЙТ',
-    'УЕХАЛ НА ДРУГОЙ МАШИНЕ': 'БАШКА УНАА МЕНЕН КЕТТИ',
-    'Отказаться от заказа?': 'Буйрутмадан баш тартасызбы?',
-    'Заказ вернётся в общий список и станет доступен другим водителям. Это можно сделать только до прибытия к пассажиру.': 'Буйрутма жалпы тизмеге кайтарылып, башка айдоочуларга жеткиликтүү болот. Муну жүргүнчүгө жеткенге чейин гана жасоого болот.',
-    'НЕТ': 'ЖОК',
-    'ОТКАЗАТЬСЯ': 'БАШ ТАРТУУ',
-    'ЗАВЕРШИТЬ ПОЕЗДКУ': 'ЖОЛ ЖҮРҮҮНҮ АЯКТОО',
-    'Заказы и их статусы обновляются с сервера': 'Буйрутмалар жана алардын абалы серверден жаңыланат',
-    'ВАШ НАЗНАЧЕННЫЙ ЗАКАЗ': 'СИЗГЕ ДАЙЫНДАЛГАН БУЙРУТМА',
-    'ВЫ ПРИБЫЛИ': 'СИЗ КЕЛДИҢИЗ',
-    'Я ПРИБЫЛ': 'МЕН КЕЛДИМ',
-    'ОТКАЗ': 'БАШ ТАРТУУ',
-    'ОТКРЫТЫЕ ЗАКАЗЫ РЯДОМ': 'ЖАКЫНДАГЫ АЧЫК БУЙРУТМАЛАР',
-    'Новых заказов пока нет. Ожидаем...': 'Азырынча жаңы буйрутма жок. Күтүп жатабыз...',
-    'ПРИНЯТЬ ЗАКАЗ': 'БУЙРУТМАНЫ КАБЫЛ АЛУУ',
-    'Причина отклонения': 'Четке кагуу себеби',
-    'Назначить водителя': 'Айдоочуну дайындоо',
-    'Фиксированные тарифы': 'Туруктуу тарифтер',
-    'Ноль означает, что цена ещё не установлена.': 'Нөл болсо, баа коюла элек дегенди билдирет.',
-    'СОХРАНИТЬ': 'САКТОО',
-    'Завершить поездку': 'Жол жүрүүнү аяктоо',
-    'Подставлена цена из тарифа. При необходимости диспетчер может изменить сумму перед закрытием.': 'Тарифтеги баа коюлду. Зарыл болсо, диспетчер жабуудан мурун сумманы өзгөртө алат.',
-    'ЗАВЕРШИТЬ': 'АЯКТОО',
-    'Закрыть': 'Жабуу',
-    'Сохранить': 'Сактоо',
-    'Обновить': 'Жаңылоо',
-    'Выйти из кабинета диспетчера': 'Диспетчердин кабинетинен чыгуу',
-    'Не удалось открыть диспетчерскую панель': 'Диспетчер панелин ачуу мүмкүн болгон жок',
-    'Для доступа требуется вход в Firebase под учётной записью диспетчера. Старый локальный ПИН-код не заменяет серверную авторизацию.': 'Кирүү үчүн диспетчердин Firebase аккаунту менен авторизациядан өтүү керек. Эски PIN-код сервердик авторизацияны алмаштырбайт.',
-    'Нет связи с сервером. Показаны последние загруженные данные; повторное обновление будет выполнено автоматически.': 'Сервер менен байланыш жок. Акыркы жүктөлгөн маалымат көрсөтүлдү; кайра жаңылоо автоматтык түрдө аткарылат.',
-    'Сводка за сегодня': 'Бүгүнкү жыйынтык',
-    'Всего заказов: ': 'Жалпы буйрутмалар: ',
-    'Ожидают назначения: ': 'Дайындоону күтүп жаткандар: ',
-    'Водителей в базе: ': 'Базадагы айдоочулар: ',
-    'Тарифы для клиентов': 'Кардарлар үчүн тарифтер',
-    'ИЗМЕНИТЬ ТАРИФЫ': 'ТАРИФТЕРДИ ӨЗГӨРТҮҮ',
-    'Заявки водителей · ожидают решения': 'Айдоочулардын арыздары · чечим күтүп жатат',
-    'Нет новых заявок водителей.': 'Жаңы айдоочу арыздары жок.',
-    'Не все документы загружены. Проверьте заявку перед одобрением.': 'Бардык документтер жүктөлгөн эмес. Бекитүүдөн мурун арызды текшериңиз.',
-    'Отклонить': 'Четке кагуу',
-    'Одобрить': 'Бекитүү',
-    'Отклонённых заявок нет.': 'Четке кагылган арыздар жок.',
-    'В базе пока нет водителей.': 'Базада азырынча айдоочулар жок.',
-    'Открытые заказы': 'Ачык буйрутмалар',
-    'Нет заказов, ожидающих назначения.': 'Дайындоону күтүп жаткан буйрутмалар жок.',
-    'Откуда: ': 'Кайдан: ',
-    'Куда: ': 'Каякка: ',
-    'Пассажиров: ': 'Жүргүнчүлөр: ',
-    'Оплата: ': 'Төлөм: ',
-    'Тариф: ': 'Тариф: ',
-    'Водитель прибыл · ожидают закрытия': 'Айдоочу келди · жабууну күтүп жатат',
-    'Маршрут: ': 'Маршрут: ',
-    'Обновить историю': 'Тарыхты жаңылоо',
-    'Загрузить ещё': 'Дагы жүктөө',
-    'Нет отмен по причине отсутствия пассажира.': 'Жүргүнчү келбегенине байланыштуу жокко чыгаруу жок.',
-    'Поездка не засчитана · начисление: 0 сом': 'Жол жүрүү эсептелген жок · чегерүү: 0 сом',
-    'Общий заработок: ': 'Жалпы киреше: ',
-    'Водителям: ': 'Айдоочуларга: ',
-    'Таксопарку: ': 'Таксопаркка: ',
-    'Заработок водителей за сегодня': 'Айдоочулардын бүгүнкү кирешеси',
-    'Изменить процент': 'Пайызды өзгөртүү',
-    'Закрыть смену': 'Сменаны жабуу',
-    'История закрытых смен': 'Жабылган сменалардын тарыхы',
-    'Закрытых смен пока нет.': 'Азырынча жабылган сменалар жок.',
-    'Статусы заказов за сегодня': 'Бүгүнкү буйрутмалардын абалы',
-  };
-}
-class TaxiLanguageSwitcher extends StatelessWidget {
-  const TaxiLanguageSwitcher({super.key});
-  @override
-  Widget build(BuildContext context) => ValueListenableBuilder<String>(
-    valueListenable: TaxiLanguage.current,
-    builder: (context, language, _) => Align(
-      alignment: Alignment.centerRight,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-        decoration: BoxDecoration(color: const Color(0xFFFFD45A), borderRadius: BorderRadius.circular(24), border: Border.all(color: const Color(0xFF171F1D))),
-        child: DropdownButtonHideUnderline(child: DropdownButton<String>(
-          value: language, isDense: true,
-          icon: const Icon(Icons.language_rounded, color: Color(0xFF171F1D)),
-          dropdownColor: const Color(0xFFFFF8E7),
-          style: const TextStyle(color: Color(0xFF171F1D), fontWeight: FontWeight.w800),
-          items: const [DropdownMenuItem(value: 'ru', child: Text('Русский')), DropdownMenuItem(value: 'ky', child: Text('Кыргызча'))],
-          onChanged: (value) { if (value != null) TaxiLanguage.current.value = value; },
-        )),
-      ),
-    ),
-  );
-}
-class TaxiLocalizedText extends StatelessWidget {
-  const TaxiLocalizedText({super.key, required this.russian, this.kyrgyz, this.style, this.textAlign, this.maxLines, this.softWrap, this.overflow});
-  final String russian;
-  final String? kyrgyz;
-  final TextStyle? style;
-  final TextAlign? textAlign;
-  final int? maxLines;
-  final bool? softWrap;
-  final TextOverflow? overflow;
-  @override
-  Widget build(BuildContext context) => ValueListenableBuilder<String>(
-    valueListenable: TaxiLanguage.current,
-    builder: (context, language, _) => Text(
-      language == 'ky' ? (kyrgyz ?? TaxiLanguage.translate(russian)) : russian,
-      style: style, textAlign: textAlign, maxLines: maxLines, softWrap: softWrap, overflow: overflow,
-    ),
-  );
-}
 class RoleSelectionScreen extends StatefulWidget {
   const RoleSelectionScreen({super.key});
   @override
@@ -1333,9 +1168,9 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                 Navigator.pop(ctx);
                 Navigator.push(context, MaterialPageRoute(builder: (_) => const DispatcherScreen()));
               } on FirebaseAuthException catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка входа: ${e.message ?? e.code}')));
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: TaxiText('Ошибка входа: ${e.message ?? e.code}')));
               } catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: TaxiText(e.toString())));
               }
             },
             child: const TaxiLocalizedText(russian: 'Войти', kyrgyz: 'Кирүү'),
@@ -1405,11 +1240,11 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                             ),
                           ),
                           const SizedBox(height: 16),
-                          const Text('«ЖОЛ АМАН КЕНЧИ»', textAlign: TextAlign.center,
+                          const TaxiText('«ЖОЛ АМАН КЕНЧИ»', textAlign: TextAlign.center,
                             style: TextStyle(color: gold, fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: 1.0)),
-                          const Text('ТАКСИ', style: TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.w800, letterSpacing: 5)),
+                          const TaxiText('ТАКСИ', style: TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.w800, letterSpacing: 5)),
                           const SizedBox(height: 8),
-                          const Text('СУЛЮКТА  •  ЛЕЙЛЕК  •  БАТКЕН', textAlign: TextAlign.center,
+                          const TaxiText('СУЛЮКТА  •  ЛЕЙЛЕК  •  БАТКЕН', textAlign: TextAlign.center,
                             style: TextStyle(color: Color(0xFFFFE8A0), fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 1.3)),
                           const SizedBox(height: 15),
                           Container(height: 2, decoration: const BoxDecoration(
@@ -1483,8 +1318,8 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
           Icon(icon, size: 31),
           const SizedBox(width: 15),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(label, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, letterSpacing: 0.8)),
-            Text(subtitle, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+            TaxiText(label, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, letterSpacing: 0.8)),
+            TaxiText(subtitle, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
           ])),
           const Icon(Icons.arrow_forward_ios_rounded, size: 17),
         ]),
@@ -1546,7 +1381,7 @@ class _ClientAuthScreenState extends State<ClientAuthScreen> {
               final password = pinController.text;
               if (!TaxiParkState.isValidKgPhone(phone) || password.length < 6) {
                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                    content: Text('Проверьте телефон и пароль (не менее 6 символов).')));
+                    content: TaxiText('Проверьте телефон и пароль (не менее 6 символов).')));
                 return;
               }
               try {
@@ -1570,9 +1405,9 @@ class _ClientAuthScreenState extends State<ClientAuthScreen> {
                 final message = e.code == 'user-not-found' || e.code == 'wrong-password' || e.code == 'invalid-credential'
                     ? 'Неверный телефон или пароль.'
                     : 'Ошибка входа: ${e.message ?? e.code}';
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: TaxiText(message)));
               } catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Не удалось войти: $e')));
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: TaxiText('Не удалось войти: $e')));
               }
             },
             child: const TaxiLocalizedText(russian: 'Войти', kyrgyz: 'Кирүү'),
@@ -1631,12 +1466,12 @@ class _ClientAuthScreenState extends State<ClientAuthScreen> {
               final password = pinController.text;
               if (name.isEmpty || password.length < 6) {
                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                    content: Text('Укажите имя и пароль не короче 6 символов.')));
+                    content: TaxiText('Укажите имя и пароль не короче 6 символов.')));
                 return;
               }
               if (!TaxiParkState.isValidKgPhone(phone)) {
                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                    content: Text('Введите правильный номер, например 0700112233.')));
+                    content: TaxiText('Введите правильный номер, например 0700112233.')));
                 return;
               }
               try {
@@ -1664,9 +1499,9 @@ class _ClientAuthScreenState extends State<ClientAuthScreen> {
                 final message = e.code == 'email-already-in-use'
                     ? 'Этот номер уже зарегистрирован. Войдите в аккаунт.'
                     : 'Ошибка регистрации: ${e.message ?? e.code}';
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: TaxiText(message)));
               } catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Не удалось зарегистрироваться: $e')));
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: TaxiText('Не удалось зарегистрироваться: $e')));
               }
             },
             child: const TaxiLocalizedText(russian: 'Зарегистрироваться', kyrgyz: 'Катталуу'),
@@ -1792,7 +1627,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> with WidgetsBindingOb
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const TaxiLocalizedText(russian: 'Доступ к геолокации запрещён', kyrgyz: 'Геолокацияга уруксат берилген жок'),
-        content: const Text(
+        content: const TaxiText(
           'Разрешение было запрещено в настройках телефона. '
           'Откройте настройки приложения и включите доступ к местоположению, '
           'затем вернитесь сюда и нажмите кнопку геолокации ещё раз.',
@@ -1875,7 +1710,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> with WidgetsBindingOb
       if (showMessage) {
         final message = error.toString().replaceFirst('Exception: ', '');
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Не удалось определить ваше местоположение: $message')),
+          SnackBar(content: TaxiText('Не удалось определить ваше местоположение: $message')),
         );
       }
       // Keep the Sülüktü fallback and manual map selection available.
@@ -1968,7 +1803,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> with WidgetsBindingOb
     final client = TaxiParkState.currentLoggedInClient;
     if (destination.isEmpty || destination.length > 200) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(destination.isEmpty
+        content: TaxiText(destination.isEmpty
             ? 'Укажите пункт назначения!'
             : 'Пункт назначения слишком длинный. Укажите не более 200 символов.'),
       ));
@@ -2067,11 +1902,11 @@ class _ClientMapScreenState extends State<ClientMapScreen> with WidgetsBindingOb
       }
     } on WorkerApiException catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Сервер не подтвердил публикацию заказа: ${e.message}')),
+        SnackBar(content: TaxiText('Сервер не подтвердил публикацию заказа: ${e.message}')),
       );
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Не удалось отправить заказ. Проверьте интернет и повторите попытку: $e')),
+        SnackBar(content: TaxiText('Не удалось отправить заказ. Проверьте интернет и повторите попытку: $e')),
       );
     } finally {
       if (mounted) setState(() => _sendingOrder = false);
@@ -2275,7 +2110,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> with WidgetsBindingOb
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const TaxiLocalizedText(russian: 'Выйти из аккаунта?', kyrgyz: 'Аккаунттан чыгасызбы?'),
-        content: Text(
+        content: TaxiText(
           hasActiveOrder
               ? 'Вы выйдете из аккаунта. Текущий заказ не будет отменён, но после выхода вы перестанете видеть его обновления на этом устройстве.'
               : 'Вы действительно хотите выйти из аккаунта пассажира?',
@@ -2308,7 +2143,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> with WidgetsBindingOb
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Не удалось выйти из аккаунта: $e')),
+          SnackBar(content: TaxiText('Не удалось выйти из аккаунта: $e')),
         );
       }
     } finally {
@@ -2345,7 +2180,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> with WidgetsBindingOb
         _routeError = null;
       });
     } on WorkerApiException catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: TaxiText(e.message)));
     } finally {
       if (mounted) setState(() => _cancellingOrder = false);
     }
@@ -2373,7 +2208,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> with WidgetsBindingOb
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('ЖОЛ АМАН КЕНЧИ • ТАКСИ',
+        title: const TaxiText('ЖОЛ АМАН КЕНЧИ • ТАКСИ',
           style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 0.2)),
         backgroundColor: const Color(0xFFFFD400),
         foregroundColor: const Color(0xFF171717),
@@ -2479,7 +2314,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> with WidgetsBindingOb
                             ),
                             const SizedBox(width: 8),
                             Expanded(
-                              child: Text(
+                              child: TaxiText(
                                 _pickupPointConfirmed
                                     ? 'Точка подачи выбрана'
                                     : 'Определите местоположение или отметьте точку на карте',
@@ -2533,8 +2368,8 @@ class _ClientMapScreenState extends State<ClientMapScreen> with WidgetsBindingOb
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(!gpsIsFresh ? 'Нет актуального GPS: положение машины и маршрут временно скрыты.' : (_routeLoading ? 'Обновляем положение такси и маршрут…' : (_approachRoute != null ? 'Маршрут до вас: ${_approachRoute!.distanceLabel} · примерно ${_approachRoute!.etaLabel}' : (_routeError ?? 'Маршрут уточняется'))), style: const TextStyle(fontWeight: FontWeight.w600)),
-                  Text(
+                  TaxiText(!gpsIsFresh ? 'Нет актуального GPS: положение машины и маршрут временно скрыты.' : (_routeLoading ? 'Обновляем положение такси и маршрут…' : (_approachRoute != null ? 'Маршрут до вас: ${_approachRoute!.distanceLabel} · примерно ${_approachRoute!.etaLabel}' : (_routeError ?? 'Маршрут уточняется'))), style: const TextStyle(fontWeight: FontWeight.w600)),
+                  TaxiText(
                     gpsAgeSeconds == null
                         ? 'Положение автомобиля получено; время GPS пока неизвестно.'
                         : (!gpsIsFresh
@@ -2545,7 +2380,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> with WidgetsBindingOb
                       color: !gpsIsFresh ? Colors.red : Colors.grey.shade700,
                     ),
                   ),
-                  Text('Такси: ${order?.assignedDriver?.carBrand ?? ''} ${order?.assignedDriver?.plateNumber ?? ''}', style: const TextStyle(fontSize: 12)),
+                  TaxiText('Такси: ${order?.assignedDriver?.carBrand ?? ''} ${order?.assignedDriver?.plateNumber ?? ''}', style: const TextStyle(fontSize: 12)),
                 ],
               ),
             ),
@@ -2571,7 +2406,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> with WidgetsBindingOb
                         children: [
                           Expanded(
                             child: ChoiceChip(
-                              label: Text(
+                              label: TaxiText(
                                   'По городу (${_cityFareSom > 0 ? '$_cityFareSom сом' : 'цена не задана'})',
                                   style: TextStyle(fontWeight: FontWeight.w800,
                                     color: !_isIntercity ? const Color(0xFF171717) : const Color(0xFF555555))),
@@ -2586,7 +2421,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> with WidgetsBindingOb
                           const SizedBox(width: 8),
                           Expanded(
                             child: ChoiceChip(
-                              label: Text('Межгород (${_intercityFareSom > 0 ? '$_intercityFareSom сом' : 'цена не задана'})',
+                              label: TaxiText('Межгород (${_intercityFareSom > 0 ? '$_intercityFareSom сом' : 'цена не задана'})',
                                   style: TextStyle(fontWeight: FontWeight.w800,
                                     color: _isIntercity ? const Color(0xFF171717) : const Color(0xFF555555))),
                               selectedColor: const Color(0xFFFFD400),
@@ -2601,7 +2436,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> with WidgetsBindingOb
                       ),
                       const SizedBox(height: 10),
                       if (_isIntercity) ...[
-                        Text(
+                        TaxiText(
                           _intercityFareSom > 0
                               ? 'Фиксированная цена межгорода: $_intercityFareSom сом.'
                               : 'Диспетчер ещё не установил цену межгорода. Уточните стоимость перед заказом.',
@@ -2609,7 +2444,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> with WidgetsBindingOb
                         ),
                         const SizedBox(height: 10),
                         SwitchListTile(
-                          title: const Text(
+                          title: const TaxiText(
                               'Оплата по договору (безнал / корп.)',
                               style: TextStyle(fontSize: 14)),
                           value: _isByContract,
@@ -2631,7 +2466,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> with WidgetsBindingOb
                           DropdownButton<int>(
                             value: _passengerCount,
                             items: List.generate(4, (i) => DropdownMenuItem(
-                              value: i + 1, child: Text('${i + 1}'),
+                              value: i + 1, child: TaxiText('${i + 1}'),
                             )),
                             onChanged: (value) => setState(() => _passengerCount = value ?? 1),
                           ),
@@ -2641,14 +2476,14 @@ class _ClientMapScreenState extends State<ClientMapScreen> with WidgetsBindingOb
                               value: _paymentMethod,
                               items: const [
                                 DropdownMenuItem(value: 'Наличные', child: TaxiLocalizedText(russian: 'Наличные', kyrgyz: 'Накталай')),
-                                DropdownMenuItem(value: 'QR-код', child: Text('QR-код')),
+                                DropdownMenuItem(value: 'QR-код', child: TaxiText('QR-код')),
                               ],
                               onChanged: (value) => setState(() => _paymentMethod = value ?? 'Наличные'),
                             ),
                         ],
                       ),
                       ),
-                      Text(
+                      TaxiText(
                         !_tariffsLoaded
                             ? 'Загружаем тарифы…'
                             : ((_isIntercity ? _intercityFareSom : _cityFareSom) > 0
@@ -2703,7 +2538,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> with WidgetsBindingOb
                         ),
                         onPressed: _sendingOrder ? null : _createOrder,
                         icon: const Icon(Icons.local_taxi_rounded, size: 27),
-                        label: Text(_sendingOrder ? 'ОТПРАВКА...' : 'ВЫЗВАТЬ МАШИНУ',
+                        label: TaxiText(_sendingOrder ? 'ОТПРАВКА...' : 'ВЫЗВАТЬ МАШИНУ',
                           style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17, letterSpacing: 0.4)),
                       ),
                     ],
@@ -2734,7 +2569,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> with WidgetsBindingOb
               const CircularProgressIndicator(color: Colors.amber),
               const SizedBox(width: 16),
               Expanded(
-                  child: Text(
+                  child: TaxiText(
                       order.isIntercity
                           ? 'Ищем машину на межгород Сулюкта-Раззаков...'
                           : 'Ищем свободную машину по городу (${order.fixedPrice} сом)...',
@@ -2748,7 +2583,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> with WidgetsBindingOb
           OutlinedButton.icon(
             onPressed: _cancellingOrder ? null : _cancelClientOrder,
             icon: const Icon(Icons.close),
-            label: Text(_cancellingOrder ? 'ОТМЕНЯЕМ...' : 'ОТМЕНИТЬ ЗАКАЗ'),
+            label: TaxiText(_cancellingOrder ? 'ОТМЕНЯЕМ...' : 'ОТМЕНИТЬ ЗАКАЗ'),
             style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
           ),
         ],
@@ -2763,15 +2598,15 @@ class _ClientMapScreenState extends State<ClientMapScreen> with WidgetsBindingOb
           const TaxiLocalizedText(russian: 'Машина назначена и едет к вам!', kyrgyz: 'Унаа дайындалды жана сизге келе жатат!',
               style:
                   TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
-          Text('Водитель: ${d.name} (${d.phone})'),
-          Text('Авто: ${d.fullCarInfo}'),
-          const Text('Синяя линия показывает прямое направление к точке подачи, а не дорожный маршрут.',
+          TaxiText('Водитель: ${d.name} (${d.phone})'),
+          TaxiText('Авто: ${d.fullCarInfo}'),
+          const TaxiText('Синяя линия показывает прямое направление к точке подачи, а не дорожный маршрут.',
               style: TextStyle(fontSize: 11, color: Colors.black54)),
           const SizedBox(height: 8),
           OutlinedButton.icon(
             onPressed: _cancellingOrder ? null : _cancelClientOrder,
             icon: const Icon(Icons.close),
-            label: Text(_cancellingOrder ? 'ОТМЕНЯЕМ...' : 'ОТМЕНИТЬ ЗАКАЗ ДО ПРИЕЗДА'),
+            label: TaxiText(_cancellingOrder ? 'ОТМЕНЯЕМ...' : 'ОТМЕНИТЬ ЗАКАЗ ДО ПРИЕЗДА'),
             style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
           ),
         ],
@@ -2783,10 +2618,10 @@ class _ClientMapScreenState extends State<ClientMapScreen> with WidgetsBindingOb
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text('ВОДИТЕЛЬ ПРИБЫЛ НА МЕСТО ПОДАЧИ',
+          const TaxiText('ВОДИТЕЛЬ ПРИБЫЛ НА МЕСТО ПОДАЧИ',
               style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
-          Text('Водитель: ${d.name} (${d.phone})'),
-          Text('Автомобиль: ${d.fullCarInfo}'),
+          TaxiText('Водитель: ${d.name} (${d.phone})'),
+          TaxiText('Автомобиль: ${d.fullCarInfo}'),
         ],
       );
     }
@@ -2846,7 +2681,7 @@ class _DriverEntryScreenState extends State<DriverEntryScreen> {
   void _showMessage(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
+      SnackBar(content: TaxiText(message)),
     );
   }
 
@@ -2934,8 +2769,8 @@ class _DriverEntryScreenState extends State<DriverEntryScreen> {
   Widget _documentPickRow(String label, XFile? file, VoidCallback onPick) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 3),
     child: Row(children: [
-      Expanded(child: Text(file == null ? '$label · не выбрано' : '$label · выбрано')),
-      TextButton.icon(onPressed: onPick, icon: const Icon(Icons.add_a_photo_outlined), label: Text(file == null ? 'Добавить' : 'Заменить')),
+      Expanded(child: TaxiText(file == null ? '$label · не выбрано' : '$label · выбрано')),
+      TextButton.icon(onPressed: onPick, icon: const Icon(Icons.add_a_photo_outlined), label: TaxiText(file == null ? 'Добавить' : 'Заменить')),
     ]),
   );
 
@@ -3060,7 +2895,7 @@ class _DriverReviewStatusScreenState extends State<DriverReviewStatusScreen> {
   void _message(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
+      SnackBar(content: TaxiText(message)),
     );
   }
 
@@ -3198,8 +3033,8 @@ class _DriverReviewStatusScreenState extends State<DriverReviewStatusScreen> {
 
   Widget _pickRow(String title, XFile? file, String kind) => ListTile(
     leading: Icon(file == null ? Icons.add_a_photo : Icons.check_circle, color: file == null ? Colors.grey : Colors.green),
-    title: Text(title), subtitle: Text(file == null ? 'Не выбрано' : 'Файл выбран'),
-    trailing: TextButton(onPressed: _busy ? null : () => _pick(kind), child: Text(file == null ? 'Выбрать' : 'Заменить')),
+    title: TaxiText(title), subtitle: TaxiText(file == null ? 'Не выбрано' : 'Файл выбран'),
+    trailing: TextButton(onPressed: _busy ? null : () => _pick(kind), child: TaxiText(file == null ? 'Выбрать' : 'Заменить')),
   );
 
   @override
@@ -3211,11 +3046,11 @@ class _DriverReviewStatusScreenState extends State<DriverReviewStatusScreen> {
         actions: [IconButton(onPressed: _busy ? null : _logout, icon: const Icon(Icons.logout), tooltip: 'Выйти')]),
       body: Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 520), child: ListView(padding: const EdgeInsets.all(20), children: [
         const Icon(Icons.fact_check_outlined, size: 64, color: Colors.amber),
-        Text(widget.profile['name']?.toString() ?? 'Водитель', textAlign: TextAlign.center, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+        TaxiText(widget.profile['name']?.toString() ?? 'Водитель', textAlign: TextAlign.center, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
         const SizedBox(height: 12),
         Card(color: rejected ? Colors.red.shade50 : Colors.amber.shade50, child: Padding(padding: const EdgeInsets.all(16), child: Column(children: [
-          Text(rejected ? 'Заявка отклонена' : 'Документы ожидают проверки', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-          if (rejected) ...[const SizedBox(height: 8), Text('Причина: ${widget.profile['rejection_reason'] ?? 'Не указана'}')],
+          TaxiText(rejected ? 'Заявка отклонена' : 'Документы ожидают проверки', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          if (rejected) ...[const SizedBox(height: 8), TaxiText('Причина: ${widget.profile['rejection_reason'] ?? 'Не указана'}')],
           if (!rejected) const TaxiLocalizedText(russian: 'Диспетчер проверит документы. До одобрения выход на линию недоступен.', kyrgyz: 'Диспетчер документтерди текшерет. Бекитилгенге чейин линияга чыгууга болбойт.'),
         ]))),
         if (rejected) ...[
@@ -3225,7 +3060,7 @@ class _DriverReviewStatusScreenState extends State<DriverReviewStatusScreen> {
           _pickRow('Фото водителя', _driverPhoto, 'driver'),
           _pickRow('Фото автомобиля', _carPhoto, 'car'),
           const SizedBox(height: 12),
-          ElevatedButton.icon(onPressed: _busy ? null : _resubmit, icon: const Icon(Icons.upload), label: Text(_busy ? 'ОТПРАВКА...' : 'ОТПРАВИТЬ ПОВТОРНО')),
+          ElevatedButton.icon(onPressed: _busy ? null : _resubmit, icon: const Icon(Icons.upload), label: TaxiText(_busy ? 'ОТПРАВКА...' : 'ОТПРАВИТЬ ПОВТОРНО')),
         ],
       ]))),
     );
@@ -3360,7 +3195,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
       });
       if (hadAssignedOrder && assigned.isEmpty && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Активный заказ закрыт или снят. Вы снова можете принимать заказы.'),
+          content: TaxiText('Активный заказ закрыт или снят. Вы снова можете принимать заказы.'),
         ));
       }
       if (assigned.isNotEmpty) unawaited(_loadDriverApproachRoute());
@@ -3380,7 +3215,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
         if (!_driverAccessWarningShown) {
           _driverAccessWarningShown = true;
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(e.message),
+            content: TaxiText(e.message),
           ));
         }
       } else if (mounted) {
@@ -3391,7 +3226,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
         if (shouldNotify) {
           _lastOrderPollNotice = e.message;
           _lastOrderPollNoticeAt = now;
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: TaxiText(e.message)));
         }
       }
     } catch (_) {
@@ -3413,10 +3248,10 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
       final result = await WorkerApi.respondToOrder(id);
       if (!mounted) return;
       final message = (result['message'] ?? 'Отклик отправлен. Ожидайте выбора ближайшего водителя.').toString();
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: TaxiText(message)));
       await _pollServerOrders();
     } on WorkerApiException catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: TaxiText(e.message)));
       await _pollServerOrders();
     } finally {
       if (mounted) setState(() => _respondingOrderIds.remove(id));
@@ -3492,11 +3327,11 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
       final result = await WorkerApi.cancelOrder(orderId: id, role: 'driver');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text((result['message'] ?? 'Вы отказались от заказа.').toString()),
+          content: TaxiText((result['message'] ?? 'Вы отказались от заказа.').toString()),
         ));
       }
     } on WorkerApiException catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: TaxiText(e.message)));
     } catch (_) {
       if (mounted) _showLocationMessage('Не удалось отказаться от заказа из-за ошибки сети. Проверьте связь и обновите список.');
     } finally {
@@ -3943,7 +3778,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
 
   void _showLocationMessage(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: TaxiText(message)));
   }
 
   @override
@@ -4001,7 +3836,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
 
     _finalPriceController.clear();
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Поездка завершена! Зачислено: $earned сом')),
+      SnackBar(content: TaxiText('Поездка завершена! Зачислено: $earned сом')),
     );
   }
 
@@ -4056,7 +3891,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
       if (!_driverWantsOnline) _scheduleOfflineStateRetry();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Не удалось безопасно выйти. Аккаунт оставлен открытым: $e')),
+          SnackBar(content: TaxiText('Не удалось безопасно выйти. Аккаунт оставлен открытым: $e')),
         );
       }
     } finally {
@@ -4071,7 +3906,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
+        title: TaxiText(
           'Водитель: ${driver?.name ?? ""} (${driver?.fullCarInfo ?? ""})',
           maxLines: 1,
           softWrap: false,
@@ -4090,7 +3925,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
               icon: Icon(!_driverWantsOnline
                   ? Icons.toggle_off
                   : (_driverGpsReady ? Icons.toggle_on : Icons.gps_not_fixed)),
-              label: Text(_availabilityChanging
+              label: TaxiText(_availabilityChanging
                   ? 'Подождите…'
                   : (!_driverWantsOnline
                       ? 'Не на линии'
@@ -4181,8 +4016,8 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
                   ..._serverAssignedOrders.map((item) => Card(
                     child: ListTile(
                       leading: const Icon(Icons.flag, color: Colors.green),
-                      title: Text((item['destination_address'] ?? 'Пункт назначения не указан').toString()),
-                      subtitle: Text('Подача: ${item['pickup_address'] ?? 'На карте'}\nПассажиров: ${item['passenger_count'] ?? 1} · ${item['payment_method'] ?? ''}\n${_driverRouteLoading ? 'Строим маршрут…' : (_driverApproachRoute != null && _driverRouteOrderId == (item['id'] ?? item['firebase_order_id'] ?? '').toString() ? 'По дорогам: ${_driverApproachRoute!.distanceLabel} · примерно ${_driverApproachRoute!.etaLabel}' : (_driverRouteError ?? 'Маршрут пока не рассчитан'))}'),
+                      title: TaxiText((item['destination_address'] ?? 'Пункт назначения не указан').toString()),
+                      subtitle: TaxiText('Подача: ${item['pickup_address'] ?? 'На карте'}\nПассажиров: ${item['passenger_count'] ?? 1} · ${item['payment_method'] ?? ''}\n${_driverRouteLoading ? 'Строим маршрут…' : (_driverApproachRoute != null && _driverRouteOrderId == (item['id'] ?? item['firebase_order_id'] ?? '').toString() ? 'По дорогам: ${_driverApproachRoute!.distanceLabel} · примерно ${_driverApproachRoute!.etaLabel}' : (_driverRouteError ?? 'Маршрут пока не рассчитан'))}'),
                       trailing: (item['status'] ?? 'driver_assigned') == 'arrived'
                           ? Column(
                               mainAxisSize: MainAxisSize.min,
@@ -4222,11 +4057,11 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
                     return Card(
                       child: ListTile(
                         leading: const Icon(Icons.local_taxi, color: Colors.amber),
-                        title: Text(destination.toString()),
-                        subtitle: Text('Подача: $pickup\nПассажиров: ${item['passenger_count'] ?? 1} · ${item['payment_method'] ?? ''} · ${item['tariff_type'] ?? ''}'),
+                        title: TaxiText(destination.toString()),
+                        subtitle: TaxiText('Подача: $pickup\nПассажиров: ${item['passenger_count'] ?? 1} · ${item['payment_method'] ?? ''} · ${item['tariff_type'] ?? ''}'),
                         trailing: ElevatedButton(
                           onPressed: _respondingOrderIds.contains(id) ? null : () => _respondToServerOrder(item),
-                          child: Text(_respondingOrderIds.contains(id) ? 'ОЖИДАНИЕ' : 'ОТКЛИК'),
+                          child: TaxiText(_respondingOrderIds.contains(id) ? 'ОЖИДАНИЕ' : 'ОТКЛИК'),
                         ),
                       ),
                     );
@@ -4234,7 +4069,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
                 ] else if (_serverAssignedOrders.isEmpty)
                   const TaxiLocalizedText(russian: 'Новых заказов пока нет. Ожидаем...', kyrgyz: 'Азырынча жаңы буйрутма жок. Күтүп жатабыз...', style: TextStyle(color: Colors.grey)),
                 if (order != null && order.status == 'searching') ...[
-                  Text(
+                  TaxiText(
                       'Новый заказ (${order.isIntercity ? "Межгород" : "По городу"}): ${order.destination}',
                       style: const TextStyle(fontWeight: FontWeight.bold)),
                   const SizedBox(height: 10),
@@ -4247,7 +4082,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
                   ),
                 ],
                 if (order != null && order.status == 'accepted') ...[
-                  Text('Выполняется заказ: ${order.destination}',
+                  TaxiText('Выполняется заказ: ${order.destination}',
                       style: const TextStyle(fontWeight: FontWeight.bold)),
                   if (order.isIntercity) ...[
                     const SizedBox(height: 10),
@@ -4395,7 +4230,7 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Не удалось выйти из кабинета: $e')),
+          SnackBar(content: TaxiText('Не удалось выйти из кабинета: $e')),
         );
       }
     }
@@ -4465,7 +4300,7 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
       if (!mounted) return;
       if (!silent) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Не удалось обновить историю отмен: $error'),
+          content: TaxiText('Не удалось обновить историю отмен: $error'),
         ));
       }
     } finally {
@@ -4506,7 +4341,7 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Не удалось загрузить следующие отмены: $error'),
+          content: TaxiText('Не удалось загрузить следующие отмены: $error'),
         ));
       }
     } finally {
@@ -4549,7 +4384,7 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
     return Card(child: Padding(
       padding: const EdgeInsets.all(12),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('На линии с актуальным GPS: ${markers.length}', style: const TextStyle(fontWeight: FontWeight.bold)),
+        TaxiText('На линии с актуальным GPS: ${markers.length}', style: const TextStyle(fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
         SizedBox(height: 260, child: FlutterMap(
           options: MapOptions(initialCenter: center, initialZoom: fleetZoom),
@@ -4559,7 +4394,7 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
           ],
         )),
         const SizedBox(height: 6),
-        const Text('Показываются только одобренные водители на линии с GPS не старше 60 секунд.',
+        const TaxiText('Показываются только одобренные водители на линии с GPS не старше 60 секунд.',
           style: TextStyle(fontSize: 12, color: Colors.black54)),
       ]),
     ));
@@ -4675,13 +4510,13 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
           isExpanded: true,
           items: available.map((d) => DropdownMenuItem<String>(
             value: d['uid'].toString(),
-            child: Text('${d['name'] ?? 'Водитель'} · ${d['car_number'] ?? 'без номера'} · на линии'),
+            child: TaxiText('${d['name'] ?? 'Водитель'} · ${d['car_number'] ?? 'без номера'} · на линии'),
           )).toList(),
           onChanged: (v) => setDialog(() => selected = v),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const TaxiLocalizedText(russian: 'Отмена', kyrgyz: 'Жокко чыгаруу')),
-          ElevatedButton(onPressed: () => Navigator.pop(ctx, selected), child: const Text('Назначить')),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx, selected), child: const TaxiText('Назначить')),
         ],
       )),
     );
@@ -4765,7 +4600,7 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
       builder: (ctx) => AlertDialog(
         title: const TaxiLocalizedText(russian: 'Завершить поездку', kyrgyz: 'Жол жүрүүнү аяктоо'),
         content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Заказ №$id'),
+          TaxiText('Заказ №$id'),
           const SizedBox(height: 10),
           TextField(controller: fareController, autofocus: true, keyboardType: TextInputType.number,
             decoration: const InputDecoration(labelText: 'Стоимость поездки (сом)', border: OutlineInputBorder())),
@@ -4773,7 +4608,7 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
           const TaxiLocalizedText(russian: 'Подставлена цена из тарифа. При необходимости диспетчер может изменить сумму перед закрытием.', kyrgyz: 'Тарифтеги баа коюлду. Зарыл болсо, диспетчер жабуудан мурун сумманы өзгөртө алат.', style: TextStyle(fontSize: 12, color: Colors.black54)),
         ]),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Назад')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const TaxiText('Назад')),
           ElevatedButton(onPressed: () {
             final value = int.tryParse(fareController.text.trim());
             if (value == null || value < 1) return;
@@ -4814,12 +4649,12 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
     final path = _storageObjectPath(rawPath);
     if (path.isEmpty) { _notice('Файл документа не найден'); return; }
     await showDialog<void>(context: context, builder: (ctx) => AlertDialog(
-      title: Text(label),
+      title: TaxiText(label),
       content: SizedBox(width: 420, child: FutureBuilder<Uint8List?>(
         future: taxiFirebaseStorage.ref(path).getData(8 * 1024 * 1024),
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) return const SizedBox(height: 180, child: Center(child: CircularProgressIndicator()));
-          if (snapshot.hasError || snapshot.data == null) return const Text('Не удалось загрузить документ. Проверьте правила Firebase Storage и подключение.');
+          if (snapshot.hasError || snapshot.data == null) return const TaxiText('Не удалось загрузить документ. Проверьте правила Firebase Storage и подключение.');
           return InteractiveViewer(child: Image.memory(snapshot.data!, fit: BoxFit.contain));
         },
       )),
@@ -4832,7 +4667,7 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
     return TextButton.icon(
       onPressed: path.isEmpty ? null : () => _showDriverDocument(label, value),
       icon: const Icon(Icons.image_search, size: 16),
-      label: Text(path.isEmpty ? '$label · нет' : label),
+      label: TaxiText(path.isEmpty ? '$label · нет' : label),
     );
   }
 
@@ -4844,7 +4679,7 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
     final percent = await showDialog<int>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Процент водителя · ${driver['driver_name'] ?? 'Водитель'}'),
+        title: TaxiText('Процент водителя · ${driver['driver_name'] ?? 'Водитель'}'),
         content: TextField(
           controller: controller,
           keyboardType: TextInputType.number,
@@ -4887,8 +4722,8 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Закрыть смену водителя?'),
-        content: Text('Водитель: $name\\nЗаработок за день: $earned сом\nПроцент водителя: ${driver['commission_percent'] ?? 50}%\n\nПосле закрытия сумма и процент сохранятся в истории. Повторно закрыть эту смену будет нельзя.'),
+        title: const TaxiText('Закрыть смену водителя?'),
+        content: TaxiText('Водитель: $name\\nЗаработок за день: $earned сом\nПроцент водителя: ${driver['commission_percent'] ?? 50}%\n\nПосле закрытия сумма и процент сохранятся в истории. Повторно закрыть эту смену будет нельзя.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const TaxiLocalizedText(russian: 'Отмена', kyrgyz: 'Жокко чыгаруу')),
           ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const TaxiLocalizedText(russian: 'Закрыть смену', kyrgyz: 'Сменаны жабуу')),
@@ -4916,7 +4751,7 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
       rows.fold<int>(0, (sum, row) => sum + ((row[field] as num?)?.toInt() ?? 0));
 
   void _notice(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: TaxiText(message)));
   }
 
   int _sumToday() => _today.fold<int>(0, (sum, row) => sum + ((row['count'] as num?)?.toInt() ?? 0));
@@ -4952,7 +4787,7 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF6F2E9),
       appBar: AppBar(
-        title: const Text(
+        title: const TaxiText(
           'Диспетчер · ЖОЛ АМАН КЕНЧИ',
           maxLines: 1,
           softWrap: false,
@@ -4977,7 +4812,7 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
               mainAxisSize: MainAxisSize.min, children: [
                 const Icon(Icons.lock_outline, size: 48), const SizedBox(height: 12),
                 const TaxiLocalizedText(russian: 'Не удалось открыть диспетчерскую панель', kyrgyz: 'Диспетчер панелин ачуу мүмкүн болгон жок', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
-                const SizedBox(height: 8), Text(_error!, textAlign: TextAlign.center),
+                const SizedBox(height: 8), TaxiText(_error!, textAlign: TextAlign.center),
                 const SizedBox(height: 12), const TaxiLocalizedText(russian: 'Для доступа требуется вход в Firebase под учётной записью диспетчера. Старый локальный ПИН-код не заменяет серверную авторизацию.', kyrgyz: 'Кирүү үчүн диспетчердин Firebase аккаунту менен авторизациядан өтүү керек. Эски PIN-код сервердик авторизацияны алмаштырбайт.', textAlign: TextAlign.center),
                 const SizedBox(height: 12), ElevatedButton(onPressed: _load, child: const TaxiLocalizedText(russian: 'Повторить', kyrgyz: 'Кайталоо')),
               ])))
@@ -4997,9 +4832,9 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
                   padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     const TaxiLocalizedText(russian: 'Сводка за сегодня', kyrgyz: 'Бүгүнкү жыйынтык', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
                     const SizedBox(height: 8),
-                    Text('Всего заказов: ${_sumToday()}'),
-                    Text('Ожидают назначения: ${activeOrders.length}'),
-                    Text('Водителей в базе: ${_drivers.length}'),
+                    TaxiText('Всего заказов: ${_sumToday()}'),
+                    TaxiText('Ожидают назначения: ${activeOrders.length}'),
+                    TaxiText('Водителей в базе: ${_drivers.length}'),
                   ]))),
                 const WalkieTalkieWidget(senderName: 'Диспетчер', allowText: true),
                 _sectionTitle('Карта водителей на линии', Icons.map_outlined),
@@ -5007,8 +4842,8 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
                 _sectionTitle('Тарифы для клиентов', Icons.price_change),
                 Card(child: Padding(padding: const EdgeInsets.all(12), child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text('По городу: ${_cityFareSom > 0 ? '$_cityFareSom сом' : 'не установлено'}'),
-                    Text('Межгород: ${_intercityFareSom > 0 ? '$_intercityFareSom сом' : 'не установлено'}'),
+                    TaxiText('По городу: ${_cityFareSom > 0 ? '$_cityFareSom сом' : 'не установлено'}'),
+                    TaxiText('Межгород: ${_intercityFareSom > 0 ? '$_intercityFareSom сом' : 'не установлено'}'),
                     const SizedBox(height: 8),
                     Align(alignment: Alignment.centerRight, child: ElevatedButton.icon(
                       onPressed: _working ? null : _editTariffs,
@@ -5018,9 +4853,9 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
                 if (pending.isEmpty) const TaxiLocalizedText(russian: 'Нет новых заявок водителей.', kyrgyz: 'Жаңы айдоочу арыздары жок.'),
                 ...pending.map((d) => Card(child: Padding(
                   padding: const EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text((d['name'] ?? 'Водитель').toString(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                    Text('${d['phone'] ?? ''} · ${d['car_model'] ?? ''} · ${d['car_number'] ?? ''}'),
-                    Text('UID: ${d['uid'] ?? ''}', style: const TextStyle(fontSize: 11, color: Colors.black54)),
+                    TaxiText((d['name'] ?? 'Водитель').toString(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    TaxiText('${d['phone'] ?? ''} · ${d['car_model'] ?? ''} · ${d['car_number'] ?? ''}'),
+                    TaxiText('UID: ${d['uid'] ?? ''}', style: const TextStyle(fontSize: 11, color: Colors.black54)),
                     Wrap(spacing: 8, children: [
                       _documentLink('Удостоверение', d['license_url']),
                       _documentLink('Фото водителя', d['driver_photo_url']),
@@ -5045,8 +4880,8 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
                 if (rejected.isEmpty) const TaxiLocalizedText(russian: 'Отклонённых заявок нет.', kyrgyz: 'Четке кагылган арыздар жок.'),
                 ...rejected.map((d) => Card(child: Padding(
                   padding: const EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text((d['name'] ?? 'Водитель').toString(), style: const TextStyle(fontWeight: FontWeight.bold)),
-                    Text('Причина: ${d['rejection_reason'] ?? 'Не указана'}'),
+                    TaxiText((d['name'] ?? 'Водитель').toString(), style: const TextStyle(fontWeight: FontWeight.bold)),
+                    TaxiText('Причина: ${d['rejection_reason'] ?? 'Не указана'}'),
                     Wrap(spacing: 8, children: [
                       _documentLink('Удостоверение', d['license_url']),
                       _documentLink('Фото водителя', d['driver_photo_url']),
@@ -5069,8 +4904,8 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
                               : 'Не одобрен · документы не отправлены';
                   return Card(child: ListTile(
                     leading: Icon(Icons.local_taxi, color: online ? Colors.green : Colors.grey),
-                    title: Text((d['name'] ?? 'Водитель').toString()),
-                    subtitle: Text('${d['car_model'] ?? ''} · ${d['car_number'] ?? ''}\n$approvalLabel · ${online ? 'На линии' : 'Не на линии'}\nПроверка документов: $reviewStatus'),
+                    title: TaxiText((d['name'] ?? 'Водитель').toString()),
+                    subtitle: TaxiText('${d['car_model'] ?? ''} · ${d['car_number'] ?? ''}\n$approvalLabel · ${online ? 'На линии' : 'Не на линии'}\nПроверка документов: $reviewStatus'),
                     isThreeLine: true,
                     trailing: approved
                         ? IconButton(tooltip: 'Отключить допуск', onPressed: _working ? null : () => _approve(d, false), icon: const Icon(Icons.block, color: Colors.red))
@@ -5082,12 +4917,12 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
                 if (activeOrders.isEmpty) const TaxiLocalizedText(russian: 'Нет заказов, ожидающих назначения.', kyrgyz: 'Дайындоону күтүп жаткан буйрутмалар жок.'),
                 ...activeOrders.map((o) => Card(child: Padding(
                   padding: const EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text('Заказ №${o['id'] ?? ''}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                    TaxiText('Заказ №${o['id'] ?? ''}', style: const TextStyle(fontWeight: FontWeight.bold)),
                     const SizedBox(height: 6),
-                    Text('Откуда: ${o['pickup_address'] ?? 'Точка на карте'}'),
-                    Text('Куда: ${o['destination_address'] ?? 'Не указано'}'),
-                    Text('Пассажиров: ${o['passenger_count'] ?? 1} · Оплата: ${o['payment_method'] ?? '—'}'),
-                    Text('Тариф: ${o['tariff_type'] ?? '—'}'),
+                    TaxiText('Откуда: ${o['pickup_address'] ?? 'Точка на карте'}'),
+                    TaxiText('Куда: ${o['destination_address'] ?? 'Не указано'}'),
+                    TaxiText('Пассажиров: ${o['passenger_count'] ?? 1} · Оплата: ${o['payment_method'] ?? '—'}'),
+                    TaxiText('Тариф: ${o['tariff_type'] ?? '—'}'),
                     Align(alignment: Alignment.centerRight, child: ElevatedButton.icon(
                       onPressed: _working ? null : () => _assign(o), icon: const Icon(Icons.person_add_alt_1), label: const TaxiLocalizedText(russian: 'Назначить водителя', kyrgyz: 'Айдоочуну дайындоо'))),
                   ])))),
@@ -5095,13 +4930,13 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
                 ..._orders.where((o) => o['status'] == 'arrived').map((o) => Card(
                   child: Padding(padding: const EdgeInsets.all(12), child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text('Заказ №${o['id'] ?? ''}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                      Text('Водитель: ${o['driver_name'] ?? 'не указан'} · ${o['driver_car_number'] ?? ''}'),
-                      Text('Маршрут: ${o['pickup_address'] ?? '—'} → ${o['destination_address'] ?? '—'}'),
+                      TaxiText('Заказ №${o['id'] ?? ''}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                      TaxiText('Водитель: ${o['driver_name'] ?? 'не указан'} · ${o['driver_car_number'] ?? ''}'),
+                      TaxiText('Маршрут: ${o['pickup_address'] ?? '—'} → ${o['destination_address'] ?? '—'}'),
                       Align(alignment: Alignment.centerRight, child: ElevatedButton.icon(
                         onPressed: _working ? null : () => _completeTrip(o),
                         icon: const Icon(Icons.check_circle),
-                        label: const Text(
+                        label: const TaxiText(
                           'ЗАВЕРШИТЬ И ЗАПИСАТЬ ОПЛАТУ',
                           maxLines: 2,
                           softWrap: true,
@@ -5146,10 +4981,10 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
                       : DateTime.fromMillisecondsSinceEpoch(cancelledAt * 1000).toLocal().toString();
                   return Card(child: Padding(padding: const EdgeInsets.all(12), child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text('Заказ №' + (o['order_id'] ?? '').toString(), style: const TextStyle(fontWeight: FontWeight.bold)),
-                      Text('Водитель: ' + (o['driver_name'] ?? 'не указан').toString() + ' · ' + (o['driver_car_number'] ?? '').toString()),
-                      Text('Причина: ' + reason),
-                      Text('Отменён: ' + cancelledTime),
+                      TaxiText('Заказ №' + (o['order_id'] ?? '').toString(), style: const TextStyle(fontWeight: FontWeight.bold)),
+                      TaxiText('Водитель: ' + (o['driver_name'] ?? 'не указан').toString() + ' · ' + (o['driver_car_number'] ?? '').toString()),
+                      TaxiText('Причина: ' + reason),
+                      TaxiText('Отменён: ' + cancelledTime),
                       TaxiLocalizedText(russian: 'Маршрут: ', kyrgyz: 'Маршрут: ' + (o['pickup_address'] ?? '—').toString() + ' → ' + (o['destination_address'] ?? '—').toString()),
                       const TaxiLocalizedText(russian: 'Поездка не засчитана · начисление: 0 сом', kyrgyz: 'Жол жүрүү эсептелген жок · чегерүү: 0 сом'),
                     ])));
@@ -5162,12 +4997,12 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
                 _sectionTitle('Финансовый итог за сегодня · $_businessDate', Icons.account_balance_wallet_outlined),
                 Card(child: Padding(padding: const EdgeInsets.all(14), child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text('Общий заработок: $todayGross сом', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+                    TaxiText('Общий заработок: $todayGross сом', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
                     const SizedBox(height: 5),
-                    Text('Водителям: $todayDriverShare сом'),
-                    Text('Таксопарку: $todayParkShare сом'),
+                    TaxiText('Водителям: $todayDriverShare сом'),
+                    TaxiText('Таксопарку: $todayParkShare сом'),
                     const SizedBox(height: 5),
-                    const Text('Итог включает ещё не закрытые поездки и уже закрытые смены за местный день Кыргызстана (UTC+6).', style: TextStyle(fontSize: 11, color: Colors.black54)),
+                    const TaxiText('Итог включает ещё не закрытые поездки и уже закрытые смены за местный день Кыргызстана (UTC+6).', style: TextStyle(fontSize: 11, color: Colors.black54)),
                   ],
                 ))),
                 _sectionTitle('Заработок водителей за сегодня', Icons.account_balance_wallet_outlined),
@@ -5180,11 +5015,11 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
                   final parkShare = (row['park_share_som'] as num?)?.toInt() ?? 0;
                   return Card(child: Padding(padding: const EdgeInsets.all(12), child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text((row['driver_name'] ?? 'Водитель').toString(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                      Text('Авто: ${row['car_number'] ?? '—'} · Поездок: $trips'),
-                      Text('Общий заработок: $earned сом'),
-                      Text('Доля водителя: $percent% · $driverShare сом'),
-                      Text('Доля таксопарка: ${100 - percent}% · $parkShare сом'),
+                      TaxiText((row['driver_name'] ?? 'Водитель').toString(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      TaxiText('Авто: ${row['car_number'] ?? '—'} · Поездок: $trips'),
+                      TaxiText('Общий заработок: $earned сом'),
+                      TaxiText('Доля водителя: $percent% · $driverShare сом'),
+                      TaxiText('Доля таксопарка: ${100 - percent}% · $parkShare сом'),
                       const SizedBox(height: 8),
                       Wrap(spacing: 8, runSpacing: 8, children: [
                         OutlinedButton.icon(
@@ -5201,11 +5036,11 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
                 if (_closedShifts.isEmpty) const TaxiLocalizedText(russian: 'Закрытых смен пока нет.', kyrgyz: 'Азырынча жабылган сменалар жок.'),
                 ..._closedShifts.take(15).map((row) => Card(child: ListTile(
                   leading: const Icon(Icons.verified, color: Colors.green),
-                  title: Text((row['driver_name'] ?? 'Водитель').toString()),
-                  subtitle: Text('Дата: ${row['shift_date']} · Поездок: ${row['trip_count']} · Процент водителя: ${row['driver_percent']}%'),
+                  title: TaxiText((row['driver_name'] ?? 'Водитель').toString()),
+                  subtitle: TaxiText('Дата: ${row['shift_date']} · Поездок: ${row['trip_count']} · Процент водителя: ${row['driver_percent']}%'),
                   trailing: SizedBox(
                     width: 116,
-                    child: Text(
+                    child: TaxiText(
                       '${row['gross_earnings_som']} сом\nВодителю: ${row['driver_share_som']} сом',
                       maxLines: 2,
                       softWrap: true,
@@ -5215,9 +5050,9 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
                   ),
                 ))),
                 _sectionTitle('Статусы заказов за сегодня', Icons.analytics_outlined),
-                ..._today.map((row) => ListTile(dense: true, title: Text((row['status'] ?? '—').toString()), trailing: Text('${row['count'] ?? 0}'))),
+                ..._today.map((row) => ListTile(dense: true, title: TaxiText((row['status'] ?? '—').toString()), trailing: TaxiText('${row['count'] ?? 0}'))),
                 const SizedBox(height: 20),
-                const Text('Сумма поездки записывается при её завершении. При закрытии смены процент фиксируется в истории: указанная доля принадлежит водителю, остаток — таксопарку.', style: TextStyle(color: Colors.black54)),
+                const TaxiText('Сумма поездки записывается при её завершении. При закрытии смены процент фиксируется в истории: указанная доля принадлежит водителю, остаток — таксопарку.', style: TextStyle(color: Colors.black54)),
               ],
             )),
       floatingActionButton: _working ? const FloatingActionButton(onPressed: null, child: CircularProgressIndicator()) : null,

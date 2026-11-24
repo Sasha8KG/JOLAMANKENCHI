@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import 'services/firebase_service.dart';
 import 'services/worker_api.dart';
 import 'services/driver_document_store.dart';
+import 'services/taxi_localization.dart';
 
 /// Отдельный экран регистрации водителя. Не использует вложенный StatefulBuilder
 /// и диалог с Form GlobalKey, чтобы форма не уничтожалась во время загрузки фото.
@@ -68,7 +69,7 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
     final messenger = ScaffoldMessenger.of(context);
     messenger.hideCurrentSnackBar();
     messenger.showSnackBar(
-      SnackBar(content: Text(value), duration: const Duration(seconds: 5)),
+      SnackBar(content: TaxiText(value), duration: const Duration(seconds: 5)),
     );
   }
 
@@ -300,8 +301,8 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
           file == null ? Icons.add_a_photo_outlined : Icons.check_circle,
           color: file == null ? Colors.grey : Colors.green,
         ),
-        title: Text(title),
-        subtitle: Text(
+        title: TaxiText(title),
+        subtitle: TaxiText(
           file == null ? 'Фотография не выбрана' : file.name,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
@@ -310,7 +311,7 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
           message: file == null ? 'Выбрать фотографию' : 'Заменить фотографию',
           child: TextButton(
             onPressed: _busy ? null : () => _pick(kind),
-            child: Text(file == null ? 'Выбрать' : 'Заменить'),
+            child: TaxiText(file == null ? 'Выбрать' : 'Заменить'),
           ),
         ),
       ),
@@ -321,8 +322,9 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Заявка водителя'),
+        title: const TaxiText('Заявка водителя'),
         backgroundColor: Colors.amber,
+        actions: const [Padding(padding: EdgeInsets.only(right: 12), child: TaxiLanguageSwitcher())],
       ),
       body: Center(
         child: SafeArea(
@@ -337,7 +339,7 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
               ),
               children: [
                 const Icon(Icons.local_taxi, size: 58, color: Colors.amber),
-                const Text(
+                const TaxiText(
                   'Регистрация водителя «ЖОЛ АМАН КЕНЧИ»',
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold),
@@ -433,13 +435,13 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
                   },
                 ),
                 const SizedBox(height: 18),
-                const Text('Фотографии для проверки диспетчером',
+                const TaxiText('Фотографии для проверки диспетчером',
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                 _photoTile('Водительское удостоверение', _license, 'license'),
                 _photoTile('Фото водителя', _driverPhoto, 'driver'),
                 _photoTile('Фото автомобиля', _carPhoto, 'car'),
                 const SizedBox(height: 8),
-                const Text(
+                const TaxiText(
                   'После отправки анкеты диспетчер проверит документы. До одобрения заявки вход в рабочий кабинет и приём заказов будут недоступны.',
                   style: TextStyle(color: Colors.black54, fontSize: 12),
                 ),
@@ -453,14 +455,14 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
                   const SizedBox(height: 8),
                   Semantics(
                     liveRegion: true,
-                    child: Text(_stage ?? 'Подождите…', textAlign: TextAlign.center),
+                    child: TaxiText(_stage ?? 'Подождите…', textAlign: TextAlign.center),
                   ),
                   const SizedBox(height: 12),
                 ],
                 ElevatedButton.icon(
                   onPressed: _busy ? null : _submit,
                   icon: Icon(_busy ? Icons.hourglass_top : Icons.send),
-                  label: Text(_busy ? 'ОТПРАВКА…' : 'ОТПРАВИТЬ АНКЕТУ'),
+                  label: TaxiText(_busy ? 'ОТПРАВКА…' : 'ОТПРАВИТЬ АНКЕТУ'),
                 ),
               ],
             ),
