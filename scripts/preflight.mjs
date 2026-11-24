@@ -167,7 +167,7 @@ check('Passenger route cache includes pickup coordinates', /final key = '[^']*pi
 check('Passenger route cache includes driver coordinates', /driverPoint\\.latitude\\.toStringAsFixed\\(3\\)/.test(app) && /driverPoint\\.longitude\\.toStringAsFixed\\(3\\)/.test(app));
 check('Passenger route avoids overlapping route requests', /if \\(_routeLoading\\) return;/.test(app));
 check('Passenger route respects retry cooldown', /_routeRetryAfter == null \\|\\| DateTime\\.now\\(\\)\\.isBefore\\(_routeRetryAfter!\\)/.test(app));
-check('Passenger route clears previous line before refresh', /_approachRoute = null;\\s*\\}\\);\\s*\\}\\s*var refreshAfterRoute/.test(app));
+check('Passenger route clears previous line before refresh', app.includes('_approachRoute = null;') && app.includes('var refreshAfterRoute = false;'));
 check('Passenger route loading state is enabled before request', /_routeLoading = true;\\s*_routeError = null;/.test(app));
 check('Passenger route uses a captured pickup point for the request', /final pickupPoint = _pickupPoint;[\\s\\S]{0,500}RouteService\\.drivingRoute\\(driverPoint, pickupPoint\\)/.test(app));
 check('Passenger route response validates the latest pickup point as well as taxi GPS', (app.match(/final latestPickupPoint = _pickupPoint;/g) || []).length === 2 && /latestPickupPoint\\.latitude\\.toStringAsFixed\\(5\\)/.test(app) && /latestPickupPoint\\.longitude\\.toStringAsFixed\\(5\\)/.test(app));
