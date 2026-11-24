@@ -140,7 +140,7 @@ check('Route response rejects a stale driver GPS position', /if \(latestRouteKey
 check('Driver order polling requires both server order arrays', orderSnapshot.includes('if (rawOpen is! List || rawAssigned is! List)'));
 check('Driver order polling preserves previous data when the response is malformed', app.includes('final snapshot = ServerOrderSnapshot.parse(data);') && app.includes('catch (_) {') && app.includes('// Временная ошибка сети: следующий опрос повторит запрос.'));
 check('Driver order IDs are restricted to safe 1-128 character identifiers', app.includes("RegExp(r'^[A-Za-z0-9_-]{1,128}$')"));
-check('Driver order polling rejects duplicate or malformed order rows', orderSnapshot.includes("RegExp(r'^[A-Za-z0-9_-]{1,128}
+check('Driver order polling rejects duplicate or malformed order rows', orderSnapshot.includes('A-Za-z0-9_-') && orderSnapshot.includes('!seen.add(id)') && orderSnapshotTests.includes('rejects malformed and overlong order ids') && orderSnapshotTests.includes('rejects duplicate free order ids'));
 check('Driver order polling enforces at most one active trip', orderSnapshot.includes('rawAssigned.length > 1') && orderSnapshotTests.includes('rejects more than one assigned order'));
 check('Driver open-order feed contains only new orders', orderSnapshot.includes("expectedStatus: 'new'") && orderSnapshotTests.includes('rejects an invalid free-order status'));
 check('Driver assigned-order feed contains only active statuses', orderSnapshot.includes("allowedStatuses: const {'driver_assigned', 'arrived'}") && orderSnapshotTests.includes('rejects an invalid assigned-order status'));
