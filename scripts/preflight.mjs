@@ -645,6 +645,9 @@ const clientMapSource = clientMapStart >= 0 && clientMapEnd > clientMapStart
   ? app.slice(clientMapStart, clientMapEnd) : '';
 check('Client map requests the phone GPS automatically on entry', clientMapSource.includes('_locateClient(showMessage: false)'));
 check('Client location checks GPS service and requests runtime permission', clientMapSource.includes('Geolocator.isLocationServiceEnabled()') && clientMapSource.includes('Geolocator.requestPermission()'));
+check('Client GPS handles permanently denied permission without leaving the loading state', clientMapSource.includes('permission == LocationPermission.deniedForever') && clientMapSource.includes('setState(() => _clientLocationLoading = false)'));
+check('Client GPS offers a direct route to Android app settings after permanent denial', clientMapSource.includes('_showClientLocationSettingsDialog()') && clientMapSource.includes('Geolocator.openAppSettings()'));
+check('Client GPS settings dialog explains how to restore location access', clientMapSource.includes('Доступ к геолокации запрещён') && clientMapSource.includes('Открыть настройки'));
 check('Client GPS request has high accuracy and a bounded timeout', clientMapSource.includes('desiredAccuracy: LocationAccuracy.high') && clientMapSource.includes('timeLimit: const Duration(seconds: 15)'));
 check('Client GPS coordinates update the passenger pickup marker', clientMapSource.includes('_clientCurrentLocation = point') && clientMapSource.includes('_pickupPoint = point'));
 check('Client map centers after map readiness and GPS acquisition', clientMapSource.includes('onMapReady:') && clientMapSource.includes('_clientMapController.move(point, 16.0)'));
