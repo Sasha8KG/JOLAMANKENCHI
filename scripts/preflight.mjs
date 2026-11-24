@@ -629,20 +629,26 @@ check('Client login password field is localized', app.includes("Сырсөз (к
 check('Client registration name field is localized', app.includes("Атыңыз"));
 check('Widget test covers client login language switching', read('testapp/test/widget_test.dart').includes('Localized login screens'));
 
+// These regression checks must inspect the actual source and run before the
+// summary; literal true values would silently allow a broken UI through CI.
+const driverStart = app.indexOf('class DriverMapScreen');
+const dispatcherStart = app.indexOf('class DispatcherScreen');
+const driverUi = driverStart >= 0 ? app.slice(driverStart, dispatcherStart > driverStart ? dispatcherStart : undefined) : '';
+const dispatcherUi = dispatcherStart >= 0 ? app.slice(dispatcherStart) : '';
+check("Driver cabinet uses branded dark header", /backgroundColor: const Color\(0xFF171717\)/.test(driverUi) && /foregroundColor: const Color\(0xFFFFD400\)/.test(driverUi));
+check("Driver cabinet exposes language switcher", driverUi.includes('TaxiLanguageSwitcher()'));
+check("Driver approach route is high-contrast gold", /PolylineLayer\(polylines: \[Polyline\(points: _driverApproachRoute!\.points, color: const Color\(0xFFFFD400\)/.test(driverUi));
+check("Driver marker has black and gold frame", /color: const Color\(0xFF171717\), shape: BoxShape\.circle, border: Border\.all\(color: const Color\(0xFFFFD400\)/.test(driverUi));
+check("Open pickup marker uses branded gold pin", /color: const Color\(0xFFFFD400\), shape: BoxShape\.circle, border: Border\.all\(color: const Color\(0xFF171717\)/.test(driverUi));
+check("Assigned pickup marker uses contrasting gold flag", /Icons\.flag, color: const Color\(0xFF171717\)/.test(driverUi));
+check("Driver order panel uses dark branded surface", /decoration: BoxDecoration\(color: const Color\(0xFF171717\), border: Border\(top: BorderSide\(color: const Color\(0xFFFFD400\)/.test(driverUi));
+check("Driver panel title uses gold", driverUi.includes("Text('Заказы водителя'") && driverUi.includes('color: const Color(0xFFFFD400)'));
+check("Assigned order heading uses gold", driverUi.includes("Text('Назначенный заказ'") && driverUi.includes('color: const Color(0xFFFFD400)'));
+check("Dispatcher header uses dark gold styling", /backgroundColor: const Color\(0xFF171717\)/.test(dispatcherUi) && /foregroundColor: const Color\(0xFFFFD400\)/.test(dispatcherUi));
+
 for (const item of checks) {
   process.stdout.write(`${item.ok ? 'PASS' : 'FAIL'}  ${item.label}\n`);
 }
 const failed = checks.filter((item) => !item.ok);
 process.stdout.write(`\nPreflight: ${checks.length - failed.length}/${checks.length} checks passed.\n`);
 if (failed.length) process.exitCode = 1;
-
-check("Driver cabinet uses branded dark header", true);
-check("Driver cabinet exposes language switcher", true);
-check("Driver approach route is high-contrast gold", true);
-check("Driver marker has black and gold frame", true);
-check("Open pickup marker uses branded gold pin", true);
-check("Assigned pickup marker uses contrasting gold flag", true);
-check("Driver order panel uses dark branded surface", true);
-check("Driver panel title uses gold", true);
-check("Assigned order heading uses gold", true);
-check("Dispatcher header uses dark gold styling", true);
