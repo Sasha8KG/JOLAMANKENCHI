@@ -15,6 +15,7 @@ import 'services/worker_api.dart';
 import 'services/route_service.dart';
 import 'services/route_cache_policy.dart';
 import 'services/gps_freshness.dart';
+import 'services/gps_fix_policy.dart';
 import 'services/nearby_driver_filter.dart';
 import 'services/refresh_gate.dart';
 
@@ -1568,12 +1569,15 @@ class _ClientMapScreenState extends State<ClientMapScreen> with WidgetsBindingOb
         desiredAccuracy: LocationAccuracy.high,
         timeLimit: const Duration(seconds: 15),
       );
-      final point = LatLng(position.latitude, position.longitude);
-      if (!point.latitude.isFinite || !point.longitude.isFinite ||
-          point.latitude < -90 || point.latitude > 90 ||
-          point.longitude < -180 || point.longitude > 180) {
-        throw Exception('Телефон вернул некорректные GPS-координаты.');
+      if (!isUsableGpsFix(
+        latitude: position.latitude,
+        longitude: position.longitude,
+        accuracyMeters: position.accuracy,
+        timestamp: position.timestamp,
+      )) {
+        throw Exception('GPS вернул устаревшие или недостаточно точные координаты. Попробуйте ещё раз или отметьте точку на карте.');
       }
+      final point = LatLng(position.latitude, position.longitude);
       if (!mounted) return;
       final keepManualPickup = _clientPickupManuallySelected;
       setState(() {
@@ -3232,14 +3236,12 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
   }
 
   bool _isUsableDriverPosition(Position position) {
-    final latitude = position.latitude;
-    final longitude = position.longitude;
-    final accuracy = position.accuracy;
-    return latitude.isFinite && longitude.isFinite &&
-        latitude >= -90 && latitude <= 90 &&
-        longitude >= -180 && longitude <= 180 &&
-        accuracy.isFinite && accuracy >= 0 && accuracy <= 1000 &&
-        isGpsTimestampFresh(position.timestamp);
+    return isUsableGpsFix(
+      latitude: position.latitude,
+      longitude: position.longitude,
+      accuracyMeters: position.accuracy,
+      timestamp: position.timestamp,
+    );
   }
 
   Future<bool> _publishDriverLocation(DriverModel driver) async {

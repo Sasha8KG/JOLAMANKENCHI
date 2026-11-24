@@ -26,6 +26,8 @@ const firebase = JSON.parse(read('testapp/android/app/google-services.json'));
 const worker = read('backend/cloudflare-worker/worker.js');
 const api = read('testapp/lib/services/worker_api.dart');
 const gps = read('testapp/lib/services/gps_freshness.dart');
+const gpsPolicy = read('testapp/lib/services/gps_fix_policy.dart');
+const gpsPolicyTests = read('testapp/test/gps_fix_policy_test.dart');
 const refreshGate = read('testapp/lib/services/refresh_gate.dart');
 const app = read('testapp/lib/main.dart');
 const registration = read('testapp/lib/driver_registration_screen.dart');
@@ -381,7 +383,12 @@ check('Flutter online API requires both GPS coordinates when online', api.includ
 check('Flutter online API rejects non-finite and out-of-range GPS', api.includes('!latitude.isFinite') && api.includes('!longitude.isFinite') && api.includes('latitude < -90') && api.includes('longitude > 180'));
 check('Driver GPS stream failure marks the driver offline', app.includes('Stop advertising an old position as live while GPS is unavailable.') && app.includes('WorkerApi.setDriverOnline(online: false)'));
 check('Driver heartbeat failure marks the driver offline', app.includes('Do not keep the driver advertised as online when fresh GPS cannot be confirmed.') && app.includes('WorkerApi.setDriverOnline(online: false)'));
-check('Leaving the live driver screen marks the driver offline', /void dispose\(\) \{[\s\S]{0,300}WorkerApi\.setDriverOnline\(online: false\)/.test(app));
+const driverScreenStart = app.indexOf('class _DriverMapScreenState');
+const driverDisposeStart = app.indexOf('void dispose()', driverScreenStart);
+const driverDisposeEnd = app.indexOf('\\n  void _acceptOrder', driverDisposeStart);
+const driverDisposeBlock = driverDisposeStart >= 0 && driverDisposeEnd > driverDisposeStart
+  ? app.slice(driverDisposeStart, driverDisposeEnd) : '';
+check('Leaving the live driver screen marks the driver offline', driverDisposeBlock.includes('WorkerApi.setDriverOnline(online: false)'));
 check('Driver order polling runs every five seconds', app.includes('Timer.periodic(const Duration(seconds: 5), (_) {') && app.includes('_pollServerOrders();'));
 check('Open-order endpoint requires an approved online driver', worker.includes('url.pathname === "/orders/open"') && worker.includes('requireApprovedDriver(request, env, true)'));
 check('Open-order query returns only unassigned new orders', worker.includes("FROM orders o WHERE status='new'"));
@@ -668,6 +675,11 @@ check('GPS numeric timestamps enforce the DateTime millisecond range', gps.inclu
 check('GPS parser accepts numeric-string Unix seconds', gps.includes("RegExp(r'^[+-]?") && gps.includes('double.tryParse(text)'));
 check('GPS parser caps timestamp text length before parsing', gps.includes('text.length > 64'));
 check('GPS parser retains ISO timestamp compatibility', gps.includes('DateTime.tryParse(text)'));
+check('Shared GPS fix policy validates coordinate bounds, accuracy and timestamp freshness', gpsPolicy.includes('latitude < -90') && gpsPolicy.includes('longitude > 180') && gpsPolicy.includes('accuracyMeters > maxAccuracyMeters') && gpsPolicy.includes('isGpsTimestampFresh(timestamp, now: now, maxAge: maxAge)'));
+check('Passenger GPS rejects stale and imprecise fixes before moving the pickup marker', app.includes('GPS вернул устаревшие или недостаточно точные координаты') && app.includes('accuracyMeters: position.accuracy') && app.includes('timestamp: position.timestamp'));
+check('Driver initial, streaming and heartbeat fixes share the same GPS acceptance policy', app.includes('bool _isUsableDriverPosition(Position position)') && app.includes('return isUsableGpsFix('));
+check('GPS policy tests cover coordinate bounds, invalid accuracy, missing time, stale and future fixes', gpsPolicyTests.includes('rejects non-finite and out-of-range coordinates') && gpsPolicyTests.includes('rejects missing, negative, non-finite or excessive accuracy') && gpsPolicyTests.includes('rejects a cached fix older than sixty seconds') && gpsPolicyTests.includes('rejects a GPS timestamp in the future'));
+check('GPS policy tests cover exact boundaries and stricter custom limits', gpsPolicyTests.includes('accepts exact coordinate and accuracy boundaries') && gpsPolicyTests.includes('honors a stricter caller-supplied accuracy limit'));
 check('GPS freshness compares full Duration precision, not truncated seconds', gps.includes('!age.isNegative && age <= maxAge') && !gps.includes('ageSeconds >= 0'));
 check('GPS freshness rejects negative age limits', gps.includes('maxAge.isNegative'));
 check('GPS tests cover fractional and string Unix timestamps', read('testapp/test/widget_test.dart').includes('preserves fractional Unix seconds') && read('testapp/test/widget_test.dart').includes('serialized as numeric strings'));
