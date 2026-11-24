@@ -111,6 +111,13 @@ check('An unchanged successful route is not requested again', /_driverRouteKey =
 check('Route retries respect the retry cooldown', /_driverRouteRetryAfter != null &&\s*DateTime\.now\(\)\.isBefore\(_driverRouteRetryAfter!\)/.test(app));
 check('A previous route is cleared when a new route is requested', /_driverApproachRoute = null;\s*_driverRouteOrderId = id;\s*_driverRouteError = null;/.test(app));
 check('Route loading state is published through setState', /setState\(\(\) \{\s*_driverRouteLoading = true;/.test(app));
+check('Driver route requires a fresh local GPS timestamp',
+  app.includes('if (!isGpsTimestampFresh(driver.locationUpdatedAt))') &&
+  app.includes('Ожидаем свежие координаты GPS'));
+check('Driver GPS timestamp is updated from the initial fix, stream and heartbeat',
+  app.includes('driver.locationUpdatedAt = firstPosition.timestamp;') &&
+  app.includes('driver.locationUpdatedAt = position.timestamp;') &&
+  app.includes('_driverRouteRetryAfter = null;'));
 check('Route response verifies the current driver identity', /TaxiParkState\.currentLoggedInDriver\?\.id != driver\.id/.test(app));
 check('Route response verifies the assigned order is unchanged', /final latestAssignedId = _serverAssignedOrders\.isEmpty[\s\S]{0,120}if \(latestAssignedId != id\) \{\s*refreshAfterRoute = latestAssignedId\.isNotEmpty;\s*return;/.test(app));
 check('Route response rejects a stale driver GPS position', /if \(latestRouteKey != routeKey\) \{\s*refreshAfterRoute = latestRouteKey != null;\s*return;/.test(app));
@@ -168,8 +175,8 @@ check('Passenger route requires an active taxi order', passengerRouteBlock.inclu
 check('Passenger route requires an assigned driver', passengerRouteBlock.includes('driverId == null'));
 check('Passenger route requires a valid order identifier', passengerRouteBlock.includes('orderId.isEmpty'));
 check('Passenger route requires the driver to be online', passengerRouteBlock.includes('!driver.isOnline'));
-check('Passenger route requires a known GPS timestamp', passengerRouteBlock.includes('gpsAge == null'));
-check('Passenger route rejects stale GPS older than 60 seconds', passengerRouteBlock.includes('gpsAge > 60'));
+check('Passenger route requires a fresh GPS timestamp without whole-second rounding',
+  passengerRouteBlock.includes('!isGpsTimestampFresh(driver.locationUpdatedAt)'));
 check('Passenger route cache includes order and driver identity', passengerRouteBlock.includes("final key = '$orderId:$driverId:"));
 check('Passenger route cache includes pickup coordinates', passengerRouteBlock.includes('pickupPoint.latitude.toStringAsFixed(5)') && passengerRouteBlock.includes('pickupPoint.longitude.toStringAsFixed(5)'));
 check('Passenger route cache includes driver coordinates', passengerRouteBlock.includes('driverPoint.latitude.toStringAsFixed(3)') && passengerRouteBlock.includes('driverPoint.longitude.toStringAsFixed(3)'));
@@ -216,6 +223,9 @@ const nearbyRefreshEnd = app.indexOf('int _parseFare', nearbyRefreshStart);
 const nearbyRefreshBlock = nearbyRefreshStart >= 0 && nearbyRefreshEnd > nearbyRefreshStart
   ? app.slice(nearbyRefreshStart, nearbyRefreshEnd)
   : '';
+check('Nearby refresh hides cars until pickup is confirmed',
+  nearbyRefreshBlock.includes('if (!_pickupPointConfirmed)') &&
+  nearbyRefreshBlock.includes('_nearbyDriverPoints.clear()'));
 check('Nearby refresh gate prevents overlapping network requests',
   nearbyRefreshBlock.includes('!_nearbyDriversRefreshGate.begin()'));
 check('Nearby refresh always releases its gate in finally',
@@ -242,6 +252,9 @@ check('Refresh gate unit tests cover overlapping and idle requests',
     .every((label) => read('testapp/test/widget_test.dart').includes(label)));
 check("Passenger validates latitude and longitude bounds", /lat < -90 \|\| lat > 90 \|\| lng < -180 \|\| lng > 180/.test(app));
 check("Passenger rejects stale GPS responses", /!isGpsTimestampFresh\(updatedAt\)/.test(app));
+check("Passenger only shows nearby cars after pickup confirmation",
+  app.includes('if (!_pickupPointConfirmed)') &&
+  app.includes('_nearbyDriverPoints.clear()'));
 check("Passenger keeps previous markers only until GPS expires", /_nearbyDriverPoints\.removeWhere\([\s\S]{0,100}!isGpsTimestampFresh\(entry\.value\)/.test(app));
 check('Nearby refresh gate is released after completion', /_nearbyDriversRefreshGate\.finish\(\)/.test(app) && /final refreshAgain = _nearbyDriversRefreshGate\.finish\(\);/.test(app));
 const nearbyMarkerStart = app.indexOf('_nearbyDriverPoints.map((entry) => Marker(');

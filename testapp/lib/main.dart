@@ -1606,7 +1606,16 @@ class _ClientMapScreenState extends State<ClientMapScreen> with WidgetsBindingOb
   }
 
   Future<void> _refreshNearbyDrivers() async {
-    if (!mounted || !_nearbyDriversRefreshGate.begin()) return;
+    if (!mounted) return;
+    // Do not show cars around the regional fallback center before the
+    // passenger confirms a real GPS or manually selected pickup point.
+    if (!_pickupPointConfirmed) {
+      if (_nearbyDriverPoints.isNotEmpty) {
+        setState(() => _nearbyDriverPoints.clear());
+      }
+      return;
+    }
+    if (!_nearbyDriversRefreshGate.begin()) return;
     try {
       final data = await WorkerApi.nearbyDrivers();
       final rawDrivers = data['drivers'];
@@ -1802,10 +1811,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> with WidgetsBindingOb
         orderId.isEmpty ||
         order.status != 'accepted') return;
     final driver = order.assignedDriver!;
-    final gpsAge = driver.locationUpdatedAt == null
-        ? null
-        : DateTime.now().difference(driver.locationUpdatedAt!).inSeconds;
-    if (!driver.isOnline || gpsAge == null || gpsAge < 0 || gpsAge > 60) return;
+    if (!driver.isOnline || !isGpsTimestampFresh(driver.locationUpdatedAt)) return;
     // Include both endpoints: a pickup-point change during an in-flight
     // request must invalidate the old route just like a taxi GPS movement.
     final pickupPoint = _pickupPoint;
@@ -1932,7 +1938,6 @@ class _ClientMapScreenState extends State<ClientMapScreen> with WidgetsBindingOb
             final lng = _readValidCoordinate(raw['longitude'], min: -180, max: 180);
             if (uid.isNotEmpty && lat != null && lng != null) {
               final locationUpdatedAt = parseGpsTimestamp(raw['location_updated_at']);
-              final gpsAge = calculateGpsAgeSeconds(locationUpdatedAt);
               order.assignedDriver = DriverModel(
               id: uid,
               name: (raw['name'] ?? 'Водитель').toString(),
@@ -1945,7 +1950,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> with WidgetsBindingOb
               locationUpdatedAt: locationUpdatedAt,
               isApproved: true,
               isOnline: (raw['online'] == true || raw['online'] == 1 || raw['online']?.toString().trim().toLowerCase() == 'true' || raw['online']?.toString().trim() == '1') &&
-                  gpsAge != null && gpsAge >= 0 && gpsAge <= 60,
+                  isGpsTimestampFresh(locationUpdatedAt),
               );
             }
           }
@@ -3142,6 +3147,18 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
       return;
     }
     final driverPoint = driver.currentLocation;
+    if (!isGpsTimestampFresh(driver.locationUpdatedAt)) {
+      if (_driverRouteRetryAfter != null &&
+          DateTime.now().isBefore(_driverRouteRetryAfter!)) return;
+      if (mounted) setState(() {
+        _driverApproachRoute = null;
+        _driverRouteOrderId = id;
+        _driverRouteKey = null;
+        _driverRouteError = 'Ожидаем свежие координаты GPS. Включите геолокацию и выйдите на линию.';
+        _driverRouteRetryAfter = DateTime.now().add(const Duration(seconds: 20));
+      });
+      return;
+    }
     if (!driverPoint.latitude.isFinite || !driverPoint.longitude.isFinite ||
         driverPoint.latitude < -90 || driverPoint.latitude > 90 ||
         driverPoint.longitude < -180 || driverPoint.longitude > 180) return;
@@ -3300,6 +3317,8 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
         throw StateError('GPS не предоставил свежие и точные координаты.');
       }
       driver.currentLocation = LatLng(position.latitude, position.longitude);
+      driver.locationUpdatedAt = position.timestamp;
+      _driverRouteRetryAfter = null;
       setState(() {});
       final published = await _publishDriverLocation(driver);
       if (!published) {
@@ -3380,6 +3399,8 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
         return;
       }
       driver.currentLocation = LatLng(firstPosition.latitude, firstPosition.longitude);
+      driver.locationUpdatedAt = firstPosition.timestamp;
+      _driverRouteRetryAfter = null;
       if (mounted) setState(() {});
       // A temporary API outage must not advertise a driver without a confirmed location.
       final published = await _publishDriverLocation(driver);
@@ -3409,6 +3430,8 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
         final longitude = position.longitude;
 
         driver.currentLocation = LatLng(latitude, longitude);
+        driver.locationUpdatedAt = position.timestamp;
+        _driverRouteRetryAfter = null;
         _locationStreamErrorShown = false;
         setState(() {});
         if (_serverAssignedOrders.isNotEmpty) {

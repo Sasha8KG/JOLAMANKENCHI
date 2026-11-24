@@ -424,6 +424,16 @@ void main() {
       );
     });
 
+    test('rejects GPS one millisecond beyond the 60-second limit', () {
+      expect(
+        isGpsTimestampFresh(
+          now.subtract(const Duration(seconds: 60, milliseconds: 1)),
+          now: now,
+        ),
+        isFalse,
+      );
+    });
+
     test('rejects timestamps from the future', () {
       expect(
         isGpsTimestampFresh(now.add(const Duration(seconds: 1)), now: now),
