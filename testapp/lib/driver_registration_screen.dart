@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 
 import 'services/firebase_service.dart';
 import 'services/worker_api.dart';
+import 'services/driver_document_store.dart';
 
 /// Отдельный экран регистрации водителя. Не использует вложенный StatefulBuilder
 /// и диалог с Form GlobalKey, чтобы форма не уничтожалась во время загрузки фото.
@@ -87,10 +88,17 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
         _message('Фото пустое или превышает 8 МБ. Выберите фотографию меньшего размера.');
         return;
       }
+      final documentType = kind == 'driver' ? 'driver_photo' :
+          kind == 'car' ? 'car_photo' : 'license';
+      final retained = await DriverDocumentStore.persistPickedImage(
+        uid: 'pending-registration', documentType: documentType, source: file,
+      );
+      if (!mounted) return;
+      final localFile = XFile(retained.path);
       setState(() {
-        if (kind == 'license') _license = file;
-        if (kind == 'driver') _driverPhoto = file;
-        if (kind == 'car') _carPhoto = file;
+        if (kind == 'license') _license = localFile;
+        if (kind == 'driver') _driverPhoto = localFile;
+        if (kind == 'car') _carPhoto = localFile;
       });
     } on TimeoutException {
       _message('Фотография загружается слишком долго. Проверьте память телефона и повторите выбор.');
@@ -201,6 +209,20 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
         carNumber: carNumber,
       );
       if (!mounted) return;
+      _ensureActiveAccount(uid);
+      _setStage('Сохраняем оригиналы документов на телефоне…');
+      final localLicense = await DriverDocumentStore.persistPickedImage(
+        uid: uid, documentType: 'license', source: _license!,
+      );
+      final localDriverPhoto = await DriverDocumentStore.persistPickedImage(
+        uid: uid, documentType: 'driver_photo', source: _driverPhoto!,
+      );
+      final localCarPhoto = await DriverDocumentStore.persistPickedImage(
+        uid: uid, documentType: 'car_photo', source: _carPhoto!,
+      );
+      _license = XFile(localLicense.path);
+      _driverPhoto = XFile(localDriverPhoto.path);
+      _carPhoto = XFile(localCarPhoto.path);
       _ensureActiveAccount(uid);
       _setStage('Загружаем водительское удостоверение…');
       final licensePath = await _upload(_license!, uid, 'license');

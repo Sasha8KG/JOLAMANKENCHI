@@ -12,6 +12,7 @@ import 'package:livekit_client/livekit_client.dart' hide ConnectionState;
 import 'services/firebase_service.dart';
 import 'driver_registration_screen.dart';
 import 'services/worker_api.dart';
+import 'services/driver_document_store.dart';
 import 'services/route_service.dart';
 import 'services/route_cache_policy.dart';
 import 'services/gps_freshness.dart';
@@ -2902,6 +2903,30 @@ class _DriverReviewStatusScreenState extends State<DriverReviewStatusScreen> {
   bool _busy = false;
   final ImagePicker _picker = ImagePicker();
 
+  @override
+  void initState() {
+    super.initState();
+    _restoreLocalDocuments();
+  }
+
+  Future<void> _restoreLocalDocuments() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null || uid.isEmpty) return;
+    try {
+      final license = await DriverDocumentStore.find(uid: uid, documentType: 'license');
+      final driverPhoto = await DriverDocumentStore.find(uid: uid, documentType: 'driver_photo');
+      final carPhoto = await DriverDocumentStore.find(uid: uid, documentType: 'car_photo');
+      if (!mounted) return;
+      setState(() {
+        if (license != null) _license = XFile(license.path);
+        if (driverPhoto != null) _driverPhoto = XFile(driverPhoto.path);
+        if (carPhoto != null) _carPhoto = XFile(carPhoto.path);
+      });
+    } catch (_) {
+      // Selecting the files again remains available if local restore fails.
+    }
+  }
+
   void _message(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -2925,10 +2950,22 @@ class _DriverReviewStatusScreenState extends State<DriverReviewStatusScreen> {
         _message('Фото пустое или больше 8 МБ. Выберите фотографию меньшего размера.');
         return;
       }
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null || uid.isEmpty) {
+        _message('Срок входа истёк. Войдите снова и выберите документы.');
+        return;
+      }
+      final documentType = kind == 'driver' ? 'driver_photo' :
+          kind == 'car' ? 'car_photo' : 'license';
+      final retained = await DriverDocumentStore.persistPickedImage(
+        uid: uid, documentType: documentType, source: file,
+      );
+      if (!mounted) return;
+      final localFile = XFile(retained.path);
       setState(() {
-        if (kind == 'license') _license = file;
-        if (kind == 'driver') _driverPhoto = file;
-        if (kind == 'car') _carPhoto = file;
+        if (kind == 'license') _license = localFile;
+        if (kind == 'driver') _driverPhoto = localFile;
+        if (kind == 'car') _carPhoto = localFile;
       });
     } catch (e) {
       _message('Не удалось выбрать фотографию: $e');

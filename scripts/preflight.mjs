@@ -616,6 +616,21 @@ check('Dispatcher can load subsequent cancellation pages without duplicate order
 check('Dispatcher history exposes refresh and load-more controls', app.includes('Обновить историю') && app.includes('Загрузить ещё'));
 check('Dispatcher cancellation history shows the route and preserves zero earnings', app.includes("o['pickup_address']") && app.includes('начисление: 0 сом'));
 check('Recent 100-order overview no longer limits the dedicated cancellation history', !worker.slice(worker.indexOf('if (url.pathname === "/dispatcher/overview"'), worker.indexOf('if (url.pathname === "/orders/assign"')).includes('LEFT JOIN order_cancellations c'));
+// Private local copies and a bounded direct-transfer packet protocol.
+check('Local document storage dependencies are declared', /crypto:\s*\^3\.0\.3/.test(pubspec) && /path_provider:\s*\^2\.1\.2/.test(pubspec));
+const localDocumentStore = read('testapp/lib/services/driver_document_store.dart');
+const transferProtocol = read('testapp/lib/services/driver_document_transfer_protocol.dart');
+check('Driver originals are stored in app-private phone documents', localDocumentStore.includes('getApplicationDocumentsDirectory()') && localDocumentStore.includes('driver_documents'));
+check('Local document store restricts UID paths and document types', localDocumentStore.includes("_uid=RegExp") && localDocumentStore.includes("'license','driver_photo','car_photo'"));
+check('Local document store enforces 8 MB file limit', localDocumentStore.includes('8*1024*1024'));
+check('Local document write verifies SHA-256 before final rename', localDocumentStore.includes('sha256.convert(saved).toString()!=digest') && localDocumentStore.includes('temp.rename(target.path)'));
+check('Transfer protocol uses 10 KiB chunks', transferProtocol.includes('chunkBytes = 10 * 1024'));
+check('Transfer protocol caps packets at 14 KiB', transferProtocol.includes('maxPacketBytes = 14 * 1024'));
+check('Transfer protocol validates request, driver, document and chunk sequence', transferProtocol.includes('_identity(requestId, driverUid, documentType)') && transferProtocol.includes('chunkCountFor(total)'));
+check('Transfer protocol validates payload size and SHA-256 format', transferProtocol.includes('_sha.hasMatch(digest)') && transferProtocol.includes('payload.length != expected'));
+check('Transfer protocol supports chunk acknowledgements', transferProtocol.includes('encodeAck') && transferProtocol.includes('decodeAck'));
+check('Driver registration stores selected originals locally before cloud upload', registration.includes("uid: 'pending-registration'") && registration.includes("uid: uid, documentType: 'license'"));
+check('Driver review screen restores local documents on entry', app.includes('_restoreLocalDocuments()') && app.includes('DriverDocumentStore.find'));
 // Driver registration, document upload and dispatcher approval regression checks.
 check('Driver registration requires all three identity and vehicle photos', registration.includes('_license == null || _driverPhoto == null || _carPhoto == null'));
 check('Driver upload accepts only the three supported document kinds', registration.includes("const allowedKinds = {'license', 'driver_photo', 'car_photo'};"));
