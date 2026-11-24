@@ -864,16 +864,6 @@ for (const item of checks) {
 const failed = checks.filter((item) => !item.ok);
 process.stdout.write(`\nPreflight: ${checks.length - failed.length}/${checks.length} checks passed.\n`);
 if (failed.length) process.exitCode = 1;
-)") && orderSnapshot.includes('!seen.add(id)') && orderSnapshotTests.includes('rejects duplicate free order ids'));
-check('Driver order polling enforces at most one active trip', app.includes('if (assigned.length > 1)'));
-check('Driver open-order feed contains only new orders', app.includes("item['status'] ?? '').toString() != 'new'"));
-check('Driver assigned-order feed contains only active statuses', app.includes("['driver_assigned', 'arrived'].contains((item['status'] ?? '').toString())"));
-check('Driver order polling rejects an order listed as both open and assigned', app.includes('assigned.any((item) => openIds.contains(_serverOrderId(item)))'));
-check('Driver route re-fetches after an in-flight request observes a replacement assignment', app.includes('refreshAfterRoute = latestAssignedId.isNotEmpty;'));
-check('Driver route response revalidates current pickup and GPS coordinates', app.includes('String? _currentDriverRouteKey(String orderId)') && app.includes('final latestRouteKey = _currentDriverRouteKey(id);'));
-check('A stale route request is refreshed after GPS movement', /if \(refreshAfterRoute && mounted\)\s*\{\s*unawaited\(_loadDriverApproachRoute\(\)\);/.test(app));
-check('Route loading state is reset through setState', /setState\(\(\) => _driverRouteLoading = false\)/.test(app));
-check('Driver map draws a route only for its assigned order', /_driverApproachRoute != null &&\s*_serverAssignedOrders\.isNotEmpty &&\s*_driverRouteOrderId ==/.test(app));
 
 
 check('Passenger pickup is not treated as confirmed at the regional fallback center', /bool _pickupPointConfirmed = false;/.test(app));
