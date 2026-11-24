@@ -65,8 +65,13 @@ List<MapEntry<LatLng, DateTime>> selectNearbyDriverLocations({
   }
 
   ranked.sort((a, b) {
-    final byDistance = a.distanceKm.compareTo(b.distanceKm);
-    if (byDistance != 0) return byDistance;
+    // Treat sub-micrometre distance differences as floating-point noise so
+    // genuinely equidistant cars are consistently ordered by freshest GPS.
+    const distanceTieToleranceKm = 1e-9;
+    final distanceDelta = a.distanceKm - b.distanceKm;
+    if (distanceDelta.abs() > distanceTieToleranceKm) {
+      return distanceDelta.compareTo(0);
+    }
     return b.entry.value.compareTo(a.entry.value);
   });
   return ranked.take(maxResults).map((item) => item.entry).toList();
