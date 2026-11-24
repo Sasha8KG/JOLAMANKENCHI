@@ -325,6 +325,11 @@ class _SessionGateState extends State<SessionGate> {
       if (_isEnabled(access['driver'])) {
         final profile = await WorkerApi.driverProfile();
         if (!mounted) return;
+        final profileUser = FirebaseAuth.instance.currentUser;
+        if (profileUser == null || profileUser.uid != restoringUid) {
+          setState(() => _destination = const RoleSelectionScreen());
+          return;
+        }
         final raw = profile['driver'];
         if (raw is Map) {
           final data = Map<String, dynamic>.from(raw);
@@ -2868,6 +2873,9 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
   Timer? _heartbeatTimer;
   Timer? _ordersPollTimer;
   bool _ordersPollInProgress = false;
+  bool _ordersPollRefreshPending = false;
+  DateTime? _lastOrderPollNoticeAt;
+  String? _lastOrderPollNotice;
   bool _driverAccessWarningShown = false;
   bool _locationUpdateInProgress = false;
   bool _heartbeatCheckInProgress = false;
@@ -2928,11 +2936,20 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
   }
 
   Future<void> _pollServerOrders() async {
-    // Не допускаем наложения запросов, если сеть отвечает дольше интервала опроса.
-    if (!mounted || _ordersPollInProgress) return;
+    // Coalesce timer/lifecycle refreshes while a slow request is active.
+    // One follow-up request then fetches the newest server state.
+    if (!mounted) return;
+    if (_ordersPollInProgress) {
+      _ordersPollRefreshPending = true;
+      return;
+    }
+    final pollingUid = FirebaseAuth.instance.currentUser?.uid;
+    if (pollingUid == null) return;
     _ordersPollInProgress = true;
     try {
       final data = await WorkerApi.openOrders();
+      // A response from a previous account must never replace the current UI.
+      if (!mounted || FirebaseAuth.instance.currentUser?.uid != pollingUid) return;
       final snapshot = ServerOrderSnapshot.parse(data);
       final open = snapshot.openOrders;
       final assigned = snapshot.assignedOrders;
@@ -2940,6 +2957,8 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
       final visibleOpen = _driverWantsOnline ? open : <Map<String, dynamic>>[];
       if (!mounted) return;
       _driverAccessWarningShown = false;
+      _lastOrderPollNoticeAt = null;
+      _lastOrderPollNotice = null;
       final hadAssignedOrder = _serverAssignedOrders.isNotEmpty;
       final activeAssignedId = assigned.isEmpty ? null : _serverOrderId(assigned.first);
       setState(() {
@@ -2988,12 +3007,24 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
           ));
         }
       } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+        final now = DateTime.now();
+        final shouldNotify = _lastOrderPollNotice != e.message ||
+            _lastOrderPollNoticeAt == null ||
+            now.difference(_lastOrderPollNoticeAt!) >= const Duration(seconds: 30);
+        if (shouldNotify) {
+          _lastOrderPollNotice = e.message;
+          _lastOrderPollNoticeAt = now;
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+        }
       }
     } catch (_) {
-      // Временная ошибка сети: следующий опрос повторит запрос.
+      // A transient network error is retried by the next scheduled poll.
     } finally {
       _ordersPollInProgress = false;
+      if (mounted && _ordersPollRefreshPending) {
+        _ordersPollRefreshPending = false;
+        scheduleMicrotask(() => _pollServerOrders());
+      }
     }
   }
 
