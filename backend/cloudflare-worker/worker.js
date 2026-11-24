@@ -78,7 +78,7 @@ function base64Url(value) {
   return btoa(binary).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
 }
 
-async function createLiveKitToken(env, uid, name) {
+async function createLiveKitToken(env, uid, name, roomName = "jol-aman-kenchi-radio") {
   const key = env.LIVEKIT_API_KEY;
   const secret = env.LIVEKIT_API_SECRET;
   if (!key || !secret || !env.LIVEKIT_URL) throw new Error("Голосовая рация ещё не настроена: администратору нужно подключить LiveKit в Cloudflare");
@@ -86,7 +86,7 @@ async function createLiveKitToken(env, uid, name) {
   const header = base64Url(JSON.stringify({ alg: "HS256", typ: "JWT" }));
   const payload = base64Url(JSON.stringify({
     iss: key, sub: uid, name: name.slice(0, 80), nbf: now - 5, iat: now, exp: now + 3600,
-    video: { roomJoin: true, room: "jol-aman-kenchi-radio", canPublish: true, canSubscribe: true, canPublishData: true }
+    video: { roomJoin: true, room: roomName, canPublish: true, canSubscribe: true, canPublishData: true }
   }));
   const unsigned = header + "." + payload;
   const cryptoKey = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret),
@@ -289,6 +289,30 @@ export default {
         expires_at INTEGER NOT NULL DEFAULT 0
       )`).run();
       await env.DB.prepare("INSERT OR IGNORE INTO radio_floor (id,holder_uid,holder_name,expires_at) VALUES (1,NULL,NULL,0)").run();
+      // Durable request metadata only: document bytes stay on the two phones.
+      await env.DB.prepare(`CREATE TABLE IF NOT EXISTS driver_document_transfer_requests (
+        request_id TEXT PRIMARY KEY NOT NULL,
+        driver_uid TEXT NOT NULL,
+        requested_by TEXT NOT NULL,
+        status TEXT NOT NULL CHECK(status IN ('requested','transferring','received','expired','cancelled')),
+        created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        expires_at INTEGER NOT NULL,
+        completed_at INTEGER,
+        FOREIGN KEY(driver_uid) REFERENCES drivers(uid)
+      )`).run();
+      await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_driver_doc_requests_driver
+        ON driver_document_transfer_requests(driver_uid,status,created_at)`).run();
+      await env.DB.prepare(`CREATE TABLE IF NOT EXISTS driver_document_receipts (
+        request_id TEXT NOT NULL,
+        driver_uid TEXT NOT NULL,
+        document_type TEXT NOT NULL CHECK(document_type IN ('license','driver_photo','car_photo')),
+        byte_size INTEGER NOT NULL CHECK(byte_size BETWEEN 1 AND 8388608),
+        sha256 TEXT NOT NULL CHECK(length(sha256)=64),
+        received_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        PRIMARY KEY(request_id,document_type),
+        FOREIGN KEY(request_id) REFERENCES driver_document_transfer_requests(request_id),
+        FOREIGN KEY(driver_uid) REFERENCES drivers(uid)
+      )`).run();
       await env.DB.prepare(`CREATE TABLE IF NOT EXISTS driver_documents (
         driver_uid TEXT PRIMARY KEY NOT NULL,
         license_url TEXT NOT NULL,
@@ -463,6 +487,112 @@ export default {
         return response({ status: "ok", documents_saved: true, review_status: "pending" });
       }
 
+      if (url.pathname === "/drivers/documents/request" && request.method === "POST") {
+        const auth = await requireDispatcher(request);
+        const b = await readJsonObject(request);
+        if (!b || typeof b.uid !== "string" || !b.uid.trim() || b.uid.length > 128)
+          return response({ status: "error", message: "Укажите корректный UID водителя" }, 400);
+        const uid = b.uid.trim();
+        const driver = await driverRow(env, uid);
+        if (!driver) return response({ status: "error", message: "Водитель не найден" }, 404);
+        const now = Math.floor(Date.now() / 1000);
+        const existing = await env.DB.prepare(`SELECT request_id,status,expires_at FROM driver_document_transfer_requests
+          WHERE driver_uid=? AND status IN ('requested','transferring') AND expires_at>? ORDER BY created_at DESC LIMIT 1`).bind(uid, now).first();
+        if (existing) return response({ status: "ok", request_id: existing.request_id, request_status: existing.status, expires_at: existing.expires_at, reused: true });
+        const requestId = crypto.randomUUID();
+        await env.DB.prepare(`INSERT INTO driver_document_transfer_requests
+          (request_id,driver_uid,requested_by,status,created_at,expires_at)
+          VALUES (?,?,?,'requested',?,?)`).bind(requestId, uid, auth.user.localId, now, now + 86400).run();
+        return response({ status: "ok", request_id: requestId, request_status: "requested", expires_at: now + 86400, reused: false });
+      }
+
+      if (url.pathname === "/drivers/documents/request" && request.method === "GET") {
+        const auth = await verifyFirebaseUser(request);
+        const now = Math.floor(Date.now() / 1000);
+        await env.DB.prepare(`UPDATE driver_document_transfer_requests SET status='expired'
+          WHERE status IN ('requested','transferring') AND expires_at<=?`).bind(now).run();
+        if (auth.user.localId === DISPATCHER_UID) {
+          const rows = await env.DB.prepare(`SELECT r.request_id,r.driver_uid,r.status,r.created_at,r.expires_at,r.completed_at,
+            d.name AS driver_name,d.phone AS driver_phone
+            FROM driver_document_transfer_requests r JOIN drivers d ON d.uid=r.driver_uid
+            WHERE r.created_at>=? ORDER BY r.created_at DESC LIMIT 100`).bind(now - 30 * 86400).all();
+          return response({ status: "ok", requests: rows.results || [] });
+        }
+        const row = await env.DB.prepare(`SELECT request_id,status,created_at,expires_at,completed_at
+          FROM driver_document_transfer_requests WHERE driver_uid=? AND status IN ('requested','transferring')
+          AND expires_at>? ORDER BY created_at DESC LIMIT 1`).bind(auth.user.localId, now).first();
+        return response({ status: "ok", request: row || null });
+      }
+
+      if (url.pathname === "/drivers/documents/token" && request.method === "POST") {
+        const auth = await verifyFirebaseUser(request);
+        const b = await readJsonObject(request);
+        const requestId = String(b?.request_id || "");
+        if (!/^[0-9a-f-]{36}$/i.test(requestId))
+          return response({ status: "error", message: "Неверный номер запроса документов" }, 400);
+        const transfer = await env.DB.prepare(`SELECT request_id,driver_uid,status,expires_at
+          FROM driver_document_transfer_requests WHERE request_id=?`).bind(requestId).first();
+        const now = Math.floor(Date.now() / 1000);
+        if (!transfer || Number(transfer.expires_at) <= now || !['requested','transferring'].includes(transfer.status))
+          return response({ status: "error", message: "Запрос документов истёк или уже закрыт" }, 409);
+        const isDispatcher = auth.user.localId === DISPATCHER_UID;
+        if (!isDispatcher && auth.user.localId !== transfer.driver_uid)
+          return response({ status: "error", message: "Нет доступа к передаче этих документов" }, 403);
+        const driver = await driverRow(env, transfer.driver_uid);
+        const name = isDispatcher ? "Диспетчер" : String(driver?.name || "Водитель");
+        const room = "jol-aman-kenchi-docs-" + requestId.replace(/-/g, "");
+        await env.DB.prepare(`UPDATE driver_document_transfer_requests SET status='transferring'
+          WHERE request_id=? AND status='requested'`).bind(requestId).run();
+        const token = await createLiveKitToken(env, auth.user.localId, name, room);
+        return response({ status: "ok", url: env.LIVEKIT_URL, token, room, request_id: requestId });
+      }
+
+      if (url.pathname === "/drivers/documents/received" && request.method === "POST") {
+        const auth = await requireDispatcher(request);
+        const b = await readJsonObject(request);
+        const requestId = String(b?.request_id || "");
+        const uid = String(b?.uid || "");
+        const files = b?.files;
+        if (!/^[0-9a-f-]{36}$/i.test(requestId) || !uid || uid.length > 128 || !Array.isArray(files) || files.length !== 3)
+          return response({ status: "error", message: "Передайте запрос и сведения обо всех трёх сохранённых документах" }, 400);
+        const expected = ['license','driver_photo','car_photo'];
+        const normalized = [];
+        let total = 0;
+        for (let i=0;i<expected.length;i++) {
+          const file = files[i];
+          const type = String(file?.type || "");
+          const size = Number(file?.size);
+          const sha = String(file?.sha256 || "").toLowerCase();
+          if (type !== expected[i] || !Number.isInteger(size) || size < 1 || size > 8 * 1024 * 1024 || !/^[a-f0-9]{64}$/.test(sha))
+            return response({ status: "error", message: "Некорректные сведения о файлах. Порядок: удостоверение, водитель, автомобиль" }, 400);
+          total += size;
+          normalized.push({type,size,sha});
+        }
+        if (total > 18 * 1024 * 1024)
+          return response({ status: "error", message: "Общий размер документов превышает 18 МБ" }, 400);
+        const transfer = await env.DB.prepare(`SELECT request_id,driver_uid,status,expires_at
+          FROM driver_document_transfer_requests WHERE request_id=? AND driver_uid=?`).bind(requestId, uid).first();
+        const now = Math.floor(Date.now() / 1000);
+        if (!transfer || !['requested','transferring'].includes(transfer.status) || Number(transfer.expires_at) <= now)
+          return response({ status: "error", message: "Запрос передачи не найден, истёк или уже обработан" }, 409);
+        const statements = normalized.map(file => env.DB.prepare(`INSERT INTO driver_document_receipts
+          (request_id,driver_uid,document_type,byte_size,sha256,received_at) VALUES (?,?,?,?,?,?)
+          ON CONFLICT(request_id,document_type) DO UPDATE SET byte_size=excluded.byte_size,sha256=excluded.sha256,received_at=excluded.received_at`)
+          .bind(requestId, uid, file.type, file.size, file.sha, now));
+        statements.push(env.DB.prepare(`INSERT INTO driver_documents
+          (driver_uid,license_url,driver_photo_url,car_photo_url,submitted_at,review_status,rejection_reason,reviewed_at,reviewed_by)
+          VALUES (?,'','','',?,'pending',NULL,NULL,NULL)
+          ON CONFLICT(driver_uid) DO UPDATE SET license_url='',driver_photo_url='',car_photo_url='',
+          submitted_at=excluded.submitted_at,review_status='pending',rejection_reason=NULL,reviewed_at=NULL,reviewed_by=NULL`).bind(uid, now));
+        statements.push(env.DB.prepare(`UPDATE drivers SET approved=0,online=0,updated_at=? WHERE uid=?`).bind(now, uid));
+        statements.push(env.DB.prepare(`UPDATE driver_document_transfer_requests SET status='received',completed_at=?
+          WHERE request_id=? AND status IN ('requested','transferring')`).bind(now, requestId));
+        const result = await env.DB.batch(statements);
+        if ((result || []).length !== 6 || (result[5]?.meta?.changes || 0) !== 1)
+          return response({ status: "error", message: "Не удалось зафиксировать получение документов. Обновите список и повторите" }, 409);
+        return response({ status: "ok", documents_received: true, review_status: "pending" });
+      }
+
       if (url.pathname === "/drivers/review" && request.method === "POST") {
         const auth = await requireDispatcher(request);
         const b = await readJsonObject(request);
@@ -477,7 +607,10 @@ export default {
         const exists = await env.DB.prepare("SELECT uid FROM drivers WHERE uid=?").bind(uid).first();
         if (!exists) return response({ status: "error", message: "Водитель не найден" }, 404);
         let docs = await env.DB.prepare("SELECT license_url,driver_photo_url,car_photo_url,review_status FROM driver_documents WHERE driver_uid=?").bind(uid).first();
-        const hasAllDocuments = Boolean(docs && docs.license_url && docs.driver_photo_url && docs.car_photo_url);
+        const receiptCount = await env.DB.prepare("SELECT COUNT(*) AS count FROM driver_document_receipts r JOIN driver_document_transfer_requests q ON q.request_id=r.request_id WHERE r.driver_uid=? AND q.status='received'").bind(uid).first();
+        const hasNewLocalDocuments = Number(receiptCount?.count || 0) >= 3;
+        const hasLegacyStoragePaths = Boolean(docs && docs.license_url && docs.driver_photo_url && docs.car_photo_url);
+        const hasAllDocuments = hasNewLocalDocuments || hasLegacyStoragePaths;
         // Approval requires all three files. Rejection must remain possible for
         // incomplete applications so the dispatcher can explain what is missing.
         if (decision === "approved" && !hasAllDocuments)

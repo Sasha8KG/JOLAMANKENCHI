@@ -922,6 +922,21 @@ check('Firebase Storage upload helper is available to driver registration', app.
 check('Firebase Storage reads and writes share one configured bucket helper', app.split('taxiFirebaseStorage.ref').length >= 4);
 
 
+check('Worker stores document transfer requests as metadata only', worker.includes('CREATE TABLE IF NOT EXISTS driver_document_transfer_requests') && worker.includes('CREATE TABLE IF NOT EXISTS driver_document_receipts'));
+check('Document transfer requests are dispatcher-authorized and persistent', worker.includes('url.pathname === "/drivers/documents/request" && request.method === "POST"') && worker.includes('requested_by TEXT NOT NULL') && worker.includes("status IN ('requested','transferring')"));
+check('Pending drivers can request their own document-transfer token only', worker.includes('url.pathname === "/drivers/documents/token" && request.method === "POST"') && worker.includes('auth.user.localId !== transfer.driver_uid'));
+check('Document transfer uses a dedicated per-request LiveKit room', worker.includes('jol-aman-kenchi-docs-') && worker.includes('createLiveKitToken(env, auth.user.localId, name, room)'));
+check('Dispatcher receipt confirmation validates exactly three document hashes and sizes', worker.includes('files.length !== 3') && worker.includes('^[a-f0-9]{64}
+  process.stdout.write(`${item.ok ? 'PASS' : 'FAIL'}  ${item.label}\n`);
+}
+const failed = checks.filter((item) => !item.ok);
+process.stdout.write(`\nPreflight: ${checks.length - failed.length}/${checks.length} checks passed.\n`);
+if (failed.length) process.exitCode = 1;
+) && worker.includes('total > 18 * 1024 * 1024'));
+check('Document receipt metadata is committed before review status is pending', worker.includes('driver_document_receipts') && worker.includes("review_status='pending'") && worker.includes("status='received'"));
+check('Flutter API exposes authenticated document request, polling, token and receipt methods', api.includes('requestDriverDocuments') && api.includes('driverDocumentRequest') && api.includes('driverDocumentsTransferToken') && api.includes('confirmDriverDocumentsReceived'));
+check('Document transfer uses D1 metadata and does not put image bytes in D1', !/CREATE TABLE IF NOT EXISTS driver_document_transfer_requests[\\s\\S]{0,900}BLOB/i.test(worker));
+
 for (const item of checks) {
   process.stdout.write(`${item.ok ? 'PASS' : 'FAIL'}  ${item.label}\n`);
 }
