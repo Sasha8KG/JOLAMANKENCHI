@@ -1,0 +1,24 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() { return request.auth != null; }
+    function isDispatcher() {
+      return signedIn() && request.auth.uid == 'AMGNzQEr7GfnisJcr7u4BqcdIvh1';
+    }
+    function isDriverDocument(fileName) {
+      return fileName in ['license.jpg', 'driver_photo.jpg', 'car_photo.jpg'];
+    }
+    match /drivers/{driverUid}/{fileName} {
+      allow read: if signedIn() && isDriverDocument(fileName)
+        && (request.auth.uid == driverUid || isDispatcher());
+      allow create, update: if signedIn()
+        && request.auth.uid == driverUid
+        && isDriverDocument(fileName)
+        && request.resource.size <= 8 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png|webp)');
+      allow delete: if signedIn()
+        && request.auth.uid == driverUid
+        && isDriverDocument(fileName);
+    }
+  }
+}

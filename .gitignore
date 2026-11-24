@@ -1,0 +1,8 @@
+# Private Android signing material
+**/key.properties
+**/*.jks
+**/*.keystore
+
+# Local build outputs
+**/build/
+**/.dart_tool/
