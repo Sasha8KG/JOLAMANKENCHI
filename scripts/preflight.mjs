@@ -886,6 +886,18 @@ check('Shared radio message input uses dark text on an explicit white background
 check('Shared radio input has visible hint, cursor and focused borders', app.includes('cursorColor: Color(0xFF8A6500),') && app.includes('hintStyle: TextStyle(color: Colors.black54)') && app.includes('focusedBorder: OutlineInputBorder('));
 
 
+check('Driver logout waits until the server order list has been checked', app.includes('bool _assignedOrdersLoaded = false;') && app.includes('_assignedOrdersLoaded = true;') && app.includes('if (!_assignedOrdersLoaded) {') && app.includes('unawaited(_pollServerOrders());'));
+check('Driver cannot log out while an assigned trip remains active', app.includes('if (_serverAssignedOrders.isNotEmpty) {') && app.includes('Нельзя выйти из аккаунта во время назначенного заказа'));
+check('Driver logout has a duplicate-action guard', app.includes('bool _logoutInProgress = false;') && app.includes('if (_logoutInProgress || _availabilityChanging || _offlineSyncInProgress) return;'));
+check('Driver logout disables its button while logout is running', app.includes('(_availabilityChanging || _logoutInProgress) ? null : _logoutDriver'));
+check('Driver logout cancels location retry before leaving the line', app.includes('_locationRetryTimer?.cancel();\n        _locationRetryTimer = null;'));
+check('Driver logout stops the GPS subscription and heartbeat before sign-out', app.includes('await _positionSubscription?.cancel();\n        _positionSubscription = null;\n        _stopLocationHeartbeat();'));
+check('Driver logout confirms server-side offline state before Firebase sign-out', app.includes('WorkerApi.setDriverOnline(online: false)') && app.includes("if (result['online'] != false) {\n          throw StateError('Сервер не подтвердил отключение от линии.')") && app.indexOf("if (result['online'] != false) {\n          throw StateError('Сервер не подтвердил отключение от линии.')") < app.indexOf('await FirebaseService.signOut().timeout(const Duration(seconds: 20));', app.indexOf('Future<void> _logoutDriver')));
+check('Driver logout keeps authentication when server offline confirmation fails', app.includes('Не удалось безопасно выйти. Аккаунт оставлен открытым') && app.includes('if (!_driverWantsOnline) _scheduleOfflineStateRetry();'));
+check('Driver logout clears local availability before requesting server offline state', app.includes('_driverWantsOnline = false;\n          _driverGpsReady = false;\n          _serverOpenOrders = [];'));
+check('Driver logout only clears the driver session after Firebase sign-out succeeds', app.includes('await FirebaseService.signOut().timeout(const Duration(seconds: 20));\n      TaxiParkState.currentLoggedInDriver = null;'));
+
+
 for (const item of checks) {
   process.stdout.write(`${item.ok ? 'PASS' : 'FAIL'}  ${item.label}\n`);
 }

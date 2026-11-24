@@ -2984,6 +2984,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
   Timer? _locationRetryTimer;
   List<Map<String, dynamic>> _serverOpenOrders = [];
   List<Map<String, dynamic>> _serverAssignedOrders = [];
+  bool _assignedOrdersLoaded = false;
   final Set<String> _respondingOrderIds = <String>{};
   final Set<String> _orderActionIds = <String>{};
   RoadRoute? _driverApproachRoute;
@@ -2995,6 +2996,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
   bool _driverWantsOnline = false;
   bool _driverGpsReady = false;
   bool _availabilityChanging = false;
+  bool _logoutInProgress = false;
   bool _offlineSyncInProgress = false;
   Timer? _offlineSyncRetryTimer;
 
@@ -3064,6 +3066,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
       setState(() {
         _serverOpenOrders = visibleOpen;
         _serverAssignedOrders = assigned;
+        _assignedOrdersLoaded = true;
         // Never leave the previous passenger's route on the map after an
         // assignment changes or is cancelled.
         if (activeAssignedId != _driverRouteOrderId) {
@@ -3729,21 +3732,61 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
   }
 
   Future<void> _logoutDriver() async {
-    if (_availabilityChanging) return;
+    if (_logoutInProgress || _availabilityChanging || _offlineSyncInProgress) return;
+
+    // Never abandon an assigned trip: the passenger and dispatcher still need
+    // this driver's live status until the trip is completed or cancelled.
+    if (!_assignedOrdersLoaded) {
+      unawaited(_pollServerOrders());
+      _showLocationMessage('Проверяем активные заказы. Повторите выход через несколько секунд.');
+      return;
+    }
+    if (_serverAssignedOrders.isNotEmpty) {
+      _showLocationMessage('Нельзя выйти из аккаунта во время назначенного заказа. Сначала завершите поездку или согласуйте её отмену с диспетчером.');
+      return;
+    }
+
+    setState(() => _logoutInProgress = true);
     try {
-      // Stop offering this driver's account as available before signing out.
+      // Confirm the server-side offline transition before ending authentication.
       if (_driverWantsOnline) {
-        await _toggleDriverAvailability();
+        setState(() {
+          _driverWantsOnline = false;
+          _driverGpsReady = false;
+          _serverOpenOrders = [];
+          if (TaxiParkState.currentLoggedInDriver != null) {
+            TaxiParkState.currentLoggedInDriver!.isOnline = false;
+          }
+        });
+        _locationRetryTimer?.cancel();
+        _locationRetryTimer = null;
+        _offlineSyncRetryTimer?.cancel();
+        _offlineSyncRetryTimer = null;
+        await _positionSubscription?.cancel();
+        _positionSubscription = null;
+        _stopLocationHeartbeat();
+
+        final result = await WorkerApi.setDriverOnline(online: false)
+            .timeout(const Duration(seconds: 20));
+        if (result['online'] != false) {
+          throw StateError('Сервер не подтвердил отключение от линии.');
+        }
       }
+
       await FirebaseService.signOut().timeout(const Duration(seconds: 20));
       TaxiParkState.currentLoggedInDriver = null;
       if (mounted) Navigator.popUntil(context, (route) => route.isFirst);
     } catch (e) {
+      // Keep the account open if the server could not confirm that the driver
+      // is offline. Retry the offline sync in the background.
+      if (!_driverWantsOnline) _scheduleOfflineStateRetry();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Не удалось выйти: $e')),
+          SnackBar(content: Text('Не удалось безопасно выйти. Аккаунт оставлен открытым: $e')),
         );
       }
+    } finally {
+      if (mounted) setState(() => _logoutInProgress = false);
     }
   }
 
@@ -3777,8 +3820,8 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
             ),
           ),
           IconButton(
-            tooltip: 'Выйти из кабинета',
-            onPressed: _availabilityChanging ? null : _logoutDriver,
+            tooltip: _logoutInProgress ? 'Завершаем выход…' : 'Выйти из кабинета',
+            onPressed: (_availabilityChanging || _logoutInProgress) ? null : _logoutDriver,
             icon: const Icon(Icons.logout),
           ),
         ],
