@@ -20,6 +20,16 @@ function hasForbiddenControlCharacters(value) {
     return (code < 32 && code !== 9 && code !== 10 && code !== 13) || code === 127;
   });
 }
+async function readJsonObject(request) {
+  try {
+    const value = await request.json();
+    return value && typeof value === "object" && !Array.isArray(value) ? value : null;
+  } catch (_) {
+    // Malformed JSON and empty request bodies are client errors, not server errors.
+    return null;
+  }
+}
+
 async function verifyFirebaseUser(request) {
   const h = request.headers.get("Authorization") || "";
   const token = h.startsWith("Bearer ") ? h.slice(7) : "";
@@ -328,7 +338,8 @@ export default {
 
       if (url.pathname === "/drivers/register" && request.method === "POST") {
         const auth = await verifyFirebaseUser(request);
-        const b = await request.json();
+        const b = await readJsonObject(request);
+        if (!b) return response({ status: "error", message: "Переданы неверные данные запроса. Отправьте корректный JSON-объект." }, 400);
         if (!b || typeof b !== "object" || Array.isArray(b) ||
             ![b.name, b.phone, b.car_model, b.car_number].every(value => typeof value === "string")) {
           return response({ status: "error", message: "Передайте ФИО, телефон, марку и номер автомобиля обычным текстом." }, 400);
@@ -424,7 +435,8 @@ export default {
         const auth = await verifyFirebaseUser(request);
         const driver = await driverRow(env, auth.user.localId);
         if (!driver) return response({ status: "error", message: "Сначала отправьте анкету водителя" }, 409);
-        const b = await request.json();
+        const b = await readJsonObject(request);
+        if (!b) return response({ status: "error", message: "Переданы неверные данные запроса. Отправьте корректный JSON-объект." }, 400);
         const paths = [b.license_url, b.driver_photo_url, b.car_photo_url].map(v => String(v || ""));
         const expectedPaths = [
           `drivers/${auth.user.localId}/license.jpg`,
@@ -453,7 +465,8 @@ export default {
 
       if (url.pathname === "/drivers/review" && request.method === "POST") {
         const auth = await requireDispatcher(request);
-        const b = await request.json();
+        const b = await readJsonObject(request);
+        if (!b) return response({ status: "error", message: "Переданы неверные данные запроса. Отправьте корректный JSON-объект." }, 400);
         const uid = String(b.uid || "");
         const decision = String(b.decision || "");
         const reason = String(b.reason || "").trim().slice(0, 500);
@@ -490,7 +503,8 @@ export default {
 
       if (url.pathname === "/drivers/approve" && request.method === "POST") {
         const auth = await requireDispatcher(request);
-        const b = await request.json();
+        const b = await readJsonObject(request);
+        if (!b) return response({ status: "error", message: "Переданы неверные данные запроса. Отправьте корректный JSON-объект." }, 400);
         const uid = String(b.uid || "");
         if (!uid) return response({ status: "error", message: "Не указан UID водителя" }, 400);
         if (b.approved) {
@@ -511,7 +525,8 @@ export default {
 
       if (url.pathname === "/tariffs" && request.method === "POST") {
         const auth = await requireDispatcher(request);
-        const b = await request.json();
+        const b = await readJsonObject(request);
+        if (!b) return response({ status: "error", message: "Переданы неверные данные запроса. Отправьте корректный JSON-объект." }, 400);
         const city = Number(b.city_fare_som), intercity = Number(b.intercity_fare_som);
         if (!Number.isSafeInteger(city) || !Number.isSafeInteger(intercity) || city < 0 || intercity < 0 || city > 1000000 || intercity > 1000000) {
           return response({ status: "error", message: "Укажите целые суммы от 0 до 1 000 000 сом" }, 400);
@@ -526,7 +541,8 @@ export default {
 
       if (url.pathname === "/drivers/commission" && request.method === "POST") {
         const auth = await requireDispatcher(request);
-        const b = await request.json();
+        const b = await readJsonObject(request);
+        if (!b) return response({ status: "error", message: "Переданы неверные данные запроса. Отправьте корректный JSON-объект." }, 400);
         const driverUid = String(b.driver_uid || "");
         const percent = Number(b.commission_percent);
         if (!driverUid || !Number.isSafeInteger(percent) || percent < 0 || percent > 100) {
@@ -544,7 +560,8 @@ export default {
 
       if (url.pathname === "/dispatcher/shifts/close" && request.method === "POST") {
         const auth = await requireDispatcher(request);
-        const b = await request.json();
+        const b = await readJsonObject(request);
+        if (!b) return response({ status: "error", message: "Переданы неверные данные запроса. Отправьте корректный JSON-объект." }, 400);
         const driverUid = String(b.driver_uid || "");
         const shiftDate = String(b.shift_date || kgTodayDate());
         if (!driverUid) return response({ status: "error", message: "Не указан водитель" }, 400);
@@ -694,7 +711,8 @@ export default {
 
       if (url.pathname === "/orders/assign" && request.method === "POST") {
         await requireDispatcher(request);
-        const b = await request.json();
+        const b = await readJsonObject(request);
+        if (!b) return response({ status: "error", message: "Переданы неверные данные запроса. Отправьте корректный JSON-объект." }, 400);
         const orderId = String(b.order_id || "");
         const driverUid = String(b.driver_uid || "");
         if (!orderId || !driverUid) return response({ status: "error", message: "Укажите заказ и водителя" }, 400);
@@ -726,7 +744,8 @@ export default {
 
       if (url.pathname === "/drivers/online" && request.method === "POST") {
         const auth = await requireApprovedDriver(request, env);
-        const b = await request.json();
+        const b = await readJsonObject(request);
+        if (!b) return response({ status: "error", message: "Переданы неверные данные запроса. Отправьте корректный JSON-объект." }, 400);
         if (typeof b.online !== "boolean") {
           return response({ status: "error", message: "Укажите, выходит ли водитель на линию" }, 400);
         }
@@ -764,7 +783,8 @@ export default {
 
       if (url.pathname === "/orders/publish" && request.method === "POST") {
         const auth = await verifyFirebaseUser(request);
-        const b = await request.json();
+        const b = await readJsonObject(request);
+        if (!b) return response({ status: "error", message: "Переданы неверные данные запроса. Отправьте корректный JSON-объект." }, 400);
         const orderId = String(b.id || "").trim();
         if (!/^[A-Za-z0-9_-]{1,128}$/.test(orderId)) {
           return response({ status: "error", message: "Укажите корректный номер заявки" }, 400);
@@ -825,7 +845,8 @@ export default {
 
       if (url.pathname === "/orders/sync" && request.method === "POST") {
         await requireDispatcher(request);
-        const b = await request.json();
+        const b = await readJsonObject(request);
+        if (!b) return response({ status: "error", message: "Переданы неверные данные запроса. Отправьте корректный JSON-объект." }, 400);
         const items = Array.isArray(b.orders) ? b.orders : [b.order];
         for (const item of items) if (item) await syncOrder(env, item);
         return response({ status: "ok", synced: items.filter(Boolean).length });
@@ -908,7 +929,8 @@ export default {
 
       if (url.pathname === "/orders/complete" && request.method === "POST") {
         const auth = await requireDispatcher(request);
-        const b = await request.json();
+        const b = await readJsonObject(request);
+        if (!b) return response({ status: "error", message: "Переданы неверные данные запроса. Отправьте корректный JSON-объект." }, 400);
         const orderId = String(b.order_id || "");
         const fareSom = Number(b.fare_som);
         if (!orderId || !Number.isSafeInteger(fareSom) || fareSom < 1 || fareSom > 1000000) {
@@ -935,7 +957,8 @@ export default {
 
       if (url.pathname === "/orders/arrived" && request.method === "POST") {
         const auth = await requireApprovedDriver(request, env);
-        const b = await request.json();
+        const b = await readJsonObject(request);
+        if (!b) return response({ status: "error", message: "Переданы неверные данные запроса. Отправьте корректный JSON-объект." }, 400);
         const orderId = String(b.order_id || "");
         if (!orderId) return response({ status: "error", message: "Не указан заказ" }, 400);
         const result = await env.DB.prepare(`UPDATE orders SET status='arrived'
@@ -948,10 +971,8 @@ export default {
       }
 
       if (url.pathname === "/orders/cancel" && request.method === "POST") {
-        const b = await request.json();
-        if (!b || typeof b !== "object" || Array.isArray(b)) {
-          return response({ status: "error", message: "Переданы неверные данные отмены заказа" }, 400);
-        }
+        const b = await readJsonObject(request);
+        if (!b) return response({ status: "error", message: "Переданы неверные данные запроса. Отправьте корректный JSON-объект." }, 400);
         const orderId = typeof b.order_id === "string" ? b.order_id.trim() : "";
         const role = typeof b.role === "string" ? b.role.trim() : "";
         if (!/^[A-Za-z0-9_-]{1,128}$/.test(orderId) || !["customer", "driver"].includes(role)) {
@@ -1026,7 +1047,8 @@ export default {
 
       if (url.pathname === "/orders/respond" && request.method === "POST") {
         const auth = await requireApprovedDriver(request, env, true);
-        const b = await request.json();
+        const b = await readJsonObject(request);
+        if (!b) return response({ status: "error", message: "Переданы неверные данные запроса. Отправьте корректный JSON-объект." }, 400);
         const order = await env.DB.prepare("SELECT * FROM orders WHERE id=? AND status='new'").bind(String(b.order_id || "")).first();
          const activeOrder = await env.DB.prepare("SELECT id FROM orders WHERE assigned_driver_uid=? AND status IN ('driver_assigned','arrived') LIMIT 1")
            .bind(auth.user.localId).first();
@@ -1069,7 +1091,8 @@ export default {
 
       if (url.pathname === "/radio/messages" && request.method === "POST") {
         const member = await requireRadioMember(request, env);
-        const body = await request.json();
+        const body = await readJsonObject(request);
+        if (!body) return response({ status: "error", message: "Переданы неверные данные запроса. Отправьте корректный JSON-объект." }, 400);
         const message = String(body.message || "").trim();
         if (!message || message.length > 500 || hasForbiddenControlCharacters(message)) return response({ status: "error", message: "Сообщение должно содержать от 1 до 500 символов и не содержать управляющих символов" }, 400);
         const result = await env.DB.prepare(`INSERT INTO radio_messages (sender_uid,sender_name,sender_role,message,created_at)
@@ -1095,7 +1118,8 @@ export default {
           }
           return response({ status: "ok", busy: !!floor?.holder_uid, holder_name: floor?.holder_name || null });
         }
-        const body = await request.json();
+        const body = await readJsonObject(request);
+        if (!body) return response({ status: "error", message: "Переданы неверные данные запроса. Отправьте корректный JSON-объект." }, 400);
         const action = String(body.action || "");
         if (action === "release") {
           await env.DB.prepare("UPDATE radio_floor SET holder_uid=NULL,holder_name=NULL,expires_at=0 WHERE id=1 AND holder_uid=?").bind(member.user.localId).run();

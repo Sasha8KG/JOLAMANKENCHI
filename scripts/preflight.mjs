@@ -677,6 +677,19 @@ check('Customer cancellation checks the conditional status transition result', c
 check('Driver pre-arrival refusal, audit and response cleanup run in one D1 batch', cancelRoute.includes('const driverRefusalResults = await env.DB.batch([') && cancelRoute.includes('INSERT OR IGNORE INTO order_refusals') && cancelRoute.includes('DELETE FROM order_responses WHERE order_id=? AND driver_uid=?'));
 check('Driver refusal cannot reopen an order after a concurrent status change', cancelRoute.includes('driverRefusalResults?.[0]?.meta?.changes') && cancelRoute.includes("status='driver_assigned'"));
 
+// All user-supplied JSON bodies are parsed through one safe object reader.
+check('Worker JSON reader converts malformed and empty request bodies into client validation failures', /async function readJsonObject\(request\)[\s\S]*?try \{[\s\S]*?await request\.json\(\)[\s\S]*?catch \(_\)[\s\S]*?return null;/.test(worker));
+check('Worker JSON reader rejects arrays and primitive JSON values', /return value && typeof value === "object" && !Array\.isArray\(value\) \? value : null;/.test(worker));
+check('Worker JSON reader is the only direct request JSON parser', (worker.match(/request\.json\(\)/g) || []).length === 1);
+check('All 17 POST JSON handlers use the safe JSON reader', (worker.match(/await readJsonObject\(request\)/g) || []).length === 17);
+check('Driver registration and document upload reject malformed JSON before field access', /\/drivers\/register[\s\S]*?readJsonObject\(request\)[\s\S]*?if \(!b\)/.test(worker) && /\/drivers\/documents[\s\S]*?readJsonObject\(request\)[\s\S]*?if \(!b\)/.test(worker));
+check('Driver review and approval reject malformed JSON before field access', /\/drivers\/review[\s\S]*?readJsonObject\(request\)[\s\S]*?if \(!b\)/.test(worker) && /\/drivers\/approve[\s\S]*?readJsonObject\(request\)[\s\S]*?if \(!b\)/.test(worker));
+check('Tariff, commission and shift handlers reject malformed JSON before numeric conversion', /\/tariffs[\s\S]*?readJsonObject\(request\)[\s\S]*?if \(!b\)/.test(worker) && /\/drivers\/commission[\s\S]*?readJsonObject\(request\)[\s\S]*?if \(!b\)/.test(worker) && /\/dispatcher\/shifts\/close[\s\S]*?readJsonObject\(request\)[\s\S]*?if \(!b\)/.test(worker));
+check('Order assignment, online status and publishing reject malformed JSON before database writes', /\/orders\/assign[\s\S]*?readJsonObject\(request\)[\s\S]*?if \(!b\)/.test(worker) && /\/drivers\/online[\s\S]*?readJsonObject\(request\)[\s\S]*?if \(!b\)/.test(worker) && /\/orders\/publish[\s\S]*?readJsonObject\(request\)[\s\S]*?if \(!b\)/.test(worker));
+check('Order sync, completion and arrival reject malformed JSON before database writes', /\/orders\/sync[\s\S]*?readJsonObject\(request\)[\s\S]*?if \(!b\)/.test(worker) && /\/orders\/complete[\s\S]*?readJsonObject\(request\)[\s\S]*?if \(!b\)/.test(worker) && /\/orders\/arrived[\s\S]*?readJsonObject\(request\)[\s\S]*?if \(!b\)/.test(worker));
+check('Order cancellation and driver self-selection reject malformed JSON before database reads', /\/orders\/cancel[\s\S]*?readJsonObject\(request\)[\s\S]*?if \(!b\)/.test(worker) && /\/orders\/respond[\s\S]*?readJsonObject\(request\)[\s\S]*?if \(!b\)/.test(worker));
+check('Radio message and push-to-talk actions reject malformed JSON before field access', /\/radio\/messages[\s\S]*?readJsonObject\(request\)[\s\S]*?if \(!body\)/.test(worker) && /\/radio\/ptt[\s\S]*?readJsonObject\(request\)[\s\S]*?if \(!body\)/.test(worker));
+
 for (const item of checks) {
   process.stdout.write(`${item.ok ? 'PASS' : 'FAIL'}  ${item.label}\n`);
 }
