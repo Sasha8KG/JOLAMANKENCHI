@@ -757,7 +757,8 @@ check('Client has a manual retry control for current location', clientMapSource.
 check('Client map keeps manual pickup selection when GPS is unavailable', clientMapSource.includes('Keep the Sülüktü fallback and manual map selection available'));
 check('Passenger order screen uses branded yellow black app bar and language switcher', app.includes('ЖОЛ АМАН КЕНЧИ • ТАКСИ') && app.includes('child: TaxiLanguageSwitcher()'));
 check('Passenger order form is presented in a rounded gold bordered card', app.includes('BorderRadius.vertical(top: Radius.circular(24))') && app.includes('Border.all(color: const Color(0xFFE6A900), width: 1.5)'));
-check('Passenger city and intercity tariff chips use selected black and gold styling', app.includes('selectedColor: const Color(0xFF171717)') && app.includes('Color(0xFFFFD400)'));
+check('Passenger city and intercity tariff chips use gold selected state with dark readable text', app.includes('selectedColor: const Color(0xFFFFD400)') && app.includes('color: !_isIntercity ? const Color(0xFF171717)') && app.includes('color: _isIntercity ? const Color(0xFF171717)'));
+check('Passenger tariff section has a clear visual heading', app.includes("Text('ВЫБЕРИТЕ ТАРИФ'") && app.includes('letterSpacing: 0.8'));
 check('Passenger pickup instructions are highlighted with a location icon', app.includes('Точка подачи: нажмите на карту') && app.includes('Icons.location_on_rounded'));
 check('Passenger destination field has a flag icon and branded focus border', app.includes('Icons.flag_rounded') && app.includes('focusedBorder: OutlineInputBorder'));
 check('Passenger order action is a large taxi button with branded colors', app.includes('ElevatedButton.icon(') && app.includes('minimumSize: const Size.fromHeight(60)') && app.includes('ВЫЗВАТЬ МАШИНУ'));

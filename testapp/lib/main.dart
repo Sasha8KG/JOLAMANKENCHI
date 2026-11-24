@@ -2430,6 +2430,12 @@ class _ClientMapScreenState extends State<ClientMapScreen> with WidgetsBindingOb
                 ? Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      const Padding(
+                        padding: EdgeInsets.only(bottom: 8, left: 2),
+                        child: Text('ВЫБЕРИТЕ ТАРИФ',
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900,
+                            letterSpacing: 0.8, color: Color(0xFF65522A))),
+                      ),
                       Row(
                         children: [
                           Expanded(
@@ -2437,8 +2443,8 @@ class _ClientMapScreenState extends State<ClientMapScreen> with WidgetsBindingOb
                               label: Text(
                                   'По городу (${_cityFareSom > 0 ? '$_cityFareSom сом' : 'цена не задана'})',
                                   style: TextStyle(fontWeight: FontWeight.w800,
-                                    color: !_isIntercity ? const Color(0xFFFFD400) : const Color(0xFF171717))),
-                              selectedColor: const Color(0xFF171717),
+                                    color: !_isIntercity ? const Color(0xFF171717) : const Color(0xFF555555))),
+                              selectedColor: const Color(0xFFFFD400),
                               backgroundColor: const Color(0xFFF1EDE3),
                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                               selected: !_isIntercity,
@@ -2451,8 +2457,8 @@ class _ClientMapScreenState extends State<ClientMapScreen> with WidgetsBindingOb
                             child: ChoiceChip(
                               label: Text('Межгород (${_intercityFareSom > 0 ? '$_intercityFareSom сом' : 'цена не задана'})',
                                   style: TextStyle(fontWeight: FontWeight.w800,
-                                    color: _isIntercity ? const Color(0xFFFFD400) : const Color(0xFF171717))),
-                              selectedColor: const Color(0xFF171717),
+                                    color: _isIntercity ? const Color(0xFF171717) : const Color(0xFF555555))),
+                              selectedColor: const Color(0xFFFFD400),
                               backgroundColor: const Color(0xFFF1EDE3),
                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                               selected: _isIntercity,
