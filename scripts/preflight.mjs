@@ -604,7 +604,7 @@ const clientMapSource = clientMapStart >= 0 && clientMapEnd > clientMapStart
   ? app.slice(clientMapStart, clientMapEnd) : '';
 check('Client map requests the phone GPS automatically on entry', clientMapSource.includes('_locateClient(showMessage: false)'));
 check('Client location checks GPS service and requests runtime permission', clientMapSource.includes('Geolocator.isLocationServiceEnabled()') && clientMapSource.includes('Geolocator.requestPermission()'));
-check('Client GPS request has high accuracy and a bounded timeout', clientMapSource.includes('accuracy: LocationAccuracy.high') && clientMapSource.includes('timeLimit: Duration(seconds: 15)'));
+check('Client GPS request has high accuracy and a bounded timeout', clientMapSource.includes('desiredAccuracy: LocationAccuracy.high') && clientMapSource.includes('timeLimit: const Duration(seconds: 15)'));
 check('Client GPS coordinates update the passenger pickup marker', clientMapSource.includes('_clientCurrentLocation = point') && clientMapSource.includes('_pickupPoint = point'));
 check('Client map centers after map readiness and GPS acquisition', clientMapSource.includes('onMapReady:') && clientMapSource.includes('_clientMapController.move(point, 16.0)'));
 check('Client has a manual retry control for current location', clientMapSource.includes('centerClientOnMyLocation') && clientMapSource.includes('_locateClient(showMessage: true)'));
