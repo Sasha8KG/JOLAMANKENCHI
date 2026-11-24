@@ -27,72 +27,40 @@ class DispatcherOverviewSnapshot {
     final drivers = _readRows(payload, 'drivers', maxDrivers, 'uid');
     final orders = _readRows(payload, 'orders', maxOrders, 'id');
     final today = _readRows(payload, 'today', maxTodayStatuses);
-    final earnings = _readRows(payload, 'earnings', maxEarningsRows, 'driver_uid');
-    final closedShifts = _readRows(payload, 'closed_shifts', maxClosedShifts);
+    final earnings =
+        _readRows(payload, 'earnings', maxEarningsRows, 'driver_uid');
+    final closedShifts =
+        _readRows(payload, 'closed_shifts', maxClosedShifts);
 
     for (final row in today) {
       final status = row['status'];
       final count = row['count'];
-      if (status is! String || status.trim().isEmpty || status.length > 64 ||
-          count is! num || !count.isFinite || count < 0 ||
-          count % 1 != 0 || count > 9007199254740991) {
-        throw const FormatException('Сервер вернул неверную статистику заказов.');
+      if (status is! String ||
+          status.trim().isEmpty ||
+          status.length > 64 ||
+          count is! num ||
+          !count.isFinite ||
+          count < 0 ||
+          count % 1 != 0 ||
+          count > 9007199254740991) {
+        throw const FormatException(
+          'Сервер вернул неверную статистику заказов.',
+        );
       }
     }
 
     final rawDate = payload['business_date'];
-    final parsedDate = rawDate is String ? DateTime.tryParse(rawDate) : null;
+    final parsedDate =
+        rawDate is String ? DateTime.tryParse(rawDate) : null;
     if (rawDate is! String ||
-        !RegExp(r'^\d{4}-\d{2}-\d{2}
-
-    return DispatcherOverviewSnapshot._(
-      drivers: List.unmodifiable(drivers),
-      orders: List.unmodifiable(orders),
-      today: List.unmodifiable(today),
-      earnings: List.unmodifiable(earnings),
-      closedShifts: List.unmodifiable(closedShifts),
-      businessDate: rawDate,
-    );
-  }
-
-  static List<Map<String, dynamic>> _readRows(
-    Map<String, dynamic> payload,
-    String key,
-    int maxRows, [
-    String? uniqueIdKey,
-  ]) {
-    final raw = payload[key];
-    if (raw is! List || raw.length > maxRows) {
-      throw FormatException('Сервер вернул неверный список: $key.');
-    }
-    final seen = <String>{};
-    final rows = <Map<String, dynamic>>[];
-    for (final item in raw) {
-      if (item is! Map) {
-        throw FormatException('Список $key содержит повреждённую запись.');
-      }
-      final Map<String, dynamic> row;
-      try {
-        row = Map<String, dynamic>.from(item);
-      } catch (_) {
-        throw FormatException('Список $key содержит неверные поля.');
-      }
-      if (uniqueIdKey != null) {
-        final id = (row[uniqueIdKey] ?? '').toString().trim();
-        if (!RegExp(r'^[A-Za-z0-9_-]{1,128}$').hasMatch(id) ||
-            !seen.add(id)) {
-          throw FormatException('Список $key содержит неверный или повторный идентификатор.');
-        }
-      }
-      rows.add(Map<String, dynamic>.unmodifiable(row));
-    }
-    return rows;
-  }
-}
-).hasMatch(rawDate) ||
+        !RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(rawDate) ||
         parsedDate == null ||
-        parsedDate.toIso8601String().substring(0, 10) != rawDate) {
-      throw const FormatException('Сервер вернул неверную дату рабочего дня.');
+        parsedDate.year.toString().padLeft(4, '0') != rawDate.substring(0, 4) ||
+        parsedDate.month.toString().padLeft(2, '0') != rawDate.substring(5, 7) ||
+        parsedDate.day.toString().padLeft(2, '0') != rawDate.substring(8, 10)) {
+      throw const FormatException(
+        'Сервер вернул неверную дату рабочего дня.',
+      );
     }
 
     return DispatcherOverviewSnapshot._(
@@ -131,7 +99,9 @@ class DispatcherOverviewSnapshot {
         final id = (row[uniqueIdKey] ?? '').toString().trim();
         if (!RegExp(r'^[A-Za-z0-9_-]{1,128}$').hasMatch(id) ||
             !seen.add(id)) {
-          throw FormatException('Список $key содержит неверный или повторный идентификатор.');
+          throw FormatException(
+            'Список $key содержит неверный или повторный идентификатор.',
+          );
         }
       }
       rows.add(Map<String, dynamic>.unmodifiable(row));
