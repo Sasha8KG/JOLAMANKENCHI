@@ -892,7 +892,7 @@ check('Driver logout has a duplicate-action guard', app.includes('bool _logoutIn
 check('Driver logout disables its button while logout is running', app.includes('(_availabilityChanging || _logoutInProgress) ? null : _logoutDriver'));
 check('Driver logout cancels location retry before leaving the line', app.includes('_locationRetryTimer?.cancel();\n        _locationRetryTimer = null;'));
 check('Driver logout stops the GPS subscription and heartbeat before sign-out', app.includes('await _positionSubscription?.cancel();\n        _positionSubscription = null;\n        _stopLocationHeartbeat();'));
-check('Driver logout confirms server-side offline state before Firebase sign-out', app.includes('WorkerApi.setDriverOnline(online: false)') && app.includes("if (result['online'] != false) {\n          throw StateError('Сервер не подтвердил отключение от линии.')") && app.indexOf("if (result['online'] != false) {\n          throw StateError('Сервер не подтвердил отключение от линии.')") < app.indexOf('await FirebaseService.signOut().timeout(const Duration(seconds: 20));', app.indexOf('Future<void> _logoutDriver')));
+check('Driver logout confirms server-side offline state before Firebase sign-out', (() => { const start=app.indexOf('Future<void> _logoutDriver()'); const end=app.indexOf('\n  @override', start); const block=app.slice(start,end); const request=block.indexOf('WorkerApi.setDriverOnline(online: false)'); const confirmation=block.indexOf("if (result['online'] != false)"); const signOut=block.indexOf('FirebaseService.signOut()'); return request >= 0 && confirmation > request && signOut > confirmation; })());
 check('Driver logout keeps authentication when server offline confirmation fails', app.includes('Не удалось безопасно выйти. Аккаунт оставлен открытым') && app.includes('if (!_driverWantsOnline) _scheduleOfflineStateRetry();'));
 check('Driver logout clears local availability before requesting server offline state', app.includes('_driverWantsOnline = false;\n          _driverGpsReady = false;\n          _serverOpenOrders = [];'));
 check('Driver logout only clears the driver session after Firebase sign-out succeeds', app.includes('await FirebaseService.signOut().timeout(const Duration(seconds: 20));\n      TaxiParkState.currentLoggedInDriver = null;'));
@@ -908,6 +908,18 @@ check('Driver logout clears local online and GPS-ready flags before server reque
 check('Driver logout cancels GPS retry and stops the position stream before server request', app.includes('_locationRetryTimer?.cancel();\n      _locationRetryTimer = null;') && app.includes('await _positionSubscription?.cancel();\n      _positionSubscription = null;'));
 check('Driver logout stops the heartbeat before server confirmation', app.includes('_positionSubscription = null;\n      _stopLocationHeartbeat();\n\n      final result = await WorkerApi.setDriverOnline(online: false)'));
 check('Driver logout retains the active-trip and initial-order-check safeguards', app.includes('if (!_assignedOrdersLoaded) {') && app.includes('if (_serverAssignedOrders.isNotEmpty) {'));
+
+
+check('Driver document uploads use the explicit Firebase project bucket', app.includes("const String taxiFirebaseStorageBucket =\\n    'gs://jol-aman-kenchi.firebasestorage.app';"));
+check('Firebase Storage helper binds the configured bucket with instanceFor', app.includes('FirebaseStorage.instanceFor(bucket: taxiFirebaseStorageBucket)'));
+check('Initial driver document upload uses the explicit bucket', app.includes('final ref = taxiFirebaseStorage.ref().child(\'drivers/$uid/$kind.jpg\');'));
+check('Driver application document upload uses the explicit bucket', app.includes('final ref = taxiFirebaseStorage.ref().child(\'drivers/$uid/$kind.jpg\');'));
+check('Dispatcher document preview uses the same explicit bucket', app.includes('future: taxiFirebaseStorage.ref(path).getData(8 * 1024 * 1024)'));
+check('No driver upload path falls back to the Firebase default bucket', !app.includes('FirebaseStorage.instance.ref()'));
+check('No dispatcher document preview falls back to the Firebase default bucket', !app.includes('FirebaseStorage.instance.ref(path)'));
+check('Configured Firebase bucket retains the exact project identifier', app.includes('jol-aman-kenchi.firebasestorage.app'));
+check('Firebase Storage upload helper is available to driver registration', app.includes('FirebaseStorage get taxiFirebaseStorage'));
+check('Firebase Storage reads and writes share one configured bucket helper', app.split('taxiFirebaseStorage.ref').length >= 4);
 
 
 for (const item of checks) {

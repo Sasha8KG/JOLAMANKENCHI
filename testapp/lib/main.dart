@@ -4,6 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+
+// Use the exact bucket configured for the Firebase project. Relying on a
+// platform default can select an empty or legacy bucket on some installations.
+const String taxiFirebaseStorageBucket =
+    'gs://jol-aman-kenchi.firebasestorage.app';
+FirebaseStorage get taxiFirebaseStorage =>
+    FirebaseStorage.instanceFor(bucket: taxiFirebaseStorageBucket);
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -2702,7 +2709,7 @@ class _DriverEntryScreenState extends State<DriverEntryScreen> {
   );
 
   Future<String> _uploadDriverDocument(XFile file, String uid, String kind) async {
-    final ref = FirebaseStorage.instance.ref().child('drivers/$uid/$kind.jpg');
+    final ref = taxiFirebaseStorage.ref().child('drivers/$uid/$kind.jpg');
     final bytes = await file.readAsBytes();
     final task = await ref.putData(
       bytes,
@@ -2841,7 +2848,7 @@ class _DriverReviewStatusScreenState extends State<DriverReviewStatusScreen> {
     if (bytes.isEmpty || bytes.length != size || bytes.length > 8 * 1024 * 1024) {
       throw const WorkerApiException('Не удалось прочитать фотографию полностью. Выберите её заново.');
     }
-    final ref = FirebaseStorage.instance.ref().child('drivers/$uid/$kind.jpg');
+    final ref = taxiFirebaseStorage.ref().child('drivers/$uid/$kind.jpg');
     final task = await ref.putData(
       bytes,
       SettableMetadata(
@@ -4531,7 +4538,7 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
     await showDialog<void>(context: context, builder: (ctx) => AlertDialog(
       title: Text(label),
       content: SizedBox(width: 420, child: FutureBuilder<Uint8List?>(
-        future: FirebaseStorage.instance.ref(path).getData(8 * 1024 * 1024),
+        future: taxiFirebaseStorage.ref(path).getData(8 * 1024 * 1024),
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) return const SizedBox(height: 180, child: Center(child: CircularProgressIndicator()));
           if (snapshot.hasError || snapshot.data == null) return const Text('Не удалось загрузить документ. Проверьте правила Firebase Storage и подключение.');
