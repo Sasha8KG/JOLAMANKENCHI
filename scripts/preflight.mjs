@@ -871,6 +871,13 @@ check('Dispatcher dashboard copies validated immutable rows into UI state', app.
 check('Dispatcher snapshot regression tests cover malformed and duplicate data', read('testapp/test/dispatcher_overview_snapshot_test.dart').includes('rejects a malformed row') && read('testapp/test/dispatcher_overview_snapshot_test.dart').includes('returns immutable row maps and lists'));
 
 
+check('Dispatcher section headings wrap inside the available phone width', app.includes('Expanded(\n          child: Text(\n            value,') && app.includes('softWrap: true,'));
+check('Dispatcher cancellation history actions wrap instead of overflowing in a narrow row', app.includes('                Wrap(\n                  spacing: 8,\n                  runSpacing: 4,') && app.includes("label: const Text('Загрузить ещё')"));
+check('Dispatcher app-bar title truncates safely on narrow devices', app.includes("'Диспетчер · ЖОЛ АМАН КЕНЧИ',\n          maxLines: 1,\n          softWrap: false,\n          overflow: TextOverflow.ellipsis,"));
+check('Dispatcher trip completion action label can occupy two lines', app.includes("'ЗАВЕРШИТЬ И ЗАПИСАТЬ ОПЛАТУ',\n                          maxLines: 2,"));
+check('Closed-shift earnings trailing text has a bounded responsive width', app.includes('trailing: SizedBox(\n                    width: 116,') && app.includes('maxLines: 2,\n                      softWrap: true,'));
+
+
 for (const item of checks) {
   process.stdout.write(`${item.ok ? 'PASS' : 'FAIL'}  ${item.label}\n`);
 }

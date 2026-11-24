@@ -4496,8 +4496,20 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
 
   Widget _sectionTitle(String value, IconData icon) => Padding(
     padding: const EdgeInsets.only(top: 18, bottom: 8),
-    child: Row(children: [Icon(icon, color: Colors.brown), const SizedBox(width: 8),
-      Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold))]),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: Colors.brown),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            value,
+            softWrap: true,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+        ),
+      ],
+    ),
   );
 
   @override
@@ -4512,7 +4524,12 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF6F2E9),
       appBar: AppBar(
-        title: const Text('Диспетчер · ЖОЛ АМАН КЕНЧИ'),
+        title: const Text(
+          'Диспетчер · ЖОЛ АМАН КЕНЧИ',
+          maxLines: 1,
+          softWrap: false,
+          overflow: TextOverflow.ellipsis,
+        ),
         backgroundColor: const Color(0xFF171717),
         foregroundColor: const Color(0xFFFFD400),
         actions: [
@@ -4655,22 +4672,32 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
                       Text('Маршрут: ${o['pickup_address'] ?? '—'} → ${o['destination_address'] ?? '—'}'),
                       Align(alignment: Alignment.centerRight, child: ElevatedButton.icon(
                         onPressed: _working ? null : () => _completeTrip(o),
-                        icon: const Icon(Icons.check_circle), label: const Text('ЗАВЕРШИТЬ И ЗАПИСАТЬ ОПЛАТУ'))),
+                        icon: const Icon(Icons.check_circle),
+                        label: const Text(
+                          'ЗАВЕРШИТЬ И ЗАПИСАТЬ ОПЛАТУ',
+                          maxLines: 2,
+                          softWrap: true,
+                          textAlign: TextAlign.center,
+                        ))),
                     ])))),
                 _sectionTitle('Отмены после прибытия · неявка пассажира', Icons.person_off_outlined),
-                Row(children: [
-                  TextButton.icon(
-                    onPressed: _loadingMoreCancellations ? null : () => _refreshCancellationHistory(),
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('Обновить историю'),
-                  ),
-                  if (_hasMoreCancellations)
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: [
                     TextButton.icon(
-                      onPressed: _loadingMoreCancellations ? null : _loadMoreCancellationHistory,
-                      icon: const Icon(Icons.expand_more),
-                      label: const Text('Загрузить ещё'),
+                      onPressed: _loadingMoreCancellations ? null : () => _refreshCancellationHistory(),
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Обновить историю'),
                     ),
-                ]),
+                    if (_hasMoreCancellations)
+                      TextButton.icon(
+                        onPressed: _loadingMoreCancellations ? null : _loadMoreCancellationHistory,
+                        icon: const Icon(Icons.expand_more),
+                        label: const Text('Загрузить ещё'),
+                      ),
+                  ],
+                ),
                 if (_cancellations.isEmpty && !_loadingMoreCancellations)
                   const Text('Нет отмен по причине отсутствия пассажира.'),
                 if (_loadingMoreCancellations && _cancellations.isEmpty)
@@ -4748,8 +4775,16 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
                   leading: const Icon(Icons.verified, color: Colors.green),
                   title: Text((row['driver_name'] ?? 'Водитель').toString()),
                   subtitle: Text('Дата: ${row['shift_date']} · Поездок: ${row['trip_count']} · Процент водителя: ${row['driver_percent']}%'),
-                  trailing: Text('${row['gross_earnings_som']} сом\nВодителю: ${row['driver_share_som']} сом',
-                    textAlign: TextAlign.end, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  trailing: SizedBox(
+                    width: 116,
+                    child: Text(
+                      '${row['gross_earnings_som']} сом\nВодителю: ${row['driver_share_som']} сом',
+                      maxLines: 2,
+                      softWrap: true,
+                      textAlign: TextAlign.end,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
                 ))),
                 _sectionTitle('Статусы заказов за сегодня', Icons.analytics_outlined),
                 ..._today.map((row) => ListTile(dense: true, title: Text((row['status'] ?? '—').toString()), trailing: Text('${row['count'] ?? 0}'))),
