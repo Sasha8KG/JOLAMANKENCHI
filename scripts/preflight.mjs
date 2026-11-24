@@ -292,7 +292,7 @@ check("Dispatcher overview supplies driver GPS coordinates", worker.includes("d.
 check("Dispatcher overview is protected by dispatcher authentication", /url\.pathname === "\/dispatcher\/overview"[\s\S]{0,100}requireDispatcher\(request\)/.test(worker));
 check("Dispatcher dashboard refresh timer is configured", app.includes("Timer.periodic(const Duration(seconds: 15)"));
 check("Dispatcher refresh runs without replacing the dashboard", app.includes("_load(showLoading: false)"));
-check("Dispatcher refresh avoids overlapping requests", app.includes("if (_dispatcherLoadInProgress) return;"));
+check("Dispatcher refresh coalesces overlapping requests into one follow-up", app.includes("if (_dispatcherLoadInProgress) {") && app.includes("_dispatcherRefreshPending = true;") && app.includes("scheduleMicrotask(() => _load(showLoading: false))"));
 check("Dispatcher refresh lock is released in finally", app.includes("_dispatcherLoadInProgress = false;"));
 check("Dispatcher refresh pauses while an action is running", app.includes("mounted && !_working"));
 check("Dispatcher map filters approved drivers", app.includes("if (!approved || !online) continue;") && app.includes("driver['approved']"));
@@ -318,7 +318,7 @@ check("Background refresh failure preserves the last loaded driver data", /else 
 check("Dispatcher shows a non-blocking offline refresh notice", app.includes("Показаны последние загруженные данные"));
 check("Dispatcher refresh notice can be dismissed", app.includes("onPressed: () => setState(() => _dispatcherRefreshError = null)"));
 check("Dispatcher refresh still retries on its periodic timer", app.includes("Timer.periodic(const Duration(seconds: 15)"));
-check("Dispatcher load lock still prevents overlapping refresh calls", app.includes("if (_dispatcherLoadInProgress) return;"));
+check("Dispatcher load lock marks a pending refresh instead of starting a concurrent request", app.includes("if (_dispatcherLoadInProgress) {") && app.includes("_dispatcherRefreshPending = true;"));
 check("Dispatcher load lock is released even after request errors", app.includes("_dispatcherLoadInProgress = false;"));
 check("Dispatcher fleet map falls back to Sulyukta when no fresh cars exist", app.includes("markers.isEmpty") && app.includes("TaxiParkState.sulyuktaCenter"));
 check("Dispatcher fleet map calculates latitude center from fresh markers", app.includes("marker.point.latitude).reduce"));
