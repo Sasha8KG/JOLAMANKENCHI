@@ -1473,15 +1473,70 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
   Timer? _nearbyDriversTimer;
   bool _nearbyDriversRequestInProgress = false;
   final MapController _clientMapController = MapController();
+  LatLng? _clientCurrentLocation;
+  bool _clientMapReady = false;
+  bool _clientLocationLoading = false;
 
   @override
   void initState() {
     super.initState();
     _loadTariffs();
+    // Determine the passenger pickup point from the phone GPS on entry.
+    unawaited(_locateClient(showMessage: false));
     unawaited(_refreshNearbyDrivers());
     _nearbyDriversTimer = Timer.periodic(const Duration(seconds: 20), (_) {
       unawaited(_refreshNearbyDrivers());
     });
+  }
+
+  Future<void> _locateClient({required bool showMessage}) async {
+    if (!mounted || _clientLocationLoading || TaxiParkState.activeOrder != null) return;
+    setState(() => _clientLocationLoading = true);
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        throw Exception('Включите геолокацию (GPS) в настройках телефона.');
+      }
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        throw Exception('Разрешите приложению доступ к местоположению.');
+      }
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 15),
+        ),
+      );
+      final point = LatLng(position.latitude, position.longitude);
+      if (!point.latitude.isFinite || !point.longitude.isFinite ||
+          point.latitude < -90 || point.latitude > 90 ||
+          point.longitude < -180 || point.longitude > 180) {
+        throw Exception('Телефон вернул некорректные GPS-координаты.');
+      }
+      if (!mounted) return;
+      setState(() {
+        _clientCurrentLocation = point;
+        _pickupPoint = point;
+        _clientLocationLoading = false;
+      });
+      if (_clientMapReady) {
+        _clientMapController.move(point, 16.0);
+      }
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _clientLocationLoading = false);
+      if (showMessage) {
+        final message = error.toString().replaceFirst('Exception: ', '');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Не удалось определить ваше местоположение: $message')),
+        );
+      }
+      // Keep the Sülüktü fallback and manual map selection available.
+    }
   }
 
   Future<void> _refreshNearbyDrivers() async {
@@ -1896,6 +1951,13 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
               options: MapOptions(
                 initialCenter: _pickupPoint,
                 initialZoom: 14.5,
+                onMapReady: () {
+                  _clientMapReady = true;
+                  final current = _clientCurrentLocation;
+                  if (current != null && mounted) {
+                    _clientMapController.move(current, 16.0);
+                  }
+                },
                 onTap: (tapPosition, point) {
                   if (TaxiParkState.activeOrder == null) {
                     setState(() => _pickupPoint = point);
@@ -1934,6 +1996,25 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
                 ),
               ],
                 ),
+                if (order == null)
+                  Positioned(
+                    right: 14,
+                    top: 14,
+                    child: FloatingActionButton.small(
+                      heroTag: 'centerClientOnMyLocation',
+                      tooltip: 'Моё местоположение',
+                      onPressed: _clientLocationLoading
+                          ? null
+                          : () => unawaited(_locateClient(showMessage: true)),
+                      child: _clientLocationLoading
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.my_location),
+                    ),
+                  ),
                 if (order?.assignedDriver != null && gpsIsFresh)
                   Positioned(
                     right: 14,

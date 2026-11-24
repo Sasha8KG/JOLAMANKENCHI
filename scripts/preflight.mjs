@@ -598,6 +598,17 @@ check('Global app bars use the gold and black brand palette', app.includes('back
 check('Primary buttons use black surfaces with gold labels', app.includes('backgroundColor: const Color(0xFF171717)') && app.includes('foregroundColor: const Color(0xFFFFD400)'));
 check('Cards use gold brand borders', app.includes('BorderSide(color: Color(0xFFE6A900), width: 1.2)'));
 check('Map tile source remains keyless OpenStreetMap DE', app.includes('https://tile.openstreetmap.de/{z}/{x}/{y}.png'));
+const clientMapStart = app.indexOf('class _ClientMapScreenState');
+const clientMapEnd = app.indexOf('class DriverMapScreen', clientMapStart);
+const clientMapSource = clientMapStart >= 0 && clientMapEnd > clientMapStart
+  ? app.slice(clientMapStart, clientMapEnd) : '';
+check('Client map requests the phone GPS automatically on entry', clientMapSource.includes('_locateClient(showMessage: false)'));
+check('Client location checks GPS service and requests runtime permission', clientMapSource.includes('Geolocator.isLocationServiceEnabled()') && clientMapSource.includes('Geolocator.requestPermission()'));
+check('Client GPS request has high accuracy and a bounded timeout', clientMapSource.includes('accuracy: LocationAccuracy.high') && clientMapSource.includes('timeLimit: Duration(seconds: 15)'));
+check('Client GPS coordinates update the passenger pickup marker', clientMapSource.includes('_clientCurrentLocation = point') && clientMapSource.includes('_pickupPoint = point'));
+check('Client map centers after map readiness and GPS acquisition', clientMapSource.includes('onMapReady:') && clientMapSource.includes('_clientMapController.move(point, 16.0)'));
+check('Client has a manual retry control for current location', clientMapSource.includes('centerClientOnMyLocation') && clientMapSource.includes('_locateClient(showMessage: true)'));
+check('Client map keeps manual pickup selection when GPS is unavailable', clientMapSource.includes('Keep the Sülüktü fallback and manual map selection available'));
 check('Passenger order screen uses branded yellow black app bar and language switcher', app.includes('ЖОЛ АМАН КЕНЧИ • ТАКСИ') && app.includes('child: TaxiLanguageSwitcher()'));
 check('Passenger order form is presented in a rounded gold bordered card', app.includes('BorderRadius.vertical(top: Radius.circular(24))') && app.includes('Border.all(color: const Color(0xFFE6A900), width: 1.5)'));
 check('Passenger city and intercity tariff chips use selected black and gold styling', app.includes('selectedColor: const Color(0xFF171717)') && app.includes('Color(0xFFFFD400)'));
