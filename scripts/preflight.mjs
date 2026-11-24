@@ -144,7 +144,7 @@ check('Driver order polling rejects duplicate or malformed order rows', orderSna
 check('Driver order polling enforces at most one active trip', orderSnapshot.includes('rawAssigned.length > 1') && orderSnapshotTests.includes('rejects more than one assigned order'));
 check('Driver open-order feed contains only new orders', orderSnapshot.includes("expectedStatus: 'new'") && orderSnapshotTests.includes('rejects an invalid free-order status'));
 check('Driver assigned-order feed contains only active statuses', orderSnapshot.includes("allowedStatuses: const {'driver_assigned', 'arrived'}") && orderSnapshotTests.includes('rejects an invalid assigned-order status'));
-check('Driver order polling rejects an order listed as both open and assigned', orderSnapshot.includes('assigned.any((order) => openIds.contains(order[\'id\'] as String))') && orderSnapshotTests.includes('rejects the same order appearing in both lists'));
+check('Driver order polling rejects an order listed as both open and assigned', orderSnapshot.includes("assigned.any((order) => openIds.contains(order['id']))") && orderSnapshotTests.includes('rejects the same order appearing in both lists'));
 check('Driver route re-fetches after an in-flight request observes a replacement assignment', app.includes('refreshAfterRoute = latestAssignedId.isNotEmpty;'));
 check('Driver route response revalidates current pickup and GPS coordinates', app.includes('String? _currentDriverRouteKey(String orderId)') && app.includes('final latestRouteKey = _currentDriverRouteKey(id);'));
 check('A stale route request is refreshed after GPS movement', /if \(refreshAfterRoute && mounted\)\s*\{\s*unawaited\(_loadDriverApproachRoute\(\)\);/.test(app));
