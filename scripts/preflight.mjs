@@ -32,6 +32,7 @@ const refreshGate = read('testapp/lib/services/refresh_gate.dart');
 const orderSnapshot = read('testapp/lib/services/server_order_snapshot.dart');
 const orderSnapshotTests = read('testapp/test/server_order_snapshot_test.dart');
 const app = read('testapp/lib/main.dart');
+const localization = read('testapp/lib/services/taxi_localization.dart');
 const registration = read('testapp/lib/driver_registration_screen.dart');
 const storageRules = read('backend/firebase-storage.rules');
 
