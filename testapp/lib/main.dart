@@ -14,6 +14,7 @@ import 'driver_registration_screen.dart';
 import 'services/worker_api.dart';
 import 'services/route_service.dart';
 import 'services/gps_freshness.dart';
+import 'services/nearby_driver_filter.dart';
 
 // Сохраняем проверенную карту OpenStreetMap DE: ей не нужен API-ключ.
 List<Widget> buildTaxiDarkMapLayers() => [
@@ -1591,11 +1592,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
     try {
       final data = await WorkerApi.nearbyDrivers();
       final rawDrivers = data['drivers'];
-      // Show only the closest available cars around the selected pickup point.
-      // This avoids displaying drivers from distant towns as if they were nearby.
-      const maxNearbyDistanceKm = 20.0;
-      const maxNearbyMarkers = 10;
-      final rankedPoints = <MapEntry<double, MapEntry<LatLng, DateTime>>>[];
+      final candidates = <MapEntry<LatLng, DateTime>>[];
       if (rawDrivers is List) {
         for (final raw in rawDrivers.whereType<Map>()) {
           final lat = double.tryParse((raw['latitude'] ?? '').toString());
@@ -1604,24 +1601,15 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
           if (lat == null || lng == null || !lat.isFinite || !lng.isFinite ||
               lat < -90 || lat > 90 || lng < -180 || lng > 180 ||
               !isGpsTimestampFresh(updatedAt)) continue;
-          final point = LatLng(lat, lng);
-          final distanceKm = const Distance().as(
-            LengthUnit.Kilometer,
-            _pickupPoint,
-            point,
-          );
-          if (!distanceKm.isFinite || distanceKm > maxNearbyDistanceKm) continue;
-          rankedPoints.add(MapEntry(
-            distanceKm,
-            MapEntry(point, updatedAt!),
-          ));
+          candidates.add(MapEntry(LatLng(lat, lng), updatedAt!));
         }
       }
-      rankedPoints.sort((a, b) => a.key.compareTo(b.key));
-      final points = rankedPoints
-          .take(maxNearbyMarkers)
-          .map((item) => item.value)
-          .toList();
+      final points = selectNearbyDriverLocations(
+        pickup: _pickupPoint,
+        candidates: candidates,
+        maxDistanceKm: 20,
+        maxResults: 10,
+      );
       if (mounted) {
         setState(() {
           _nearbyDriverPoints

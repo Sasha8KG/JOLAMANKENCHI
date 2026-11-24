@@ -5,6 +5,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:sulyukta_taxi/services/firebase_service.dart';
 import 'package:sulyukta_taxi/services/route_service.dart';
 import 'package:sulyukta_taxi/services/gps_freshness.dart';
+import 'package:sulyukta_taxi/services/nearby_driver_filter.dart';
 
 void main() {
   group('Localized login screens', () {
@@ -430,6 +431,64 @@ void main() {
     test('rejects a timestamp one millisecond in the future at a zero-age limit', () {
       expect(isGpsTimestampFresh(now.add(const Duration(milliseconds: 1)),
         now: now, maxAge: Duration.zero), isFalse);
+    });
+  });
+
+  group('Nearby driver filtering', () {
+    final now = DateTime.utc(2026, 11, 24, 9);
+    const pickup = LatLng(39.9380, 69.5650);
+
+    test('sorts fresh nearby cars by distance from pickup', () {
+      final candidates = [
+        MapEntry(const LatLng(39.9480, 69.5650), now),
+        MapEntry(const LatLng(39.9390, 69.5650), now),
+        MapEntry(const LatLng(39.9430, 69.5650), now),
+      ];
+      final result = selectNearbyDriverLocations(pickup: pickup, candidates: candidates, now: now);
+      expect(result, [candidates[1], candidates[2], candidates[0]]);
+    });
+
+    test('excludes cars beyond the requested radius', () {
+      final candidates = [
+        MapEntry(const LatLng(39.9390, 69.5650), now),
+        MapEntry(const LatLng(40.20, 69.5650), now),
+      ];
+      final result = selectNearbyDriverLocations(
+        pickup: pickup, candidates: candidates, now: now, maxDistanceKm: 5,
+      );
+      expect(result, [candidates.first]);
+    });
+
+    test('limits the number of visible cars after sorting', () {
+      final candidates = List.generate(12, (index) => MapEntry(
+        LatLng(39.9380 + (index + 1) * 0.001, 69.5650), now,
+      ));
+      final result = selectNearbyDriverLocations(
+        pickup: pickup, candidates: candidates, now: now, maxResults: 3,
+      );
+      expect(result, hasLength(3));
+      expect(result.first, candidates.first);
+    });
+
+    test('excludes stale, future and invalid GPS positions', () {
+      final candidates = [
+        MapEntry(const LatLng(39.9390, 69.5650), now),
+        MapEntry(const LatLng(39.9400, 69.5650), now.subtract(const Duration(seconds: 61))),
+        MapEntry(const LatLng(39.9410, 69.5650), now.add(const Duration(seconds: 1))),
+        MapEntry(LatLng(double.nan, 69.5650), now),
+      ];
+      final result = selectNearbyDriverLocations(pickup: pickup, candidates: candidates, now: now);
+      expect(result, [candidates.first]);
+    });
+
+    test('returns empty for invalid limits or pickup coordinates', () {
+      final candidate = MapEntry(const LatLng(39.9390, 69.5650), now);
+      expect(selectNearbyDriverLocations(
+        pickup: pickup, candidates: [candidate], now: now, maxResults: 0,
+      ), isEmpty);
+      expect(selectNearbyDriverLocations(
+        pickup: LatLng(double.nan, 0), candidates: [candidate], now: now,
+      ), isEmpty);
     });
   });
 
