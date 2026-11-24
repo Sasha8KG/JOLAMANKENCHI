@@ -113,7 +113,7 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
     if (bytes.isEmpty || bytes.length != expectedSize || bytes.length > 8 * 1024 * 1024) {
       throw const WorkerApiException('Фотография изменилась или превышает 8 МБ. Выберите её заново.');
     }
-    final ref = FirebaseStorage.instance.ref().child('drivers/$uid/$kind.jpg');
+    final ref = FirebaseStorage.instanceFor(bucket: 'gs://jol-aman-kenchi.firebasestorage.app').ref().child('drivers/$uid/$kind.jpg');
     final task = await ref.putData(
       bytes,
       SettableMetadata(
@@ -233,7 +233,9 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
     } on FirebaseException catch (e) {
       _message(e.code == 'unauthorized' || e.code == 'unauthenticated'
           ? 'Firebase не разрешил загрузку документов. Повторите вход и отправку.'
-          : 'Ошибка хранилища фотографий (${e.code}). Проверьте интернет и повторите попытку.');
+          : e.code == 'object-not-found'
+              ? 'Firebase Storage не нашёл указанное хранилище. Проверьте, что в проекте jol-aman-kenchi создано хранилище jol-aman-kenchi.firebasestorage.app и опубликованы правила доступа.'
+              : 'Ошибка хранилища фотографий (${e.code}) на этапе: ${_stage ?? 'загрузка'}. Проверьте интернет и повторите попытку.');
     } on WorkerApiException catch (e) {
       // Не удаляем созданный Firebase-аккаунт и не выходим из него:
       // следующая попытка сможет продолжить анкету на том же номере.

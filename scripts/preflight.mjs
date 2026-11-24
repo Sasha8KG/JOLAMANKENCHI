@@ -622,6 +622,7 @@ check('Each driver photo is limited to 8 MB before upload', registration.include
 check('Uploaded photo bytes are checked against the original file size', registration.includes('bytes.length != expectedSize'));
 check('Driver photo upload has a 90-second timeout', registration.includes('.timeout(const Duration(seconds: 90))'));
 check('Driver upload writes to the authenticated UID folder', registration.includes("child('drivers/$uid/$kind.jpg')"));
+check('Driver upload explicitly targets the configured Firebase Storage bucket', registration.includes("instanceFor(bucket: 'gs://jol-aman-kenchi.firebasestorage.app')"));
 check('Driver upload records owner UID metadata', registration.includes("'ownerUid': uid"));
 check('Driver upload records the document type metadata', registration.includes("'documentType': kind"));
 check('Driver upload verifies the final Storage path', registration.includes("uploadedPath != 'drivers/$uid/$kind.jpg'"));
@@ -659,7 +660,8 @@ check('Document submission immediately disables driver approval and online statu
 check('Driver review endpoint requires dispatcher authentication', reviewRoute.includes('await requireDispatcher(request)'));
 check('Driver review accepts only approved or rejected decisions', reviewRoute.includes('!["approved", "rejected"].includes(decision)'));
 check('Driver rejection requires a meaningful reason', reviewRoute.includes("decision === \"rejected\" && reason.length < 5"));
-check('Driver approval requires all three submitted documents', reviewRoute.includes('!docs.license_url || !docs.driver_photo_url || !docs.car_photo_url'));
+check('Driver approval requires all three submitted documents', reviewRoute.includes('decision === "approved" && !hasAllDocuments'));
+check('Dispatcher can reject an incomplete driver application with a reason', reviewRoute.includes('decision === "rejected"') && reviewRoute.includes("VALUES (?,'','','',unixepoch(),'pending',NULL,NULL,NULL)") && reviewRoute.includes('reason.length < 5'));
 check('Driver review only acts on a pending document submission', reviewRoute.includes('docs.review_status !== "pending"'));
 check('Driver review records reviewer identity and timestamp', reviewRoute.includes('reviewed_at=unixepoch(), reviewed_by=?'));
 check('Driver review updates the driver approval state and keeps driver offline', reviewRoute.includes('UPDATE drivers SET approved=?, online=0, updated_at=unixepoch()'));

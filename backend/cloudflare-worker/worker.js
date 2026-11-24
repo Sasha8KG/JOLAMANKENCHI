@@ -474,13 +474,22 @@ export default {
           return response({ status: "error", message: "Укажите водителя и решение" }, 400);
         if (decision === "rejected" && reason.length < 5)
           return response({ status: "error", message: "Напишите причину отказа (не менее 5 символов)" }, 400);
-        const docs = await env.DB.prepare("SELECT license_url,driver_photo_url,car_photo_url,review_status FROM driver_documents WHERE driver_uid=?").bind(uid).first();
-        if (!docs || !docs.license_url || !docs.driver_photo_url || !docs.car_photo_url)
-          return response({ status: "error", message: "У водителя ещё нет всех трёх документов" }, 409);
-        if (docs.review_status !== "pending")
-          return response({ status: "error", message: "Водитель должен повторно отправить документы. Одобрение до новой отправки запрещено." }, 409);
         const exists = await env.DB.prepare("SELECT uid FROM drivers WHERE uid=?").bind(uid).first();
         if (!exists) return response({ status: "error", message: "Водитель не найден" }, 404);
+        let docs = await env.DB.prepare("SELECT license_url,driver_photo_url,car_photo_url,review_status FROM driver_documents WHERE driver_uid=?").bind(uid).first();
+        const hasAllDocuments = Boolean(docs && docs.license_url && docs.driver_photo_url && docs.car_photo_url);
+        // Approval requires all three files. Rejection must remain possible for
+        // incomplete applications so the dispatcher can explain what is missing.
+        if (decision === "approved" && !hasAllDocuments)
+          return response({ status: "error", message: "Для одобрения водителю нужны все три документа" }, 409);
+        if (!docs && decision === "rejected") {
+          await env.DB.prepare(`INSERT OR IGNORE INTO driver_documents
+            (driver_uid,license_url,driver_photo_url,car_photo_url,submitted_at,review_status,rejection_reason,reviewed_at,reviewed_by)
+            VALUES (?,'','','',unixepoch(),'pending',NULL,NULL,NULL)`).bind(uid).run();
+          docs = await env.DB.prepare("SELECT license_url,driver_photo_url,car_photo_url,review_status FROM driver_documents WHERE driver_uid=?").bind(uid).first();
+        }
+        if (!docs || docs.review_status !== "pending")
+          return response({ status: "error", message: "Заявка уже обработана. Водитель должен повторно отправить документы для новой проверки." }, 409);
         // Apply the document decision and driver access change in one D1 batch.
         // The second statement is tied to the exact review result, preventing a
         // concurrent reviewer from changing access based on a stale decision.
