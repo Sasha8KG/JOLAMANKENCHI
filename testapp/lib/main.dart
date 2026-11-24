@@ -1491,6 +1491,35 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
     });
   }
 
+  Future<void> _showClientLocationSettingsDialog() async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Доступ к геолокации запрещён'),
+        content: const Text(
+          'Разрешение было запрещено в настройках телефона. '
+          'Откройте настройки приложения и включите доступ к местоположению, '
+          'затем вернитесь сюда и нажмите кнопку геолокации ещё раз.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Позже'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () async {
+              Navigator.of(dialogContext).pop();
+              await Geolocator.openAppSettings();
+            },
+            icon: const Icon(Icons.settings),
+            label: const Text('Открыть настройки'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _locateClient({required bool showMessage}) async {
     if (!mounted || _clientLocationLoading || TaxiParkState.activeOrder != null) return;
     setState(() => _clientLocationLoading = true);
@@ -1503,8 +1532,16 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
       }
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
+      if (permission == LocationPermission.deniedForever) {
+        if (mounted) {
+          setState(() => _clientLocationLoading = false);
+        }
+        if (showMessage) {
+          await _showClientLocationSettingsDialog();
+        }
+        return;
+      }
+      if (permission == LocationPermission.denied) {
         throw Exception('Разрешите приложению доступ к местоположению.');
       }
       final position = await Geolocator.getCurrentPosition(
