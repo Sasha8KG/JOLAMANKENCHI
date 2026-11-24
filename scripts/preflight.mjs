@@ -851,7 +851,7 @@ check('Driver refusal cannot reopen an order after a concurrent status change', 
 check('Worker JSON reader converts malformed and empty request bodies into client validation failures', /async function readJsonObject\(request\)[\s\S]*?try \{[\s\S]*?await request\.json\(\)[\s\S]*?catch \(_\)[\s\S]*?return null;/.test(worker));
 check('Worker JSON reader rejects arrays and primitive JSON values', /return value && typeof value === "object" && !Array\.isArray\(value\) \? value : null;/.test(worker));
 check('Worker JSON reader is the only direct request JSON parser', (worker.match(/request\.json\(\)/g) || []).length === 1);
-check('All 17 POST JSON handlers use the safe JSON reader', (worker.match(/await readJsonObject\(request\)/g) || []).length === 17);
+check('All 20 POST JSON handlers use the safe JSON reader', (worker.match(/await readJsonObject\(request\)/g) || []).length === 20);
 check('Driver registration and document upload reject malformed JSON before field access', /\/drivers\/register[\s\S]*?readJsonObject\(request\)[\s\S]*?if \(!b\)/.test(worker) && /\/drivers\/documents[\s\S]*?readJsonObject\(request\)[\s\S]*?if \(!b\)/.test(worker));
 check('Driver review and approval reject malformed JSON before field access', /\/drivers\/review[\s\S]*?readJsonObject\(request\)[\s\S]*?if \(!b\)/.test(worker) && /\/drivers\/approve[\s\S]*?readJsonObject\(request\)[\s\S]*?if \(!b\)/.test(worker));
 check('Tariff, commission and shift handlers reject malformed JSON before numeric conversion', /\/tariffs[\s\S]*?readJsonObject\(request\)[\s\S]*?if \(!b\)/.test(worker) && /\/drivers\/commission[\s\S]*?readJsonObject\(request\)[\s\S]*?if \(!b\)/.test(worker) && /\/dispatcher\/shifts\/close[\s\S]*?readJsonObject\(request\)[\s\S]*?if \(!b\)/.test(worker));
@@ -910,7 +910,7 @@ check('Driver logout stops the heartbeat before server confirmation', app.includ
 check('Driver logout retains the active-trip and initial-order-check safeguards', app.includes('if (!_assignedOrdersLoaded) {') && app.includes('if (_serverAssignedOrders.isNotEmpty) {'));
 
 
-check('Driver document uploads use the explicit Firebase project bucket', app.includes("const String taxiFirebaseStorageBucket =\\n    'gs://jol-aman-kenchi.firebasestorage.app';"));
+check('Driver document uploads use the explicit Firebase project bucket', app.includes("const String taxiFirebaseStorageBucket =\n    'gs://jol-aman-kenchi.firebasestorage.app';"));
 check('Firebase Storage helper binds the configured bucket with instanceFor', app.includes('FirebaseStorage.instanceFor(bucket: taxiFirebaseStorageBucket)'));
 check('Initial driver document upload uses the explicit bucket', app.includes('final ref = taxiFirebaseStorage.ref().child(\'drivers/$uid/$kind.jpg\');'));
 check('Driver application document upload uses the explicit bucket', app.includes('final ref = taxiFirebaseStorage.ref().child(\'drivers/$uid/$kind.jpg\');'));
