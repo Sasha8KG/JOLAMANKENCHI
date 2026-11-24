@@ -4,13 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-
-// Use the exact bucket configured for the Firebase project. Relying on a
-// platform default can select an empty or legacy bucket on some installations.
-const String taxiFirebaseStorageBucket =
-    'gs://jol-aman-kenchi.firebasestorage.app';
-FirebaseStorage get taxiFirebaseStorage =>
-    FirebaseStorage.instanceFor(bucket: taxiFirebaseStorageBucket);
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -27,6 +20,13 @@ import 'services/nearby_driver_filter.dart';
 import 'services/refresh_gate.dart';
 import 'services/server_order_snapshot.dart';
 import 'services/dispatcher_overview_snapshot.dart';
+
+// Use the exact bucket configured for the Firebase project. Relying on a
+// platform default can select an empty or legacy bucket on some installations.
+const String taxiFirebaseStorageBucket =
+    'gs://jol-aman-kenchi.firebasestorage.app';
+FirebaseStorage get taxiFirebaseStorage =>
+    FirebaseStorage.instanceFor(bucket: taxiFirebaseStorageBucket);
 
 // Сохраняем проверенную карту OpenStreetMap DE: ей не нужен API-ключ.
 List<Widget> buildTaxiDarkMapLayers() => [
