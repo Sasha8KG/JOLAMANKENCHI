@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:jol_aman_kenchi/main.dart';
+import 'package:sulyukta_taxi/main.dart';
 
 void main() {
   setUp(() => TaxiLanguage.current.value = 'ru');
