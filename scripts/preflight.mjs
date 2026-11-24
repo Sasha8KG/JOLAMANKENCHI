@@ -825,7 +825,11 @@ check('Driver resume recovery never turns an explicitly offline driver online', 
 check('GPS and manual pickup changes request a nearby-driver refresh',
   app.includes('unawaited(_refreshNearbyDrivers());') &&
   nearbyRefreshBlock.includes('WorkerApi.nearbyDrivers()'));
-check('Offline restore accepts only assigned and arrived active statuses', app.includes("!['driver_assigned', 'arrived'].contains((item['status'] ?? '').toString())"));
+check('Offline restore accepts only assigned and arrived active statuses',
+  orderSnapshot.includes("allowedStatuses: const {'driver_assigned', 'arrived'}") &&
+  orderSnapshot.includes('!allowedStatuses.contains(status)') &&
+  orderSnapshotTests.includes('rejects an invalid assigned-order status') &&
+  app.includes('_serverAssignedOrders = assigned;'));
 check('Offline restore clears stale route when there is no active assignment', app.includes('if (assigned.isEmpty) {') && app.includes('_driverApproachRoute = null;') && app.includes('_driverRouteOrderId = null;'));
 check('Periodic order refresh continues to recover an assigned trip', app.includes('Timer.periodic(const Duration(seconds: 5), (_) {') && app.includes('_pollServerOrders();'));
 
