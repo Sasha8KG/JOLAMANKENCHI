@@ -649,7 +649,12 @@ check("Dispatcher header uses dark gold styling", /backgroundColor: const Color\
 
 // Offline drivers must still be able to restore an assigned trip; only the open queue
 // is restricted to online drivers with fresh GPS.
-check('Assigned-order endpoint permits approved offline drivers to restore active trips', /url\.pathname === "\/orders\/open"[\s\S]*?requireApprovedDriver\(request, env\);/.test(worker) && !/url\.pathname === "\/orders\/open"[\s\S]*?requireApprovedDriver\(request, env, true\)/.test(worker));
+const openRouteStart = worker.indexOf('if (url.pathname === "/orders/open" && request.method === "GET")');
+const openRouteEnd = worker.indexOf('if (url.pathname === "/orders/status"', openRouteStart);
+const openRouteSource = openRouteStart >= 0 && openRouteEnd > openRouteStart
+  ? worker.slice(openRouteStart, openRouteEnd)
+  : '';
+check('Assigned-order endpoint permits approved offline drivers to restore active trips', openRouteSource.includes('requireApprovedDriver(request, env);') && !openRouteSource.includes('requireApprovedDriver(request, env, true)'));
 check('Open-order query still requires the driver to be online', /status='new'[\s\S]*?available_driver\.online=1/.test(worker));
 check('Open-order query still requires fresh driver GPS', /available_driver\.location_updated_at BETWEEN \? AND \?/.test(worker));
 check('Assigned-order query is independent of driver online status', /const assignedOrders = await env\.DB\.prepare\([\s\S]*?status IN \('driver_assigned','arrived'\) AND assigned_driver_uid=\?/.test(worker));
