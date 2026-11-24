@@ -782,8 +782,8 @@ check('Passenger count controls are grouped in a readable surface', app.includes
 check('Widget test covers splash brand, slogan and service area', read('testapp/test/widget_test.dart').includes('Branded splash screen') && read('testapp/test/widget_test.dart').includes('shows the approved brand and Kyrgyz slogan'));
 
 
-check('Language switch offers Russian and Kyrgyz', app.includes("DropdownMenuItem(value: 'ru', child: Text('Русский'))") && app.includes("DropdownMenuItem(value: 'ky', child: Text('Кыргызча'))"));
-check('Language switch updates a shared app language notifier', app.includes("static final ValueNotifier<String> current") && app.includes("TaxiLanguage.current.value = value"));
+check('Language switch offers Russian and Kyrgyz', localization.includes("DropdownMenuItem(value: 'ru', child: Text('Русский'))") && localization.includes("DropdownMenuItem(value: 'ky', child: Text('Кыргызча'))"));
+check('Language switch updates a shared app language notifier', localization.includes("static final ValueNotifier<String> current") && localization.includes("TaxiLanguage.current.value = value"));
 check('Role menu listens for language changes and rebuilds', app.includes("TaxiLanguage.current.addListener(_handleLanguageChanged)") && app.includes("removeListener(_handleLanguageChanged)"));
 check('Role menu passenger title is localized', app.includes("МЕН ЖҮРГҮНЧҮМҮН") && app.includes("Я ПАССАЖИР"));
 check('Role menu driver title is localized', app.includes("МЕН АЙДООЧУМУН") && app.includes("Я ВОДИТЕЛЬ"));
@@ -959,8 +959,8 @@ check('Driver order controls remain reachable in a bounded scrollable panel on s
 check('Driver green panel keeps its contrast and identity while using compact padding', app.includes('padding: const EdgeInsets.fromLTRB(12, 10, 12, 10)') && app.includes('Color(0xFF087A42)'));
 check('Dispatcher app bar retains a one-line ellipsized title for narrow screens', app.includes("'Диспетчер · ЖОЛ АМАН КЕНЧИ',\n          maxLines: 1,\n          softWrap: false,\n          overflow: TextOverflow.ellipsis,"));
 check('Russian and Kyrgyz language selector remains available in driver and dispatcher headers', (app.match(/TaxiLanguageSwitcher\(\)/g) || []).length >= 3);
-check('Language selector exposes both supported language values', app.includes("DropdownMenuItem(value: 'ru', child: Text('Русский'))") && app.includes("DropdownMenuItem(value: 'ky', child: Text('Кыргызча'))"));
-check('Language change is reactive and localized text listens to the shared language state', app.includes('TaxiLanguage.current.value = value') && app.includes('valueListenable: TaxiLanguage.current') && app.includes("language == 'ky' ? (kyrgyz ?? TaxiLanguage.translate(russian)) : russian") && app.includes('static String translate(String russian) => _translations[russian] ?? russian;'));
+check('Language selector exposes both supported language values', localization.includes("DropdownMenuItem(value: 'ru', child: Text('Русский'))") && localization.includes("DropdownMenuItem(value: 'ky', child: Text('Кыргызча'))"));
+check('Language change is reactive and localized text listens to the shared language state', localization.includes('TaxiLanguage.current.value = value') && localization.includes('valueListenable: TaxiLanguage.current') && localization.includes("language == 'ky' ? (kyrgyz ?? TaxiLanguage.translate(russian)) : russian") && localization.includes('static String translate(String russian) {'));
 check('Language switch regression tests cover live switching and narrow layout', read('testapp/test/responsive_language_test.dart').includes("expect(TaxiLanguage.isKyrgyz, isTrue)") && read('testapp/test/responsive_language_test.dart').includes('width: 220'));
 check('Driver route map, location stream and order polling code remain present after layout changes', app.includes('FlutterMap(\n              mapController: _driverMapController') && app.includes('_positionSubscription') && app.includes('_pollServerOrders();'));
 check('Dispatcher refresh and server-backed driver/order loading remain present after layout changes', app.includes('_dispatcherRefreshTimer = Timer.periodic') && app.includes('WorkerApi.dispatcherOverview()') && app.includes('WorkerApi.assignOrder'));
