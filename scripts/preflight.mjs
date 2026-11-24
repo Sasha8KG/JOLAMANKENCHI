@@ -878,6 +878,14 @@ check('Dispatcher trip completion action label can occupy two lines', app.includ
 check('Closed-shift earnings trailing text has a bounded responsive width', app.includes('trailing: SizedBox(\n                    width: 116,') && app.includes('maxLines: 2,\n                      softWrap: true,'));
 
 
+check('Passenger taxi screen provides an explicit logout action', app.includes("tooltip: 'Выйти из аккаунта пассажира'") && app.includes('onPressed: _clientLoggingOut ? null : _logoutClient'));
+check('Passenger logout asks for confirmation and warns that an active order is not cancelled', app.includes("title: const Text('Выйти из аккаунта?')") && app.includes('Текущий заказ не будет отменён'));
+check('Passenger logout signs out, clears local client state and returns to role selection', app.includes('await FirebaseService.signOut().timeout(const Duration(seconds: 20));') && app.includes('TaxiParkState.currentLoggedInClient = null;') && app.includes('Navigator.of(context).pushAndRemoveUntil('));
+check('Passenger logout prevents duplicate taps and cancels local polling timers', app.includes('bool _clientLoggingOut = false;') && app.includes('_orderStatusTimer?.cancel();\n      _nearbyDriversTimer?.cancel();'));
+check('Shared radio message input uses dark text on an explicit white background', app.includes('color: Color(0xFF171717),\n                fontSize: 15,') && app.includes('filled: true,\n                fillColor: Colors.white,'));
+check('Shared radio input has visible hint, cursor and focused borders', app.includes('cursorColor: Color(0xFF8A6500),') && app.includes('hintStyle: TextStyle(color: Colors.black54)') && app.includes('focusedBorder: OutlineInputBorder('));
+
+
 for (const item of checks) {
   process.stdout.write(`${item.ok ? 'PASS' : 'FAIL'}  ${item.label}\n`);
 }

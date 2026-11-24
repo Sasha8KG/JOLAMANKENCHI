@@ -942,9 +942,46 @@ class _WalkieTalkieWidgetState extends State<WalkieTalkieWidget> {
         const Text('ОБЩИЙ ТЕКСТОВЫЙ ЧАТ', style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 12)),
         if (!widget.allowText) const Padding(padding: EdgeInsets.symmetric(vertical: 6), child: Text('Отправка текста временно отключена во время выполнения заказа. Освободитесь от поездки, чтобы писать в чате.', style: TextStyle(color: Colors.orangeAccent, fontSize: 11))),
         Row(children: [
-          Expanded(child: TextField(controller: _msgController, enabled: widget.allowText,
-            style: const TextStyle(color: Colors.white), maxLength: 500, maxLines: 2, minLines: 1,
-            decoration: const InputDecoration(counterText: '', hintText: 'Написать сообщение…', hintStyle: TextStyle(color: Colors.grey), isDense: true, border: OutlineInputBorder()))),
+          Expanded(
+            child: TextField(
+              controller: _msgController,
+              enabled: widget.allowText,
+              style: const TextStyle(
+                color: Color(0xFF171717),
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+              ),
+              cursorColor: Color(0xFF8A6500),
+              maxLength: 500,
+              maxLines: 2,
+              minLines: 1,
+              decoration: InputDecoration(
+                counterText: '',
+                hintText: 'Написать сообщение…',
+                hintStyle: TextStyle(color: Colors.black54),
+                isDense: true,
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: Colors.amber),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: Colors.amber, width: 1.2),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: Color(0xFFFFD45A), width: 2),
+                ),
+                disabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: Colors.white24),
+                ),
+              ),
+            ),
+          ),
           IconButton(icon: Icon(_sendingMessage ? Icons.hourglass_top : Icons.send, color: Colors.amber), onPressed: widget.allowText && !_sendingMessage ? _sendTextMessage : null),
         ]),
         const SizedBox(height: 6),
@@ -1470,6 +1507,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> with WidgetsBindingOb
   int _passengerCount = 1;
   bool _sendingOrder = false;
   bool _cancellingOrder = false;
+  bool _clientLoggingOut = false;
   int _cityFareSom = 0;
   int _intercityFareSom = 0;
   bool _tariffsLoaded = false;
@@ -1998,6 +2036,54 @@ class _ClientMapScreenState extends State<ClientMapScreen> with WidgetsBindingOb
     }
   }
 
+  Future<void> _logoutClient() async {
+    if (!mounted || _clientLoggingOut) return;
+    final hasActiveOrder = TaxiParkState.activeOrder != null;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Выйти из аккаунта?'),
+        content: Text(
+          hasActiveOrder
+              ? 'Вы выйдете из аккаунта. Текущий заказ не будет отменён, но после выхода вы перестанете видеть его обновления на этом устройстве.'
+              : 'Вы действительно хотите выйти из аккаунта пассажира?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('ОСТАТЬСЯ'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('ВЫЙТИ'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted || _clientLoggingOut) return;
+    setState(() => _clientLoggingOut = true);
+    try {
+      await FirebaseService.signOut().timeout(const Duration(seconds: 20));
+      if (!mounted) return;
+      _orderStatusTimer?.cancel();
+      _nearbyDriversTimer?.cancel();
+      TaxiParkState.currentLoggedInClient = null;
+      TaxiParkState.activeOrder = null;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const RoleSelectionScreen()),
+        (route) => false,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Не удалось выйти из аккаунта: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _clientLoggingOut = false);
+    }
+  }
+
   Future<void> _cancelClientOrder() async {
     final order = TaxiParkState.activeOrder;
     if (order == null) return;
@@ -2060,10 +2146,23 @@ class _ClientMapScreenState extends State<ClientMapScreen> with WidgetsBindingOb
         backgroundColor: const Color(0xFFFFD400),
         foregroundColor: const Color(0xFF171717),
         elevation: 3,
-        actions: const [Padding(
-          padding: EdgeInsets.only(right: 10),
-          child: TaxiLanguageSwitcher(),
-        )],
+        actions: [
+          const Padding(
+            padding: EdgeInsets.only(right: 4),
+            child: TaxiLanguageSwitcher(),
+          ),
+          IconButton(
+            tooltip: 'Выйти из аккаунта пассажира',
+            onPressed: _clientLoggingOut ? null : _logoutClient,
+            icon: _clientLoggingOut
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.logout_rounded),
+          ),
+        ],
       ),
       body: Column(
         children: [
