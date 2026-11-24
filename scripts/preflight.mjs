@@ -26,6 +26,7 @@ const firebase = JSON.parse(read('testapp/android/app/google-services.json'));
 const worker = read('backend/cloudflare-worker/worker.js');
 const api = read('testapp/lib/services/worker_api.dart');
 const gps = read('testapp/lib/services/gps_freshness.dart');
+const refreshGate = read('testapp/lib/services/refresh_gate.dart');
 const app = read('testapp/lib/main.dart');
 const registration = read('testapp/lib/driver_registration_screen.dart');
 const storageRules = read('backend/firebase-storage.rules');
@@ -194,7 +195,35 @@ check("Flutter API calls the nearby endpoint", /nearbyDrivers\(\) =>\s*_request\
 check("Passenger stores GPS timestamps with map points", /List<MapEntry<LatLng, DateTime>> _nearbyDriverPoints/.test(app));
 check("Passenger loads nearby cars when screen opens", /unawaited\(_refreshNearbyDrivers\(\)\)/.test(app));
 check("Passenger refreshes nearby cars every 20 seconds", /Timer\.periodic\(const Duration\(seconds: 20\)/.test(app));
-check("Nearby refresh prevents overlapping requests", /_nearbyDriversRequestInProgress\) return/.test(app));
+const nearbyRefreshStart = app.indexOf('Future<void> _refreshNearbyDrivers');
+const nearbyRefreshEnd = app.indexOf('int _parseFare', nearbyRefreshStart);
+const nearbyRefreshBlock = nearbyRefreshStart >= 0 && nearbyRefreshEnd > nearbyRefreshStart
+  ? app.slice(nearbyRefreshStart, nearbyRefreshEnd)
+  : '';
+check('Nearby refresh gate prevents overlapping network requests',
+  nearbyRefreshBlock.includes('!_nearbyDriversRefreshGate.begin()'));
+check('Nearby refresh always releases its gate in finally',
+  nearbyRefreshBlock.includes('finally {') && nearbyRefreshBlock.includes('_nearbyDriversRefreshGate.finish()'));
+check('Nearby refresh retries only when a request was coalesced',
+  nearbyRefreshBlock.includes('if (refreshAgain && mounted)'));
+check('Nearby refresh retry starts after releasing the gate',
+  nearbyRefreshBlock.includes('final refreshAgain = _nearbyDriversRefreshGate.finish();') &&
+  nearbyRefreshBlock.includes('unawaited(_refreshNearbyDrivers());'));
+check('Nearby refresh gate is shared by the passenger map state',
+  app.includes('final CoalescedRefreshGate _nearbyDriversRefreshGate = CoalescedRefreshGate();'));
+check('Refresh gate starts the first request',
+  refreshGate.includes('_running = true;') && refreshGate.includes('return true;'));
+check('Refresh gate coalesces repeated requests into one pending retry',
+  refreshGate.includes('_pending = true;') && refreshGate.includes('final shouldRefreshAgain = _pending;'));
+check('Refresh gate clears pending state when finishing',
+  refreshGate.includes('_pending = false;'));
+check('Refresh gate does not release an inactive request',
+  refreshGate.includes('if (!_running) return false;'));
+check('Refresh gate unit tests cover overlapping and idle requests',
+  ['turns overlapping refresh calls into one follow-up request',
+   'does not schedule a retry when no request arrived during refresh',
+   'clears the pending flag before the follow-up begins']
+    .every((label) => read('testapp/test/widget_test.dart').includes(label)));
 check("Passenger validates latitude and longitude bounds", /lat < -90 \|\| lat > 90 \|\| lng < -180 \|\| lng > 180/.test(app));
 check("Passenger rejects stale GPS responses", /!isGpsTimestampFresh\(updatedAt\)/.test(app));
 check("Passenger keeps previous markers only until GPS expires", /_nearbyDriverPoints\.removeWhere\([\s\S]{0,100}!isGpsTimestampFresh\(entry\.value\)/.test(app));
@@ -205,6 +234,11 @@ check("Passenger uses the tested nearby-driver ranking helper", app.includes("se
 check("Nearby-driver filter rejects invalid pickup and search limits", /maxDistanceKm < 0/.test(read('testapp/lib/services/nearby_driver_filter.dart')) && /maxResults <= 0/.test(read('testapp/lib/services/nearby_driver_filter.dart')));
 check("Nearby-driver filter sorts by distance and caps result count", /ranked\.sort/.test(read('testapp/lib/services/nearby_driver_filter.dart')) && /ranked\.take\(maxResults\)/.test(read('testapp/lib/services/nearby_driver_filter.dart')));
 check("Nearby-driver filter has unit tests for radius, ordering, freshness and result limits", ['sorts fresh nearby cars by distance', 'excludes cars beyond the requested radius', 'limits the number of visible cars', 'excludes stale, future and invalid GPS positions'].every((label) => read('testapp/test/widget_test.dart').includes(label)));
+check('Nearby filter handles a zero-kilometre radius', read('testapp/test/widget_test.dart').includes('accepts the pickup coordinate when the search radius is zero'));
+check('Nearby filter resolves equal-distance ties by newest GPS', read('testapp/test/widget_test.dart').includes('prefers the newest GPS fix when two cars are equally distant'));
+check('Nearby filter handles longitude wrap at the date line', read('testapp/test/widget_test.dart').includes('calculates short distances across the international date line'));
+check('Nearby filter handles valid high-latitude coordinates', read('testapp/test/widget_test.dart').includes('keeps valid nearby cars at high latitudes'));
+check('Nearby filter rejects non-finite and negative radii', read('testapp/test/widget_test.dart').includes('rejects infinite and negative search radii'));
 check("Passenger map renders distinct green taxi markers", nearbyMarkerBlock.includes("point: entry.key") && nearbyMarkerBlock.includes("Icons.local_taxi") && nearbyMarkerBlock.includes("Colors.green"));
 check("Passenger cancels nearby timer when disposed", /_nearbyDriversTimer\?\.cancel\(\)/.test(app));
 
@@ -722,7 +756,9 @@ check('Assigned-order query is independent of driver online status', /const assi
 check('Driver screen restores orders immediately even when offline', /if \(_driverWantsOnline\) \{\s*_startLocationTracking\(\);\s*\}\s*\/\/ Also restore an already assigned trip[\s\S]*?unawaited\(_pollServerOrders\(\)\);/.test(app));
 check('Driver order polling does not stop solely because the driver is offline', app.includes('if (!mounted || _ordersPollInProgress) return;') && !app.includes('if (!mounted || !_driverWantsOnline || _ordersPollInProgress) return;'));
 check('Driver order polling remains protected against overlapping requests', app.includes('_ordersPollInProgress) return;') && app.includes('_ordersPollInProgress = true;') && app.includes('_ordersPollInProgress = false;'));
-check('Nearby-driver refresh is retried when GPS or pickup changes during an in-flight request', app.includes('_nearbyDriversRefreshPending = true;') && /if \(_nearbyDriversRefreshPending && mounted\) \{[\\s\\S]*?unawaited\(_refreshNearbyDrivers\(\)\);/.test(app));
+check('GPS and manual pickup changes request a nearby-driver refresh',
+  app.includes('unawaited(_refreshNearbyDrivers());') &&
+  nearbyRefreshBlock.includes('WorkerApi.nearbyDrivers()'));
 check('Offline restore accepts only assigned and arrived active statuses', app.includes("!['driver_assigned', 'arrived'].contains((item['status'] ?? '').toString())"));
 check('Offline restore clears stale route when there is no active assignment', app.includes('if (assigned.isEmpty) {') && app.includes('_driverApproachRoute = null;') && app.includes('_driverRouteOrderId = null;'));
 check('Periodic order refresh continues to recover an assigned trip', app.includes('Timer.periodic(const Duration(seconds: 5), (_) {') && app.includes('_pollServerOrders();'));

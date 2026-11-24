@@ -15,6 +15,7 @@ import 'services/worker_api.dart';
 import 'services/route_service.dart';
 import 'services/gps_freshness.dart';
 import 'services/nearby_driver_filter.dart';
+import 'services/refresh_gate.dart';
 
 // Сохраняем проверенную карту OpenStreetMap DE: ей не нужен API-ключ.
 List<Widget> buildTaxiDarkMapLayers() => [
@@ -1472,8 +1473,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
   DateTime? _routeRetryAfter;
   final List<MapEntry<LatLng, DateTime>> _nearbyDriverPoints = <MapEntry<LatLng, DateTime>>[];
   Timer? _nearbyDriversTimer;
-  bool _nearbyDriversRequestInProgress = false;
-  bool _nearbyDriversRefreshPending = false;
+  final CoalescedRefreshGate _nearbyDriversRefreshGate = CoalescedRefreshGate();
   final MapController _clientMapController = MapController();
   LatLng? _clientCurrentLocation;
   bool _clientMapReady = false;
@@ -1588,14 +1588,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
   }
 
   Future<void> _refreshNearbyDrivers() async {
-    if (!mounted) return;
-    if (_nearbyDriversRequestInProgress) {
-      // A GPS fix or pickup change during an in-flight request must trigger
-      // another fetch; otherwise the map can keep a snapshot for the old point.
-      _nearbyDriversRefreshPending = true;
-      return;
-    }
-    _nearbyDriversRequestInProgress = true;
+    if (!mounted || !_nearbyDriversRefreshGate.begin()) return;
     try {
       final data = await WorkerApi.nearbyDrivers();
       final rawDrivers = data['drivers'];
@@ -1634,9 +1627,9 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
           );
         });
       }
-      _nearbyDriversRequestInProgress = false;
-      if (_nearbyDriversRefreshPending && mounted) {
-        _nearbyDriversRefreshPending = false;
+      final refreshAgain = _nearbyDriversRefreshGate.finish();
+      if (refreshAgain && mounted) {
+        // The gate has released its slot; immediately run one coalesced retry.
         unawaited(_refreshNearbyDrivers());
       }
     }

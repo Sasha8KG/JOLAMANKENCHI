@@ -6,6 +6,7 @@ import 'package:sulyukta_taxi/services/firebase_service.dart';
 import 'package:sulyukta_taxi/services/route_service.dart';
 import 'package:sulyukta_taxi/services/gps_freshness.dart';
 import 'package:sulyukta_taxi/services/nearby_driver_filter.dart';
+import 'package:sulyukta_taxi/services/refresh_gate.dart';
 
 void main() {
   group('Localized login screens', () {
@@ -489,6 +490,83 @@ void main() {
       expect(selectNearbyDriverLocations(
         pickup: LatLng(double.nan, 0), candidates: [candidate], now: now,
       ), isEmpty);
+    });
+
+    test('accepts the pickup coordinate when the search radius is zero', () {
+      final candidate = MapEntry(pickup, now);
+      expect(selectNearbyDriverLocations(
+        pickup: pickup, candidates: [candidate], now: now, maxDistanceKm: 0,
+      ), [candidate]);
+    });
+
+    test('prefers the newest GPS fix when two cars are equally distant', () {
+      final older = MapEntry(const LatLng(39.9390, 69.5650),
+          now.subtract(const Duration(seconds: 2)));
+      final newer = MapEntry(const LatLng(39.9370, 69.5650), now);
+      final result = selectNearbyDriverLocations(
+        pickup: pickup, candidates: [older, newer], now: now,
+      );
+      expect(result, [newer, older]);
+    });
+
+    test('calculates short distances across the international date line', () {
+      final candidate = MapEntry(const LatLng(0, -179.9), now);
+      final result = selectNearbyDriverLocations(
+        pickup: const LatLng(0, 179.9), candidates: [candidate],
+        now: now, maxDistanceKm: 23,
+      );
+      expect(result, [candidate]);
+    });
+
+    test('keeps valid nearby cars at high latitudes', () {
+      final candidate = MapEntry(const LatLng(89.9, 90), now);
+      final result = selectNearbyDriverLocations(
+        pickup: const LatLng(89.9, 0), candidates: [candidate],
+        now: now, maxDistanceKm: 20,
+      );
+      expect(result, [candidate]);
+    });
+
+    test('rejects infinite and negative search radii', () {
+      final candidate = MapEntry(pickup, now);
+      expect(selectNearbyDriverLocations(
+        pickup: pickup, candidates: [candidate], now: now,
+        maxDistanceKm: double.infinity,
+      ), isEmpty);
+      expect(selectNearbyDriverLocations(
+        pickup: pickup, candidates: [candidate], now: now,
+        maxDistanceKm: -1,
+      ), isEmpty);
+    });
+  });
+
+  group('Coalesced refresh gate', () {
+    test('turns overlapping refresh calls into one follow-up request', () {
+      final gate = CoalescedRefreshGate();
+      expect(gate.begin(), isTrue);
+      expect(gate.begin(), isFalse);
+      expect(gate.begin(), isFalse);
+      expect(gate.finish(), isTrue);
+      expect(gate.begin(), isTrue);
+      expect(gate.finish(), isFalse);
+      expect(gate.finish(), isFalse);
+    });
+
+    test('does not schedule a retry when no request arrived during refresh', () {
+      final gate = CoalescedRefreshGate();
+      expect(gate.begin(), isTrue);
+      expect(gate.finish(), isFalse);
+      expect(gate.begin(), isTrue);
+      expect(gate.finish(), isFalse);
+    });
+
+    test('clears the pending flag before the follow-up begins', () {
+      final gate = CoalescedRefreshGate();
+      expect(gate.begin(), isTrue);
+      expect(gate.begin(), isFalse);
+      expect(gate.finish(), isTrue);
+      expect(gate.begin(), isTrue);
+      expect(gate.finish(), isFalse);
     });
   });
 
