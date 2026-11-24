@@ -1473,6 +1473,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
   final List<MapEntry<LatLng, DateTime>> _nearbyDriverPoints = <MapEntry<LatLng, DateTime>>[];
   Timer? _nearbyDriversTimer;
   bool _nearbyDriversRequestInProgress = false;
+  bool _nearbyDriversRefreshPending = false;
   final MapController _clientMapController = MapController();
   LatLng? _clientCurrentLocation;
   bool _clientMapReady = false;
@@ -1587,7 +1588,13 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
   }
 
   Future<void> _refreshNearbyDrivers() async {
-    if (!mounted || _nearbyDriversRequestInProgress) return;
+    if (!mounted) return;
+    if (_nearbyDriversRequestInProgress) {
+      // A GPS fix or pickup change during an in-flight request must trigger
+      // another fetch; otherwise the map can keep a snapshot for the old point.
+      _nearbyDriversRefreshPending = true;
+      return;
+    }
     _nearbyDriversRequestInProgress = true;
     try {
       final data = await WorkerApi.nearbyDrivers();
@@ -1628,6 +1635,10 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
         });
       }
       _nearbyDriversRequestInProgress = false;
+      if (_nearbyDriversRefreshPending && mounted) {
+        _nearbyDriversRefreshPending = false;
+        unawaited(_refreshNearbyDrivers());
+      }
     }
   }
 
