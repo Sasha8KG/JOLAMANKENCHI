@@ -50,6 +50,7 @@ void main() {
       await tester.pumpWidget(const MaterialApp(home: BrandedSplashGate()));
       expect(find.text('ЖОЛ АМАН КЕНЧИ'), findsOneWidget);
       expect(find.text('Такси'), findsOneWidget);
+      expect(find.text('Ылдам, коопсуз, ишенимдүү'), findsOneWidget);
       expect(find.text('Жолуңуз ар дайым шыдыр болсун!'), findsOneWidget);
       expect(find.text('СҮЛҮКТҮ  •  ЛЕЙЛЕК  •  БАТКЕН'), findsOneWidget);
       await tester.pump(const Duration(milliseconds: 100));

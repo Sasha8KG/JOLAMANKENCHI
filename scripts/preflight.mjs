@@ -718,18 +718,20 @@ check('GPS tests cover sub-second future timestamps and exact custom age boundar
 
 
 check('Branded animated splash is the first app screen', app.includes('home: const BrandedSplashGate()'));
-check('Branded splash has a bounded entrance animation', app.includes('duration: const Duration(milliseconds: 1250)'));
-check('Branded splash fades in its brand content', app.includes('FadeTransition(') && app.includes('opacity: _fade,'));
-check('Branded splash scales in its brand content', app.includes('ScaleTransition(') && app.includes('scale: _scale,'));
-check('Branded splash transitions to the existing session gate', app.includes('Timer(const Duration(milliseconds: 2400)') && app.includes('const SessionGate()'));
+check('Branded splash has a bounded multi-phase entrance animation', app.includes('duration: const Duration(milliseconds: 3800)'));
+check('Branded splash fades in the brand and taxi separately from the slogan', app.includes('opacity: _brandFade,') && app.includes('opacity: _sloganFade,'));
+check('Branded splash scales the yellow taxi emblem into view', app.includes('scale: _carScale,') && app.includes('Icons.local_taxi_rounded, size: 88, color: ink'));
+check('Branded splash transitions to the existing session gate after the animation', app.includes('Timer(const Duration(milliseconds: 4700)') && app.includes('const SessionGate()'));
 check('Branded splash cancels its navigation timer on dispose', app.includes('_navigationTimer?.cancel();'));
 check('Branded splash guards navigation after widget disposal', app.includes('if (!mounted) return;'));
-check('Branded splash shows the approved taxi fleet brand', app.includes('ЖОЛ АМАН КЕНЧИ') && app.includes("'Такси'"));
-check('Branded splash includes the requested Kyrgyz slogan', app.includes('Жолуңуз ар дайым шыдыр болсун!'));
-check('Branded splash includes Kyrgyz ornament and checker motif', app.includes('❧  ✥  ❧  ✥  ❧') && app.includes('class _TaxiCheckSquare'));
+check('Branded splash shows the approved taxi fleet brand', app.includes('ЖОЛ АМАН КЕНЧИ') && app.includes('ТАКСИ'));
+check('Branded splash includes the Kyrgyz slogan and welcome phrase', app.includes('Ылдам, коопсуз, ишенимдүү') && app.includes('Жолуңуз ар дайым шыдыр болсун!'));
+check('Branded splash keeps Kyrgyz ornament and service area details', app.includes('❧  ✥  ❧') && app.includes('СҮЛҮКТҮ  •  ЛЕЙЛЕК  •  БАТКЕН'));
 check('Branded splash exposes an accessible semantic brand label', app.includes("label: 'Жол Аман Кенчи Такси'"));
-check('Branded splash uses a dark premium background with gold brand accents', app.includes('Color(0xFF090909), Color(0xFF252525), Color(0xFF5A4300)') && app.includes('border: Border.all(color: gold, width: 3)'));
-check('Branded splash keeps the taxi emblem inside a high-contrast badge', app.includes('width: 142, height: 142') && app.includes('Icons.local_taxi_rounded, size: 94, color: ink'));
+check('Branded splash uses a blue premium background with gold taxi accents', app.includes('Color(0xFF0754A6), Color(0xFF087DE0), Color(0xFF061A35)') && app.includes('border: Border.all(color: gold, width: 4)'));
+check('Branded splash keeps the yellow taxi inside a high-contrast badge', app.includes('width: 150,') && app.includes('height: 112,') && app.includes('Icons.local_taxi_rounded, size: 88, color: ink'));
+check('Driver and dispatcher sections use the requested green header palette', app.includes('backgroundColor: const Color(0xFF087A42)') && app.includes('foregroundColor: Colors.white'));
+check('Passenger order action uses a gold button with dark text', app.includes('backgroundColor: const Color(0xFFFFD400)') && app.includes('foregroundColor: const Color(0xFF171717)'));
 check('Global app bars use the gold and black brand palette', app.includes('backgroundColor: Color(0xFFFFD400)') && app.includes('foregroundColor: Color(0xFF171717)'));
 check('Primary buttons use black surfaces with gold labels', app.includes('backgroundColor: const Color(0xFF171717)') && app.includes('foregroundColor: const Color(0xFFFFD400)'));
 check('Cards use gold brand borders', app.includes('BorderSide(color: Color(0xFFE6A900), width: 1.2)'));

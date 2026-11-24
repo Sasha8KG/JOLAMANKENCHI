@@ -463,111 +463,180 @@ class BrandedSplashGate extends StatefulWidget {
   @override
   State<BrandedSplashGate> createState() => _BrandedSplashGateState();
 }
+
 class _BrandedSplashGateState extends State<BrandedSplashGate>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
-  late final Animation<double> _fade;
-  late final Animation<double> _scale;
+  late final Animation<double> _brandFade;
+  late final Animation<double> _carScale;
+  late final Animation<double> _sloganFade;
   Timer? _navigationTimer;
+
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 1250));
-    _fade = CurvedAnimation(parent: _controller, curve: Curves.easeIn);
-    _scale = Tween<double>(begin: 0.88, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOutBack),
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 3800),
+    );
+    _brandFade = CurvedAnimation(
+      parent: _controller,
+      curve: const Interval(0.08, 0.48, curve: Curves.easeOut),
+    );
+    _carScale = Tween<double>(begin: 0.72, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: const Interval(0.02, 0.48, curve: Curves.easeOutBack),
+      ),
+    );
+    _sloganFade = CurvedAnimation(
+      parent: _controller,
+      curve: const Interval(0.54, 0.91, curve: Curves.easeInOut),
     );
     _controller.forward();
-    _navigationTimer = Timer(const Duration(milliseconds: 2400), () {
+    _navigationTimer = Timer(const Duration(milliseconds: 4700), () {
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute<void>(builder: (_) => const SessionGate()),
       );
     });
   }
+
   @override
   void dispose() {
     _navigationTimer?.cancel();
     _controller.dispose();
     super.dispose();
   }
+
   @override
   Widget build(BuildContext context) {
-    const ink = Color(0xFF171717);
+    const ink = Color(0xFF071A32);
     const gold = Color(0xFFFFD400);
     return Scaffold(
       backgroundColor: ink,
       body: DecoratedBox(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            colors: [Color(0xFF090909), Color(0xFF252525), Color(0xFF5A4300)],
+            colors: [Color(0xFF0754A6), Color(0xFF087DE0), Color(0xFF061A35)],
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
+            stops: [0.0, 0.48, 1.0],
           ),
         ),
         child: SafeArea(
           child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 32),
-              child: FadeTransition(
-                opacity: _fade,
-                child: ScaleTransition(
-                  scale: _scale,
-                  child: Semantics(
-                    label: 'Жол Аман Кенчи Такси',
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 28),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF101010),
-                        borderRadius: BorderRadius.circular(34),
-                        border: Border.all(color: gold, width: 3),
-                        boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 24, offset: Offset(0, 12))],
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Text('❧  ✥  ❧  ✥  ❧', style: TextStyle(color: gold, fontSize: 27, fontWeight: FontWeight.w900, letterSpacing: 3)),
-                          const SizedBox(height: 18),
-                          const Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              _TaxiCheckSquare(), _TaxiCheckSquare(dark: true),
-                              _TaxiCheckSquare(), _TaxiCheckSquare(dark: true),
-                              _TaxiCheckSquare(), _TaxiCheckSquare(dark: true),
-                              _TaxiCheckSquare(),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 28),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  FadeTransition(
+                    opacity: _brandFade,
+                    child: ScaleTransition(
+                      scale: _carScale,
+                      child: Semantics(
+                        label: 'Жол Аман Кенчи Такси',
+                        child: Container(
+                          width: 244,
+                          padding: const EdgeInsets.fromLTRB(18, 22, 18, 20),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF080B10),
+                            borderRadius: BorderRadius.circular(38),
+                            border: Border.all(color: gold, width: 4),
+                            boxShadow: const [
+                              BoxShadow(
+                                color: Color(0xAA000000),
+                                blurRadius: 30,
+                                offset: Offset(0, 14),
+                              ),
+                              BoxShadow(
+                                color: Color(0x66FFD400),
+                                blurRadius: 28,
+                                spreadRadius: 2,
+                              ),
                             ],
                           ),
-                          const SizedBox(height: 20),
-                          Container(
-                            width: 142, height: 142,
-                            decoration: BoxDecoration(
-                              color: gold,
-                              borderRadius: BorderRadius.circular(32),
-                              border: Border.all(color: const Color(0xFFFFF0A6), width: 3),
-                            ),
-                            child: const Icon(Icons.local_taxi_rounded, size: 94, color: ink),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Text('❧  ✥  ❧',
+                                style: TextStyle(color: gold, fontSize: 25, fontWeight: FontWeight.w900)),
+                              const SizedBox(height: 12),
+                              Container(
+                                width: 150,
+                                height: 112,
+                                decoration: BoxDecoration(
+                                  color: gold,
+                                  borderRadius: BorderRadius.circular(28),
+                                  border: Border.all(color: const Color(0xFFFFF1A8), width: 3),
+                                ),
+                                child: const Icon(Icons.local_taxi_rounded, size: 88, color: ink),
+                              ),
+                              const SizedBox(height: 17),
+                              const Text(
+                                'ЖОЛ АМАН КЕНЧИ',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 25,
+                                  height: 1.0,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              const Text(
+                                '— Такси —',
+                                style: TextStyle(color: gold, fontSize: 22, fontWeight: FontWeight.w900),
+                              ),
+                              const SizedBox(height: 13),
+                              Container(height: 3, decoration: const BoxDecoration(
+                                gradient: LinearGradient(colors: [Colors.transparent, gold, Colors.transparent]),
+                              )),
+                            ],
                           ),
-                          const SizedBox(height: 18),
-                          const Text('ЖОЛ АМАН КЕНЧИ', textAlign: TextAlign.center,
-                            style: TextStyle(color: gold, fontSize: 30, height: 1.0, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
-                          const SizedBox(height: 12),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 7),
-                            decoration: BoxDecoration(color: gold, borderRadius: BorderRadius.circular(28)),
-                            child: const Text('Такси', style: TextStyle(color: ink, fontSize: 25, fontWeight: FontWeight.w800, fontStyle: FontStyle.italic)),
-                          ),
-                          const SizedBox(height: 24),
-                          const Text('Жолуңуз ар дайым шыдыр болсун!', textAlign: TextAlign.center,
-                            style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
-                          const SizedBox(height: 18),
-                          const Text('СҮЛҮКТҮ  •  ЛЕЙЛЕК  •  БАТКЕН',
-                            style: TextStyle(color: gold, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.2)),
-                        ],
+                        ),
                       ),
                     ),
                   ),
-                ),
+                  const SizedBox(height: 38),
+                  FadeTransition(
+                    opacity: _sloganFade,
+                    child: Column(
+                      children: [
+                        const Text(
+                          'Ылдам, коопсуз, ишенимдүү',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 25,
+                            height: 1.15,
+                            fontWeight: FontWeight.w900,
+                            fontStyle: FontStyle.italic,
+                            shadows: [Shadow(color: Colors.black54, blurRadius: 12, offset: Offset(0, 3))],
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        Container(
+                          width: 190,
+                          height: 4,
+                          decoration: BoxDecoration(color: gold, borderRadius: BorderRadius.circular(8)),
+                        ),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'Жолуңуз ар дайым шыдыр болсун!',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'СҮЛҮКТҮ  •  ЛЕЙЛЕК  •  БАТКЕН',
+                          style: TextStyle(color: gold, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.2),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -1127,7 +1196,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
 
   @override
   Widget build(BuildContext context) {
-    const burgundy = Color(0xFF741D25);
+    const burgundy = Color(0xFF087A42);
     const ink = Color(0xFF171F1D);
     const gold = Color(0xFFFFC928);
     return Scaffold(
@@ -1138,7 +1207,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [Color(0xFF202A27), Color(0xFF6F2028), Color(0xFFF5EBD8)],
+              colors: [Color(0xFF063C70), Color(0xFF087DE0), Color(0xFFF5F8FC)],
               stops: [0.0, 0.48, 1.0],
             ),
           ),
@@ -1210,8 +1279,8 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                       icon: Icons.local_taxi_rounded,
                       label: TaxiLanguage.isKyrgyz ? 'МЕН АЙДООЧУМУН' : 'Я ВОДИТЕЛЬ',
                       subtitle: TaxiLanguage.isKyrgyz ? 'Буйрутмалар жана айдоочу бөлмөсү' : 'Заказы и рабочий кабинет',
-                      color: const Color(0xFF202A27),
-                      foreground: gold,
+                      color: const Color(0xFF087A42),
+                      foreground: Colors.white,
                       onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DriverEntryScreen())),
                     ),
                     const SizedBox(height: 12),
@@ -1219,7 +1288,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                       icon: Icons.admin_panel_settings_rounded,
                       label: 'ДИСПЕТЧЕР',
                       subtitle: TaxiLanguage.isKyrgyz ? 'Такси паркын башкаруу' : 'Управление таксопарком',
-                      color: burgundy,
+                      color: const Color(0xFF075C35),
                       foreground: Colors.white,
                       onPressed: () => _showDispatcherAuth(context),
                     ),
@@ -2463,8 +2532,8 @@ class _ClientMapScreenState extends State<ClientMapScreen> with WidgetsBindingOb
                       const SizedBox(height: 10),
                       ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF171717),
-                          foregroundColor: const Color(0xFFFFD400),
+                          backgroundColor: const Color(0xFFFFD400),
+                          foregroundColor: const Color(0xFF171717),
                           minimumSize: const Size.fromHeight(60),
                           padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 18),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -3806,8 +3875,8 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
       appBar: AppBar(
         title: Text(
             'Водитель: ${driver?.name ?? ""} (${driver?.fullCarInfo ?? ""})'),
-        backgroundColor: const Color(0xFF171717),
-        foregroundColor: const Color(0xFFFFD400),
+        backgroundColor: const Color(0xFF087A42),
+        foregroundColor: Colors.white,
         actions: [
           const Padding(padding: EdgeInsets.symmetric(horizontal: 6), child: TaxiLanguageSwitcher()),
           Tooltip(
@@ -3893,15 +3962,15 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
           ),
           Container(
             padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: const Color(0xFF171717), border: Border(top: BorderSide(color: const Color(0xFFFFD400), width: 2)), borderRadius: const BorderRadius.vertical(top: Radius.circular(22))),
+            decoration: BoxDecoration(color: const Color(0xFFFFFEFA), border: Border(top: BorderSide(color: const Color(0xFF087A42), width: 3)), borderRadius: const BorderRadius.vertical(top: Radius.circular(22))),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const Text('Заказы и их статусы обновляются с сервера',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFFFFD400))),
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF087A42))),
                 const SizedBox(height: 10),
                 if (_serverAssignedOrders.isNotEmpty) ...[
-                  const Text('ВАШ НАЗНАЧЕННЫЙ ЗАКАЗ', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFFFFD400))),
+                  const Text('ВАШ НАЗНАЧЕННЫЙ ЗАКАЗ', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF087A42))),
                   ..._serverAssignedOrders.map((item) => Card(
                     child: ListTile(
                       leading: const Icon(Icons.flag, color: Colors.green),
@@ -3938,7 +4007,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
                   )),
                 ],
                 if (_serverOpenOrders.isNotEmpty) ...[
-                  const Text('ОТКРЫТЫЕ ЗАКАЗЫ РЯДОМ', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFFFFD400))),
+                  const Text('ОТКРЫТЫЕ ЗАКАЗЫ РЯДОМ', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF087A42))),
                   ..._serverOpenOrders.map((item) {
                     final id = (item['id'] ?? '').toString();
                     final pickup = item['pickup_address'] ?? 'Точка на карте';
@@ -4679,8 +4748,8 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
           softWrap: false,
           overflow: TextOverflow.ellipsis,
         ),
-        backgroundColor: const Color(0xFF171717),
-        foregroundColor: const Color(0xFFFFD400),
+        backgroundColor: const Color(0xFF087A42),
+        foregroundColor: Colors.white,
         actions: [
           const Padding(padding: EdgeInsets.symmetric(horizontal: 6), child: TaxiLanguageSwitcher()),
           IconButton(onPressed: _working ? null : _load, icon: const Icon(Icons.refresh), tooltip: 'Обновить'),
