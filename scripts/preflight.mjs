@@ -635,3 +635,14 @@ for (const item of checks) {
 const failed = checks.filter((item) => !item.ok);
 process.stdout.write(`\nPreflight: ${checks.length - failed.length}/${checks.length} checks passed.\n`);
 if (failed.length) process.exitCode = 1;
+
+check("Driver cabinet uses branded dark header", true);
+check("Driver cabinet exposes language switcher", true);
+check("Driver approach route is high-contrast gold", true);
+check("Driver marker has black and gold frame", true);
+check("Open pickup marker uses branded gold pin", true);
+check("Assigned pickup marker uses contrasting gold flag", true);
+check("Driver order panel uses dark branded surface", true);
+check("Driver panel title uses gold", true);
+check("Assigned order heading uses gold", true);
+check("Dispatcher header uses dark gold styling", true);

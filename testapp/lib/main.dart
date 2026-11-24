@@ -3362,8 +3362,10 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
       appBar: AppBar(
         title: Text(
             'Водитель: ${driver?.name ?? ""} (${driver?.fullCarInfo ?? ""})'),
-        backgroundColor: Colors.amber,
+        backgroundColor: const Color(0xFF171717),
+        foregroundColor: const Color(0xFFFFD400),
         actions: [
+          const Padding(padding: EdgeInsets.symmetric(horizontal: 6), child: TaxiLanguageSwitcher()),
           Tooltip(
             message: !_driverWantsOnline
                 ? 'Выйти на линию'
@@ -3415,7 +3417,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
                                 _serverAssignedOrders.first['firebase_order_id'] ??
                                 '')
                             .toString())
-                  PolylineLayer(polylines: [Polyline(points: _driverApproachRoute!.points, color: Colors.green, strokeWidth: 5)]),
+                  PolylineLayer(polylines: [Polyline(points: _driverApproachRoute!.points, color: const Color(0xFFFFD400), strokeWidth: 6)]),
                 MarkerLayer(
                   markers: [
                     if (driver != null)
@@ -3423,20 +3425,22 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
                         point: driver.currentLocation,
                         width: 40,
                         height: 40,
-                        child: const Icon(Icons.local_taxi,
-                            color: Colors.blue, size: 35),
+                        child: Container(
+                          decoration: BoxDecoration(color: const Color(0xFF171717), shape: BoxShape.circle, border: Border.all(color: const Color(0xFFFFD400), width: 2), boxShadow: const [BoxShadow(color: Colors.black38, blurRadius: 8)]),
+                          child: const Icon(Icons.local_taxi, color: Color(0xFFFFD400), size: 27),
+                        ),
                       ),
                     ..._serverOpenOrders.map((item) => _orderPickup(item)).whereType<LatLng>().map((point) => Marker(
                       point: point,
                       width: 42,
                       height: 42,
-                      child: const Icon(Icons.location_on, color: Colors.red, size: 38),
+                      child: Container(decoration: BoxDecoration(color: const Color(0xFF171717), shape: BoxShape.circle, border: Border.all(color: const Color(0xFFFFD400), width: 2)), child: const Icon(Icons.location_on, color: Color(0xFFFFD400), size: 27)),
                     )),
                     ..._serverAssignedOrders.map((item) => _orderPickup(item)).whereType<LatLng>().map((point) => Marker(
                       point: point,
                       width: 42,
                       height: 42,
-                      child: const Icon(Icons.flag, color: Colors.green, size: 36),
+                      child: Container(decoration: BoxDecoration(color: const Color(0xFFFFD400), shape: BoxShape.circle, border: Border.all(color: const Color(0xFF171717), width: 2)), child: const Icon(Icons.flag, color: Color(0xFF171717), size: 25)),
                     )),
                   ],
                 ),
@@ -3445,15 +3449,15 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
           ),
           Container(
             padding: const EdgeInsets.all(16),
-            color: Colors.white,
+            decoration: BoxDecoration(color: const Color(0xFF171717), border: Border(top: BorderSide(color: const Color(0xFFFFD400), width: 2)), borderRadius: const BorderRadius.vertical(top: Radius.circular(22))),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const Text('Заказы и их статусы обновляются с сервера',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFFFFD400))),
                 const SizedBox(height: 10),
                 if (_serverAssignedOrders.isNotEmpty) ...[
-                  const Text('ВАШ НАЗНАЧЕННЫЙ ЗАКАЗ', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
+                  const Text('ВАШ НАЗНАЧЕННЫЙ ЗАКАЗ', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFFFFD400))),
                   ..._serverAssignedOrders.map((item) => Card(
                     child: ListTile(
                       leading: const Icon(Icons.flag, color: Colors.green),
@@ -3490,7 +3494,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
                   )),
                 ],
                 if (_serverOpenOrders.isNotEmpty) ...[
-                  const Text('ОТКРЫТЫЕ ЗАКАЗЫ РЯДОМ', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const Text('ОТКРЫТЫЕ ЗАКАЗЫ РЯДОМ', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFFFFD400))),
                   ..._serverOpenOrders.map((item) {
                     final id = (item['id'] ?? '').toString();
                     final pickup = item['pickup_address'] ?? 'Точка на карте';
@@ -4206,8 +4210,10 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
       backgroundColor: const Color(0xFFF6F2E9),
       appBar: AppBar(
         title: const Text('Диспетчер · ЖОЛ АМАН КЕНЧИ'),
-        backgroundColor: Colors.amber,
+        backgroundColor: const Color(0xFF171717),
+        foregroundColor: const Color(0xFFFFD400),
         actions: [
+          const Padding(padding: EdgeInsets.symmetric(horizontal: 6), child: TaxiLanguageSwitcher()),
           IconButton(onPressed: _working ? null : _load, icon: const Icon(Icons.refresh), tooltip: 'Обновить'),
           IconButton(
             tooltip: 'Выйти из кабинета диспетчера',
