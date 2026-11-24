@@ -29,6 +29,8 @@ const gps = read('testapp/lib/services/gps_freshness.dart');
 const gpsPolicy = read('testapp/lib/services/gps_fix_policy.dart');
 const gpsPolicyTests = read('testapp/test/gps_fix_policy_test.dart');
 const refreshGate = read('testapp/lib/services/refresh_gate.dart');
+const orderSnapshot = read('testapp/lib/services/server_order_snapshot.dart');
+const orderSnapshotTests = read('testapp/test/server_order_snapshot_test.dart');
 const app = read('testapp/lib/main.dart');
 const registration = read('testapp/lib/driver_registration_screen.dart');
 const storageRules = read('backend/firebase-storage.rules');
@@ -69,6 +71,20 @@ check('Firebase Storage exposes only the three approved driver documents', ['lic
 check('Worker accepts only exact driver document paths', /const expectedPaths = \[\s*`drivers\/\$\{auth\.user\.localId\}\/license\.jpg`,\s*`drivers\/\$\{auth\.user\.localId\}\/driver_photo\.jpg`,\s*`drivers\/\$\{auth\.user\.localId\}\/car_photo\.jpg`\s*\]/.test(worker) && /paths\.every\(\(value, index\) => value === expectedPaths\[index\]\)/.test(worker));
 check('Android launcher label matches the approved app name', /android:label="«Жол Аман Кенчи» Такси"/.test(manifest));
 
+check('Order snapshot parser rejects partial, duplicate and contradictory responses',
+  orderSnapshot.includes("rawOpen is! List || rawAssigned is! List") &&
+  orderSnapshot.includes("!seen.add(id)") &&
+  orderSnapshot.includes("openIds.contains(order['id'])"));
+check('Order snapshot parser limits free offers to Worker page size',
+  orderSnapshot.includes('maxOpenOrders = 100') && orderSnapshot.includes('rawOpen.length > maxOpenOrders'));
+check('Order snapshot tests cover malformed, duplicate, status and overlap cases',
+  ['rejects non-map order entries', 'rejects duplicate free order ids',
+   'rejects more than one assigned order', 'rejects the same order appearing in both lists',
+   'returns unmodifiable snapshot lists'].every(label => orderSnapshotTests.includes(label)));
+check('Driver clears stale offers and route after approval is denied',
+  app.includes('_driverAccessWarningShown') &&
+  app.includes('_serverOpenOrders = [];') &&
+  app.includes('_driverApproachRoute = null;'));
 check('Open orders require an approved online driver', worker.includes('url.pathname === "/orders/open"') && worker.includes('requireApprovedDriver(request, env, true)'));
 check('Open offers exclude drivers with an active order', worker.includes("active.assigned_driver_uid=?") && worker.includes("active.status IN ('driver_assigned','arrived')"));
 check('Assigned orders are limited to active states', worker.includes("status IN ('driver_assigned','arrived') AND assigned_driver_uid=?"));

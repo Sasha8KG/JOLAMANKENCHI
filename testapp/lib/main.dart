@@ -18,6 +18,7 @@ import 'services/gps_freshness.dart';
 import 'services/gps_fix_policy.dart';
 import 'services/nearby_driver_filter.dart';
 import 'services/refresh_gate.dart';
+import 'services/server_order_snapshot.dart';
 
 // Сохраняем проверенную карту OpenStreetMap DE: ей не нужен API-ключ.
 List<Widget> buildTaxiDarkMapLayers() => [
@@ -2867,6 +2868,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
   Timer? _heartbeatTimer;
   Timer? _ordersPollTimer;
   bool _ordersPollInProgress = false;
+  bool _driverAccessWarningShown = false;
   bool _locationUpdateInProgress = false;
   bool _heartbeatCheckInProgress = false;
   bool _locationStreamErrorShown = false;
@@ -2925,50 +2927,19 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
     return RegExp(r'^[A-Za-z0-9_-]{1,128}$').hasMatch(id) ? id : '';
   }
 
-  List<Map<String, dynamic>> _normalizeServerOrders(dynamic value) {
-    if (value is! List) return <Map<String, dynamic>>[];
-    final seen = <String>{};
-    return value.whereType<Map>().map((item) => Map<String, dynamic>.from(item))
-        .where((order) {
-          final id = _serverOrderId(order);
-          if (id.isEmpty || !seen.add(id)) return false;
-          order['id'] = id;
-          return true;
-        }).toList();
-  }
-
   Future<void> _pollServerOrders() async {
     // Не допускаем наложения запросов, если сеть отвечает дольше интервала опроса.
     if (!mounted || _ordersPollInProgress) return;
     _ordersPollInProgress = true;
     try {
       final data = await WorkerApi.openOrders();
-      final rawOpen = data['orders'];
-      final rawAssigned = data['assignedOrders'];
-      if (rawOpen is! List || rawAssigned is! List) {
-        throw const WorkerApiException('Сервер прислал неполный список заказов. Сохраняем предыдущие данные и повторим обновление.');
-      }
-      final open = _normalizeServerOrders(rawOpen);
-      final assigned = _normalizeServerOrders(rawAssigned);
+      final snapshot = ServerOrderSnapshot.parse(data);
+      final open = snapshot.openOrders;
+      final assigned = snapshot.assignedOrders;
       // Offline drivers may restore an assigned trip, but never see new offers.
       final visibleOpen = _driverWantsOnline ? open : <Map<String, dynamic>>[];
-      if (open.length != rawOpen.length || assigned.length != rawAssigned.length) {
-        throw const WorkerApiException('Сервер прислал заказ с неверным номером или повторяющейся записью. Список не заменён.');
-      }
-      if (assigned.length > 1) {
-        throw const WorkerApiException('Обнаружено несколько активных заказов у одного водителя. Обратитесь к диспетчеру; список сохранён.');
-      }
-      if (open.any((item) => (item['status'] ?? '').toString() != 'new')) {
-        throw const WorkerApiException('В списке свободных заказов обнаружен неверный статус. Повторяем обновление.');
-      }
-      if (assigned.any((item) => !['driver_assigned', 'arrived'].contains((item['status'] ?? '').toString()))) {
-        throw const WorkerApiException('В активном списке обнаружен неверный статус заказа. Повторяем обновление.');
-      }
-      final openIds = open.map(_serverOrderId).toSet();
-      if (assigned.any((item) => openIds.contains(_serverOrderId(item)))) {
-        throw const WorkerApiException('Один заказ одновременно отмечен свободным и назначенным. Список не заменён.');
-      }
       if (!mounted) return;
+      _driverAccessWarningShown = false;
       final hadAssignedOrder = _serverAssignedOrders.isNotEmpty;
       final activeAssignedId = assigned.isEmpty ? null : _serverOrderId(assigned.first);
       setState(() {
@@ -2998,8 +2969,25 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
       }
       if (assigned.isNotEmpty) unawaited(_loadDriverApproachRoute());
     } on WorkerApiException catch (e) {
-      // Пока водитель не одобрен или не вышел на линию, список заказов недоступен.
-      if (e.statusCode != 403 && mounted) {
+      if (e.statusCode == 403 && mounted) {
+        // A revoked approval must not leave previously fetched offers or
+        // an obsolete pickup route visible on the driver's screen.
+        setState(() {
+          _serverOpenOrders = [];
+          _serverAssignedOrders = [];
+          _driverApproachRoute = null;
+          _driverRouteOrderId = null;
+          _driverRouteKey = null;
+          _driverRouteError = null;
+          _driverRouteRetryAfter = null;
+        });
+        if (!_driverAccessWarningShown) {
+          _driverAccessWarningShown = true;
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(e.message),
+          ));
+        }
+      } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
       }
     } catch (_) {
