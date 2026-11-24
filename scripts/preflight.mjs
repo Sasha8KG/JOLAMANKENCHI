@@ -669,7 +669,7 @@ check('Periodic order refresh continues to recover an assigned trip', app.includ
 const cancelStart = worker.indexOf('if (url.pathname === "/orders/cancel" && request.method === "POST")');
 const cancelEnd = worker.indexOf('if (url.pathname === "/orders/respond"', cancelStart);
 const cancelRoute = cancelStart >= 0 && cancelEnd > cancelStart ? worker.slice(cancelStart, cancelEnd) : '';
-check('Cancellation rejects non-object and array request bodies', cancelRoute.includes('!b || typeof b !== "object" || Array.isArray(b)'));
+check('Cancellation rejects malformed, non-object and array request bodies through the shared JSON reader', cancelRoute.includes('const b = await readJsonObject(request);') && cancelRoute.includes('if (!b)'));
 check('Cancellation validates order IDs before database lookup', cancelRoute.includes('/^[A-Za-z0-9_-]{1,128}$/.test(orderId)'));
 check('Cancellation accepts only explicit customer or driver roles', cancelRoute.includes('["customer", "driver"].includes(role)'));
 check('Customer cancellation and response cleanup run in one D1 batch', cancelRoute.includes('const customerCancelResults = await env.DB.batch([') && cancelRoute.includes('DELETE FROM order_responses WHERE order_id=?'));
