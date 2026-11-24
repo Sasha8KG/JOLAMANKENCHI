@@ -227,7 +227,7 @@ check('Refresh gate unit tests cover overlapping and idle requests',
 check("Passenger validates latitude and longitude bounds", /lat < -90 \|\| lat > 90 \|\| lng < -180 \|\| lng > 180/.test(app));
 check("Passenger rejects stale GPS responses", /!isGpsTimestampFresh\(updatedAt\)/.test(app));
 check("Passenger keeps previous markers only until GPS expires", /_nearbyDriverPoints\.removeWhere\([\s\S]{0,100}!isGpsTimestampFresh\(entry\.value\)/.test(app));
-check("Nearby request lock is released after completion", /_nearbyDriversRequestInProgress = false;/.test(app));
+check('Nearby refresh gate is released after completion', /_nearbyDriversRefreshGate\.finish\(\)/.test(app) && /final refreshAgain = _nearbyDriversRefreshGate\.finish\(\);/.test(app));
 const nearbyMarkerStart = app.indexOf('_nearbyDriverPoints.map((entry) => Marker(');
 const nearbyMarkerBlock = nearbyMarkerStart >= 0 ? app.slice(nearbyMarkerStart, nearbyMarkerStart + 500) : '';
 check("Passenger uses the tested nearby-driver ranking helper", app.includes("selectNearbyDriverLocations(") && app.includes("maxDistanceKm: 20") && app.includes("maxResults: 10"));
