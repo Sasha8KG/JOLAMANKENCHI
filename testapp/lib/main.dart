@@ -1870,7 +1870,6 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
   @override
   Widget build(BuildContext context) {
     final order = TaxiParkState.activeOrder;
-    final client = TaxiParkState.currentLoggedInClient;
     final gpsAgeSeconds = calculateGpsAgeSeconds(order?.assignedDriver?.locationUpdatedAt);
     final gpsIsFresh = order?.assignedDriver?.isOnline == true &&
         isGpsTimestampFresh(order?.assignedDriver?.locationUpdatedAt);
