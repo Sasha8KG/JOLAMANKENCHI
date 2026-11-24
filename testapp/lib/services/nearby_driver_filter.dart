@@ -1,5 +1,31 @@
+import 'dart:math' as math;
+
 import 'package:latlong2/latlong.dart';
 import 'gps_freshness.dart';
+
+/// Calculates great-circle distance in kilometres using the haversine formula.
+double _distanceKm(LatLng from, LatLng to) {
+  const earthRadiusKm = 6371.0088;
+  final fromLatitude = from.latitude * math.pi / 180;
+  final toLatitude = to.latitude * math.pi / 180;
+  final latitudeDelta = (to.latitude - from.latitude) * math.pi / 180;
+  final longitudeDelta = (to.longitude - from.longitude) * math.pi / 180;
+
+  final sinLatitude = math.sin(latitudeDelta / 2);
+  final sinLongitude = math.sin(longitudeDelta / 2);
+  final haversine = (sinLatitude * sinLatitude) +
+      (math.cos(fromLatitude) *
+          math.cos(toLatitude) *
+          sinLongitude *
+          sinLongitude);
+  final boundedHaversine = haversine.clamp(0.0, 1.0);
+  final centralAngle = 2 *
+      math.atan2(
+        math.sqrt(boundedHaversine),
+        math.sqrt(1 - boundedHaversine),
+      );
+  return earthRadiusKm * centralAngle;
+}
 
 /// Filters and ranks fresh driver GPS positions around the passenger pickup.
 List<MapEntry<LatLng, DateTime>> selectNearbyDriverLocations({
@@ -21,7 +47,6 @@ List<MapEntry<LatLng, DateTime>> selectNearbyDriverLocations({
     return <MapEntry<LatLng, DateTime>>[];
   }
 
-  final distance = const Distance();
   final ranked = <({double distanceKm, MapEntry<LatLng, DateTime> entry})>[];
   for (final entry in candidates) {
     final point = entry.key;
@@ -34,7 +59,7 @@ List<MapEntry<LatLng, DateTime>> selectNearbyDriverLocations({
         !isGpsTimestampFresh(entry.value, now: now)) {
       continue;
     }
-    final distanceKm = distance.as(LengthUnit.Kilometer, pickup, point);
+    final distanceKm = _distanceKm(pickup, point);
     if (!distanceKm.isFinite || distanceKm > maxDistanceKm) continue;
     ranked.add((distanceKm: distanceKm, entry: entry));
   }
