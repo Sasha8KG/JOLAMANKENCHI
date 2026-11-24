@@ -1506,10 +1506,8 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
         throw Exception('Разрешите приложению доступ к местоположению.');
       }
       final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 15),
-        ),
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 15),
       );
       final point = LatLng(position.latitude, position.longitude);
       if (!point.latitude.isFinite || !point.longitude.isFinite ||
