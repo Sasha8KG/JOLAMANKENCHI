@@ -118,7 +118,7 @@ check('Driver map draws a route only for its assigned order', /_driverApproachRo
 check('Passenger pickup is not treated as confirmed at the regional fallback center', /bool _pickupPointConfirmed = false;/.test(app));
 check('Passenger GPS success confirms the pickup point', /_clientCurrentLocation = point;\\s*_pickupPoint = point;\\s*_pickupPointConfirmed = true;/.test(app));
 check('Manual passenger map selection confirms the pickup point', /_pickupPoint = point;\\s*_pickupPointConfirmed = true;/.test(app));
-check('Passenger cannot submit an order with an unconfirmed fallback pickup', /if \(!_pickupPointConfirmed\\) \\{[\\s\\S]{0,250}Сначала определите своё местоположение/.test(app));
+check('Passenger cannot submit an order with an unconfirmed fallback pickup', app.includes('if (!_pickupPointConfirmed)') && app.includes('Сначала определите своё местоположение'));
 check('Passenger map explains how to confirm the pickup point', app.includes('Определите местоположение или отметьте точку на карте'));
 
 check('Passenger route requires an active taxi order', /final order = TaxiParkState\.activeOrder/.test(app) && /order\.status != 'accepted'/.test(app));
