@@ -70,6 +70,7 @@ const driverDocumentRuleUses = (storageRules.match(/isDriverDocument\(fileName\)
 check('Firebase Storage exposes only the three approved driver documents', ['license.jpg', 'driver_photo.jpg', 'car_photo.jpg'].every((name) => driverDocumentRule.includes(`'${name}'`)) && driverDocumentRuleUses >= 4);
 check('Worker accepts only exact driver document paths', /const expectedPaths = \[\s*`drivers\/\$\{auth\.user\.localId\}\/license\.jpg`,\s*`drivers\/\$\{auth\.user\.localId\}\/driver_photo\.jpg`,\s*`drivers\/\$\{auth\.user\.localId\}\/car_photo\.jpg`\s*\]/.test(worker) && /paths\.every\(\(value, index\) => value === expectedPaths\[index\]\)/.test(worker));
 check('Android launcher label matches the approved app name', /android:label="«Жол Аман Кенчи» Такси"/.test(manifest));
+check('Android launcher uses the modern gold taxi location emblem', read('testapp/android/app/src/main/res/drawable/ic_launcher_kyrgyz.xml').includes('android:fillColor="#073B32"') && read('testapp/android/app/src/main/res/drawable/ic_launcher_kyrgyz.xml').includes('android:fillColor="#FFC928"') && read('testapp/android/app/src/main/res/drawable/ic_launcher_kyrgyz.xml').includes('M54,15c-17.1'));
 
 check('Order snapshot parser rejects partial, duplicate and contradictory responses',
   orderSnapshot.includes("rawOpen is! List || rawAssigned is! List") &&
