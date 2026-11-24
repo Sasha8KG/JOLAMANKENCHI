@@ -1788,7 +1788,10 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
         ? null
         : DateTime.now().difference(driver.locationUpdatedAt!).inSeconds;
     if (!driver.isOnline || gpsAge == null || gpsAge < 0 || gpsAge > 60) return;
-    final key = '$orderId:$driverId:${driverPoint.latitude.toStringAsFixed(3)},${driverPoint.longitude.toStringAsFixed(3)}';
+    // Include both endpoints: a pickup-point change during an in-flight
+    // request must invalidate the old route just like a taxi GPS movement.
+    final pickupPoint = _pickupPoint;
+    final key = '$orderId:$driverId:${pickupPoint.latitude.toStringAsFixed(5)},${pickupPoint.longitude.toStringAsFixed(5)}:${driverPoint.latitude.toStringAsFixed(3)},${driverPoint.longitude.toStringAsFixed(3)}';
     if (_routeLoading) return;
     if (_lastRouteKey == key &&
         (_routeRetryAfter == null || DateTime.now().isBefore(_routeRetryAfter!))) return;
@@ -1803,14 +1806,15 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
     }
     var refreshAfterRoute = false;
     try {
-      final route = await RouteService.drivingRoute(driverPoint, _pickupPoint);
+      final route = await RouteService.drivingRoute(driverPoint, pickupPoint);
       if (!mounted) return;
       final latestOrder = TaxiParkState.activeOrder;
       if (latestOrder?.id != orderId ||
           latestOrder?.assignedDriver?.id != driverId ||
           latestOrder?.status != 'accepted') return;
       final latestPoint = latestOrder!.assignedDriver!.currentLocation;
-      final latestKey = '$orderId:$driverId:${latestPoint.latitude.toStringAsFixed(3)},${latestPoint.longitude.toStringAsFixed(3)}';
+      final latestPickupPoint = _pickupPoint;
+      final latestKey = '$orderId:$driverId:${latestPickupPoint.latitude.toStringAsFixed(5)},${latestPickupPoint.longitude.toStringAsFixed(5)}:${latestPoint.latitude.toStringAsFixed(3)},${latestPoint.longitude.toStringAsFixed(3)}';
       if (latestKey != key) {
         // GPS moved while routing was in flight: never show a route from an old position.
         refreshAfterRoute = latestOrder.status == 'accepted';
@@ -1827,7 +1831,8 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
           latestOrder?.assignedDriver?.id != driverId ||
           latestOrder?.status != 'accepted') return;
       final latestPoint = latestOrder!.assignedDriver!.currentLocation;
-      final latestKey = '$orderId:$driverId:${latestPoint.latitude.toStringAsFixed(3)},${latestPoint.longitude.toStringAsFixed(3)}';
+      final latestPickupPoint = _pickupPoint;
+      final latestKey = '$orderId:$driverId:${latestPickupPoint.latitude.toStringAsFixed(5)},${latestPickupPoint.longitude.toStringAsFixed(5)}:${latestPoint.latitude.toStringAsFixed(3)},${latestPoint.longitude.toStringAsFixed(3)}';
       if (latestKey != key) {
         refreshAfterRoute = latestOrder.status == 'accepted';
         return;
