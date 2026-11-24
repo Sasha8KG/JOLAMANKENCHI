@@ -156,6 +156,7 @@ check(
 check('Passenger cannot submit an order with an unconfirmed fallback pickup', app.includes('if (!_pickupPointConfirmed)') && app.includes('Сначала определите своё местоположение'));
 check('Passenger map explains how to confirm the pickup point', app.includes('Определите местоположение или отметьте точку на карте'));
 
+const preflightRouteCachePolicy = read('testapp/lib/services/route_cache_policy.dart');
 const passengerRouteStart = app.indexOf('Future<void> _loadApproachRoute');
 const passengerRouteEnd = app.indexOf('double? _readValidCoordinate', passengerRouteStart);
 const passengerRouteBlock = passengerRouteStart >= 0 && passengerRouteEnd > passengerRouteStart
@@ -171,7 +172,7 @@ check('Passenger route cache includes order and driver identity', passengerRoute
 check('Passenger route cache includes pickup coordinates', passengerRouteBlock.includes('pickupPoint.latitude.toStringAsFixed(5)') && passengerRouteBlock.includes('pickupPoint.longitude.toStringAsFixed(5)'));
 check('Passenger route cache includes driver coordinates', passengerRouteBlock.includes('driverPoint.latitude.toStringAsFixed(3)') && passengerRouteBlock.includes('driverPoint.longitude.toStringAsFixed(3)'));
 check('Passenger route avoids overlapping route requests', passengerRouteBlock.includes('if (_routeLoading) return;'));
-check('Passenger route respects retry cooldown', passengerRouteBlock.includes('_routeRetryAfter == null') && passengerRouteBlock.includes('DateTime.now().isBefore(_routeRetryAfter!)'));
+check('Passenger route respects retry cooldown', passengerRouteBlock.includes('_routeRetryAfter != null') && passengerRouteBlock.includes('routeCheckTime.isBefore(_routeRetryAfter!)'));
 check('Passenger route clears previous line before refresh', passengerRouteBlock.includes('_approachRoute = null;') && passengerRouteBlock.includes('var refreshAfterRoute = false;'));
 check('Passenger route loading state is enabled before request', passengerRouteBlock.includes('_routeLoading = true;') && passengerRouteBlock.includes('_routeError = null;'));
 check('Passenger route uses a captured pickup point for the request', passengerRouteBlock.includes('final pickupPoint = _pickupPoint;') && passengerRouteBlock.includes('RouteService.drivingRoute(driverPoint, pickupPoint)'));
@@ -183,6 +184,12 @@ check('Passenger route response is discarded after taxi arrival', passengerRoute
 check('Passenger route response rejects outdated endpoint coordinates', passengerRouteBlock.includes('if (latestKey != key)') && passengerRouteBlock.includes("refreshAfterRoute = latestOrder.status == 'accepted';"));
 check('Passenger route retries after driver or pickup point changes during request', passengerRouteBlock.includes('unawaited(_loadApproachRoute(latestDriver.currentLocation))'));
 check('Passenger route errors trigger a bounded retry delay', passengerRouteBlock.includes('_routeRetryAfter = DateTime.now().add(const Duration(seconds: 30))'));
+check('Passenger route cache is reused only while the matching route is fresh', passengerRouteBlock.includes('RouteCachePolicy.isFresh(') && passengerRouteBlock.includes('cachedKey: _routeLoadedKey') && passengerRouteBlock.includes('requestedKey: key'));
+check('Passenger route cache expires after two minutes', preflightRouteCachePolicy.includes('Duration(minutes: 2)'));
+check('Passenger route cache timestamp is updated only after a successful route response', passengerRouteBlock.includes('_routeLoadedKey = key;') && passengerRouteBlock.includes('_routeLoadedAt = DateTime.now();'));
+check('Passenger route cache is cleared after a failed route response', passengerRouteBlock.includes('_routeLoadedKey = null;') && passengerRouteBlock.includes('_routeLoadedAt = null;'));
+check('Route cache freshness tests cover expiry and coordinate changes', read('testapp/test/widget_test.dart').includes('Passenger route cache freshness') && read('testapp/test/widget_test.dart').includes('does not reuse a route after pickup or taxi coordinates change'));
+
 
 check("Nearby endpoint requires Firebase authentication", /url\.pathname === "\/drivers\/nearby"[\s\S]{0,100}verifyFirebaseUser\(request\)/.test(worker));
 const nearbyEndpointStart = worker.indexOf('if (url.pathname === "/drivers/nearby"');

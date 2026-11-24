@@ -4,6 +4,7 @@ import 'package:sulyukta_taxi/main.dart' show BrandedSplashGate, ClientAuthScree
 import 'package:latlong2/latlong.dart';
 import 'package:sulyukta_taxi/services/firebase_service.dart';
 import 'package:sulyukta_taxi/services/route_service.dart';
+import 'package:sulyukta_taxi/services/route_cache_policy.dart';
 import 'package:sulyukta_taxi/services/gps_freshness.dart';
 import 'package:sulyukta_taxi/services/nearby_driver_filter.dart';
 import 'package:sulyukta_taxi/services/refresh_gate.dart';
@@ -243,6 +244,61 @@ void main() {
             reason: 'Input: ${item.input}');
       });
     }
+  });
+
+  group('Passenger route cache freshness', () {
+    final now = DateTime.utc(2026, 11, 24, 12);
+
+    test('reuses a matching route up to the two-minute limit', () {
+      expect(RouteCachePolicy.isFresh(
+        cachedKey: 'order:driver:A:B',
+        requestedKey: 'order:driver:A:B',
+        fetchedAt: now.subtract(const Duration(minutes: 2)),
+        now: now,
+      ), isTrue);
+      expect(RouteCachePolicy.isFresh(
+        cachedKey: 'order:driver:A:B',
+        requestedKey: 'order:driver:A:B',
+        fetchedAt: now.subtract(const Duration(minutes: 2, seconds: 1)),
+        now: now,
+      ), isFalse);
+    });
+
+    test('does not reuse a route after pickup or taxi coordinates change', () {
+      expect(RouteCachePolicy.isFresh(
+        cachedKey: 'order:driver:pickup-A:taxi-A',
+        requestedKey: 'order:driver:pickup-B:taxi-A',
+        fetchedAt: now,
+        now: now,
+      ), isFalse);
+      expect(RouteCachePolicy.isFresh(
+        cachedKey: 'order:driver:pickup-A:taxi-A',
+        requestedKey: 'order:driver:pickup-A:taxi-B',
+        fetchedAt: now,
+        now: now,
+      ), isFalse);
+    });
+
+    test('rejects missing, future-dated and mismatched cache entries', () {
+      expect(RouteCachePolicy.isFresh(
+        cachedKey: null,
+        requestedKey: 'route',
+        fetchedAt: now,
+        now: now,
+      ), isFalse);
+      expect(RouteCachePolicy.isFresh(
+        cachedKey: 'route',
+        requestedKey: 'route',
+        fetchedAt: now.add(const Duration(seconds: 1)),
+        now: now,
+      ), isFalse);
+      expect(RouteCachePolicy.isFresh(
+        cachedKey: 'old-route',
+        requestedKey: 'route',
+        fetchedAt: now,
+        now: now,
+      ), isFalse);
+    });
   });
 
   group('Road route validation and labels', () {

@@ -13,6 +13,7 @@ import 'services/firebase_service.dart';
 import 'driver_registration_screen.dart';
 import 'services/worker_api.dart';
 import 'services/route_service.dart';
+import 'services/route_cache_policy.dart';
 import 'services/gps_freshness.dart';
 import 'services/nearby_driver_filter.dart';
 import 'services/refresh_gate.dart';
@@ -1471,6 +1472,8 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
   String? _routeError;
   String? _lastRouteKey;
   DateTime? _routeRetryAfter;
+  String? _routeLoadedKey;
+  DateTime? _routeLoadedAt;
   final List<MapEntry<LatLng, DateTime>> _nearbyDriverPoints = <MapEntry<LatLng, DateTime>>[];
   Timer? _nearbyDriversTimer;
   final CoalescedRefreshGate _nearbyDriversRefreshGate = CoalescedRefreshGate();
@@ -1793,9 +1796,19 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
     final pickupPoint = _pickupPoint;
     final key = '$orderId:$driverId:${pickupPoint.latitude.toStringAsFixed(5)},${pickupPoint.longitude.toStringAsFixed(5)}:${driverPoint.latitude.toStringAsFixed(3)},${driverPoint.longitude.toStringAsFixed(3)}';
     if (_routeLoading) return;
+    final routeCheckTime = DateTime.now();
+    if (RouteCachePolicy.isFresh(
+      cachedKey: _routeLoadedKey,
+      requestedKey: key,
+      fetchedAt: _routeLoadedAt,
+      now: routeCheckTime,
+    )) return;
     if (_lastRouteKey == key &&
-        (_routeRetryAfter == null || DateTime.now().isBefore(_routeRetryAfter!))) return;
+        _routeRetryAfter != null &&
+        routeCheckTime.isBefore(_routeRetryAfter!)) return;
     _lastRouteKey = key;
+    _routeLoadedKey = null;
+    _routeLoadedAt = null;
     if (mounted) {
       setState(() {
         _routeLoading = true;
@@ -1823,6 +1836,8 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
       setState(() {
         _approachRoute = route;
         _routeRetryAfter = null;
+        _routeLoadedKey = key;
+        _routeLoadedAt = DateTime.now();
       });
     } catch (e) {
       if (!mounted) return;
@@ -1839,6 +1854,8 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
       }
       setState(() {
         _approachRoute = null;
+        _routeLoadedKey = null;
+        _routeLoadedAt = null;
         _routeError = 'Не удалось построить маршрут. Проверьте интернет; положение такси обновится автоматически.';
         _routeRetryAfter = DateTime.now().add(const Duration(seconds: 30));
       });
@@ -1879,6 +1896,8 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
           order.assignedDriver = null;
           _approachRoute = null;
           _lastRouteKey = null;
+          _routeLoadedKey = null;
+          _routeLoadedAt = null;
           _routeError = null;
           _routeRetryAfter = null;
         } else if (status == 'driver_assigned' || status == 'arrived') {
@@ -1886,6 +1905,8 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
           if (status == 'arrived') {
             _approachRoute = null;
             _lastRouteKey = null;
+          _routeLoadedKey = null;
+          _routeLoadedAt = null;
             _routeError = null;
           }
           order.assignedDriver = null;
@@ -1919,6 +1940,8 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
           order.assignedDriver = null;
           _approachRoute = null;
           _lastRouteKey = null;
+          _routeLoadedKey = null;
+          _routeLoadedAt = null;
           _routeError = null;
           _routeRetryAfter = null;
           _orderStatusTimer?.cancel();
@@ -1927,6 +1950,8 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
           order.assignedDriver = null;
           _approachRoute = null;
           _lastRouteKey = null;
+          _routeLoadedKey = null;
+          _routeLoadedAt = null;
           _routeError = null;
           _routeRetryAfter = null;
           _orderStatusTimer?.cancel();
@@ -1970,6 +1995,8 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
         order.assignedDriver = null;
         _approachRoute = null;
         _lastRouteKey = null;
+          _routeLoadedKey = null;
+          _routeLoadedAt = null;
         _routeError = null;
       });
     } on WorkerApiException catch (e) {
@@ -1985,6 +2012,8 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
       TaxiParkState.activeOrder = null;
       _approachRoute = null;
       _lastRouteKey = null;
+          _routeLoadedKey = null;
+          _routeLoadedAt = null;
       _routeError = null;
       _routeLoading = false;
     });
