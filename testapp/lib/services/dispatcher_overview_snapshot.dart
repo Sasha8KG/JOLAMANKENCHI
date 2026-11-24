@@ -41,9 +41,57 @@ class DispatcherOverviewSnapshot {
     }
 
     final rawDate = payload['business_date'];
+    final parsedDate = rawDate is String ? DateTime.tryParse(rawDate) : null;
     if (rawDate is! String ||
-        !RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(rawDate) ||
-        DateTime.tryParse(rawDate) == null) {
+        !RegExp(r'^\d{4}-\d{2}-\d{2}
+
+    return DispatcherOverviewSnapshot._(
+      drivers: List.unmodifiable(drivers),
+      orders: List.unmodifiable(orders),
+      today: List.unmodifiable(today),
+      earnings: List.unmodifiable(earnings),
+      closedShifts: List.unmodifiable(closedShifts),
+      businessDate: rawDate,
+    );
+  }
+
+  static List<Map<String, dynamic>> _readRows(
+    Map<String, dynamic> payload,
+    String key,
+    int maxRows, [
+    String? uniqueIdKey,
+  ]) {
+    final raw = payload[key];
+    if (raw is! List || raw.length > maxRows) {
+      throw FormatException('Сервер вернул неверный список: $key.');
+    }
+    final seen = <String>{};
+    final rows = <Map<String, dynamic>>[];
+    for (final item in raw) {
+      if (item is! Map) {
+        throw FormatException('Список $key содержит повреждённую запись.');
+      }
+      final Map<String, dynamic> row;
+      try {
+        row = Map<String, dynamic>.from(item);
+      } catch (_) {
+        throw FormatException('Список $key содержит неверные поля.');
+      }
+      if (uniqueIdKey != null) {
+        final id = (row[uniqueIdKey] ?? '').toString().trim();
+        if (!RegExp(r'^[A-Za-z0-9_-]{1,128}$').hasMatch(id) ||
+            !seen.add(id)) {
+          throw FormatException('Список $key содержит неверный или повторный идентификатор.');
+        }
+      }
+      rows.add(Map<String, dynamic>.unmodifiable(row));
+    }
+    return rows;
+  }
+}
+).hasMatch(rawDate) ||
+        parsedDate == null ||
+        parsedDate.toIso8601String().substring(0, 10) != rawDate) {
       throw const FormatException('Сервер вернул неверную дату рабочего дня.');
     }
 
