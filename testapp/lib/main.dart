@@ -469,6 +469,7 @@ class _BrandedSplashGateState extends State<BrandedSplashGate>
   late final AnimationController _controller;
   late final Animation<double> _brandFade;
   late final Animation<double> _carScale;
+  late final Animation<Offset> _carSlide;
   late final Animation<double> _sloganFade;
   Timer? _navigationTimer;
 
@@ -479,14 +480,35 @@ class _BrandedSplashGateState extends State<BrandedSplashGate>
       vsync: this,
       duration: const Duration(milliseconds: 3800),
     );
-    _brandFade = CurvedAnimation(
-      parent: _controller,
-      curve: const Interval(0.08, 0.48, curve: Curves.easeOut),
-    );
+    // The emblem appears first, holds briefly, then fades away as the
+    // Kyrgyz slogan comes forward. This is a real cross-fade.
+    _brandFade = TweenSequence<double>([
+      TweenSequenceItem<double>(
+        tween: Tween<double>(begin: 0, end: 1)
+            .chain(CurveTween(curve: Curves.easeOut)),
+        weight: 35,
+      ),
+      TweenSequenceItem<double>(tween: ConstantTween<double>(1), weight: 20),
+      TweenSequenceItem<double>(
+        tween: Tween<double>(begin: 1, end: 0)
+            .chain(CurveTween(curve: Curves.easeInOut)),
+        weight: 25,
+      ),
+      TweenSequenceItem<double>(tween: ConstantTween<double>(0), weight: 20),
+    ]).animate(_controller);
     _carScale = Tween<double>(begin: 0.72, end: 1.0).animate(
       CurvedAnimation(
         parent: _controller,
         curve: const Interval(0.02, 0.48, curve: Curves.easeOutBack),
+      ),
+    );
+    _carSlide = Tween<Offset>(
+      begin: const Offset(-0.16, 0.06),
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: const Interval(0.02, 0.48, curve: Curves.easeOutCubic),
       ),
     );
     _sloganFade = CurvedAnimation(
@@ -533,9 +555,11 @@ class _BrandedSplashGateState extends State<BrandedSplashGate>
                 children: [
                   FadeTransition(
                     opacity: _brandFade,
-                    child: ScaleTransition(
-                      scale: _carScale,
-                      child: Semantics(
+                    child: SlideTransition(
+                      position: _carSlide,
+                      child: ScaleTransition(
+                        scale: _carScale,
+                        child: Semantics(
                         label: 'Жол Аман Кенчи Такси',
                         child: Container(
                           width: 244,
@@ -595,6 +619,7 @@ class _BrandedSplashGateState extends State<BrandedSplashGate>
                               )),
                             ],
                           ),
+                        ),
                         ),
                       ),
                     ),
@@ -661,7 +686,7 @@ class SulyuktaTaxiApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: '«ЖОЛ АМАН КЕНЧИ» такси',
+      title: '«Жол Аман Кенчи» Такси',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,

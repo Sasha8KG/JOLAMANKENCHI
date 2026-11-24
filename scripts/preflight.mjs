@@ -720,6 +720,9 @@ check('GPS tests cover sub-second future timestamps and exact custom age boundar
 check('Branded animated splash is the first app screen', app.includes('home: const BrandedSplashGate()'));
 check('Branded splash has a bounded multi-phase entrance animation', app.includes('duration: const Duration(milliseconds: 3800)'));
 check('Branded splash fades in the brand and taxi separately from the slogan', app.includes('opacity: _brandFade,') && app.includes('opacity: _sloganFade,'));
+check('Branded splash cross-fades the emblem out before the slogan finishes appearing', app.includes('begin: 1, end: 0') && app.includes('weight: 25') && app.includes('curve: Curves.easeInOut'));
+check('Branded splash slides the taxi emblem smoothly into place', app.includes('late final Animation<Offset> _carSlide;') && app.includes('position: _carSlide,') && app.includes('Offset(-0.16, 0.06)'));
+check('App title uses the approved Cyrillic spelling and capitalization', app.includes("title: '«Жол Аман Кенчи» Такси'"));
 check('Branded splash scales the yellow taxi emblem into view', app.includes('scale: _carScale,') && app.includes('Icons.local_taxi_rounded, size: 88, color: ink'));
 check('Branded splash transitions to the existing session gate after the animation', app.includes('Timer(const Duration(milliseconds: 4700)') && app.includes('const SessionGate()'));
 check('Branded splash cancels its navigation timer on dispose', app.includes('_navigationTimer?.cancel();'));
