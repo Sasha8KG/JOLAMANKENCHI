@@ -19,6 +19,7 @@ import 'services/gps_fix_policy.dart';
 import 'services/nearby_driver_filter.dart';
 import 'services/refresh_gate.dart';
 import 'services/server_order_snapshot.dart';
+import 'services/dispatcher_overview_snapshot.dart';
 
 // Сохраняем проверенную карту OpenStreetMap DE: ей не нужен API-ключ.
 List<Widget> buildTaxiDarkMapLayers() => [
@@ -3879,6 +3880,7 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
   int _intercityFareSom = 0;
   bool _working = false;
   bool _dispatcherLoadInProgress = false;
+  bool _dispatcherRefreshPending = false;
   String? _dispatcherRefreshError;
   Timer? _dispatcherRefreshTimer;
 
@@ -3904,7 +3906,11 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
   }
 
   Future<void> _load({bool showLoading = true}) async {
-    if (_dispatcherLoadInProgress) return;
+    if (_dispatcherLoadInProgress) {
+      _dispatcherRefreshPending = true;
+      return;
+    }
+    final requestUid = FirebaseAuth.instance.currentUser?.uid;
     _dispatcherLoadInProgress = true;
     // При обновлении данных после изменения тарифа не убираем всю панель
     // с экрана: это сохраняет состояние вложенных виджетов и диалогов.
@@ -3916,23 +3922,22 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
     }
     try {
       final data = await WorkerApi.dispatcherOverview();
+      final snapshot = DispatcherOverviewSnapshot.parse(data);
       final tariffData = await WorkerApi.getTariffs();
       final tariffs = Map<String, dynamic>.from(tariffData['tariffs'] as Map? ?? {});
-      if (!mounted) return;
+      // Do not let a response started by a previous dispatcher account replace
+      // the current screen after logout or an account switch.
+      if (!mounted || requestUid == null ||
+          FirebaseAuth.instance.currentUser?.uid != requestUid) return;
       setState(() {
         _cityFareSom = (tariffs['city_fare_som'] as num?)?.toInt() ?? 0;
         _intercityFareSom = (tariffs['intercity_fare_som'] as num?)?.toInt() ?? 0;
-        _drivers = (data['drivers'] as List? ?? [])
-            .whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
-        _orders = (data['orders'] as List? ?? [])
-            .whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
-        _today = (data['today'] as List? ?? [])
-            .whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
-        _earnings = (data['earnings'] as List? ?? [])
-            .whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
-        _closedShifts = (data['closed_shifts'] as List? ?? [])
-            .whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
-        _businessDate = (data['business_date'] ?? '').toString();
+        _drivers = snapshot.drivers.map((e) => Map<String, dynamic>.from(e)).toList();
+        _orders = snapshot.orders.map((e) => Map<String, dynamic>.from(e)).toList();
+        _today = snapshot.today.map((e) => Map<String, dynamic>.from(e)).toList();
+        _earnings = snapshot.earnings.map((e) => Map<String, dynamic>.from(e)).toList();
+        _closedShifts = snapshot.closedShifts.map((e) => Map<String, dynamic>.from(e)).toList();
+        _businessDate = snapshot.businessDate;
         _dispatcherRefreshError = null;
         _loading = false;
       });
@@ -3948,6 +3953,10 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
       });
     } finally {
       _dispatcherLoadInProgress = false;
+      if (mounted && _dispatcherRefreshPending) {
+        _dispatcherRefreshPending = false;
+        scheduleMicrotask(() => _load(showLoading: false));
+      }
     }
   }
 

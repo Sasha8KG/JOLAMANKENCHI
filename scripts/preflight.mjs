@@ -857,6 +857,17 @@ check('Order assignment, online status and publishing reject malformed JSON befo
 check('Order sync, completion and arrival reject malformed JSON before database writes', /\/orders\/sync[\s\S]*?readJsonObject\(request\)[\s\S]*?if \(!b\)/.test(worker) && /\/orders\/complete[\s\S]*?readJsonObject\(request\)[\s\S]*?if \(!b\)/.test(worker) && /\/orders\/arrived[\s\S]*?readJsonObject\(request\)[\s\S]*?if \(!b\)/.test(worker));
 check('Order cancellation and driver self-selection reject malformed JSON before database reads', /\/orders\/cancel[\s\S]*?readJsonObject\(request\)[\s\S]*?if \(!b\)/.test(worker) && /\/orders\/respond[\s\S]*?readJsonObject\(request\)[\s\S]*?if \(!b\)/.test(worker));
 check('Radio message and push-to-talk actions reject malformed JSON before field access', /\/radio\/messages[\s\S]*?readJsonObject\(request\)[\s\S]*?if \(!body\)/.test(worker) && /\/radio\/ptt[\s\S]*?readJsonObject\(request\)[\s\S]*?if \(!body\)/.test(worker));
+check('Dispatcher overview uses a strict bounded snapshot parser', app.includes("import 'services/dispatcher_overview_snapshot.dart';") && app.includes('DispatcherOverviewSnapshot.parse(data)'));
+check('Dispatcher overview parser validates all five dashboard sections', read('testapp/lib/services/dispatcher_overview_snapshot.dart').includes("'drivers'") && read('testapp/lib/services/dispatcher_overview_snapshot.dart').includes("'closed_shifts'"));
+check('Dispatcher dashboard rejects duplicate driver and order identifiers', read('testapp/lib/services/dispatcher_overview_snapshot.dart').includes("seen.add(id)") && read('testapp/test/dispatcher_overview_snapshot_test.dart').includes('rejects duplicate order IDs'));
+check('Dispatcher dashboard enforces Worker order page limit', read('testapp/lib/services/dispatcher_overview_snapshot.dart').includes('maxOrders = 100'));
+check('Dispatcher dashboard validates business date and daily status counts', read('testapp/lib/services/dispatcher_overview_snapshot.dart').includes('business_date') && read('testapp/lib/services/dispatcher_overview_snapshot.dart').includes('count % 1 != 0'));
+check('Dispatcher dashboard preserves last good state when response parsing fails', app.includes('final snapshot = DispatcherOverviewSnapshot.parse(data);') && app.includes('_dispatcherRefreshError = e.toString();'));
+check('Dispatcher dashboard refresh requests are coalesced instead of dropped', app.includes('_dispatcherRefreshPending = true;') && app.includes('scheduleMicrotask(() => _load(showLoading: false));'));
+check('Dispatcher dashboard ignores responses from a previous Firebase account', app.includes('FirebaseAuth.instance.currentUser?.uid != requestUid'));
+check('Dispatcher dashboard copies validated immutable rows into UI state', app.includes('_drivers = snapshot.drivers.map((e) => Map<String, dynamic>.from(e)).toList();'));
+check('Dispatcher snapshot regression tests cover malformed and duplicate data', read('testapp/test/dispatcher_overview_snapshot_test.dart').includes('rejects a malformed row') && read('testapp/test/dispatcher_overview_snapshot_test.dart').includes('returns immutable row maps and lists'));
+
 
 for (const item of checks) {
   process.stdout.write(`${item.ok ? 'PASS' : 'FAIL'}  ${item.label}\n`);
