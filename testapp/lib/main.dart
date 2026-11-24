@@ -1476,6 +1476,8 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
   LatLng? _clientCurrentLocation;
   bool _clientMapReady = false;
   bool _clientLocationLoading = false;
+  // A default regional map center must never be mistaken for a confirmed pickup.
+  bool _pickupPointConfirmed = false;
 
   @override
   void initState() {
@@ -1519,6 +1521,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
       setState(() {
         _clientCurrentLocation = point;
         _pickupPoint = point;
+        _pickupPointConfirmed = true;
         _clientLocationLoading = false;
       });
       if (_clientMapReady) {
@@ -1608,6 +1611,12 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
         content: Text(destination.isEmpty
             ? 'Укажите пункт назначения!'
             : 'Пункт назначения слишком длинный. Укажите не более 200 символов.'),
+      ));
+      return;
+    }
+    if (!_pickupPointConfirmed) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Сначала определите своё местоположение кнопкой геолокации или отметьте точку подачи нажатием на карту.'),
       ));
       return;
     }
@@ -1958,7 +1967,10 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
                 },
                 onTap: (tapPosition, point) {
                   if (TaxiParkState.activeOrder == null) {
-                    setState(() => _pickupPoint = point);
+                    setState(() {
+                      _pickupPoint = point;
+                      _pickupPointConfirmed = true;
+                    });
                   }
                 },
               ),
@@ -1994,6 +2006,41 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
                 ),
               ],
                 ),
+                if (order == null)
+                  Positioned(
+                    left: 14,
+                    top: 14,
+                    right: 64,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: _pickupPointConfirmed
+                            ? Colors.green.shade800.withValues(alpha: 0.94)
+                            : Colors.orange.shade900.withValues(alpha: 0.96),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                        child: Row(
+                          children: [
+                            Icon(
+                              _pickupPointConfirmed ? Icons.check_circle : Icons.info_outline,
+                              color: Colors.white,
+                              size: 19,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _pickupPointConfirmed
+                                    ? 'Точка подачи выбрана'
+                                    : 'Определите местоположение или отметьте точку на карте',
+                                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
                 if (order == null)
                   Positioned(
                     right: 14,
