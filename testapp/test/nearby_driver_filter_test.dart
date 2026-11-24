@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:jol_aman_kenchi/services/nearby_driver_filter.dart';
+import 'package:sulyukta_taxi/services/nearby_driver_filter.dart';
 
 void main() {
   group('Nearby driver selection', () {

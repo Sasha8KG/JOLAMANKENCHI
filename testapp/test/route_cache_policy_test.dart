@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:jol_aman_kenchi/services/route_cache_policy.dart';
+import 'package:sulyukta_taxi/services/route_cache_policy.dart';
 
 void main() {
   group('Route cache policy', () {

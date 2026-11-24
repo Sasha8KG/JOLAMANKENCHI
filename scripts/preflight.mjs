@@ -138,7 +138,7 @@ check('Route response verifies the current driver identity', /TaxiParkState\.cur
 check('Route response verifies the assigned order is unchanged', /final latestAssignedId = _serverAssignedOrders\.isEmpty[\s\S]{0,120}if \(latestAssignedId != id\) \{\s*refreshAfterRoute = latestAssignedId\.isNotEmpty;\s*return;/.test(app));
 check('Route response rejects a stale driver GPS position', /if \(latestRouteKey != routeKey\) \{\s*refreshAfterRoute = latestRouteKey != null;\s*return;/.test(app));
 check('Driver order polling requires both server order arrays', orderSnapshot.includes('if (rawOpen is! List || rawAssigned is! List)'));
-check('Driver order polling preserves previous data when the response is malformed', app.includes('final snapshot = ServerOrderSnapshot.parse(data);') && app.includes('catch (_) {') && app.includes('// Временная ошибка сети: следующий опрос повторит запрос.'));
+check('Driver order polling preserves previous data when the response is malformed', app.includes('final snapshot = ServerOrderSnapshot.parse(data);') && app.includes('catch (_) {') && app.includes('A transient network error is retried by the next scheduled poll.'));
 check('Driver order IDs are restricted to safe 1-128 character identifiers', app.includes("RegExp(r'^[A-Za-z0-9_-]{1,128}$')"));
 check('Driver order polling rejects duplicate or malformed order rows', orderSnapshot.includes('A-Za-z0-9_-') && orderSnapshot.includes('!seen.add(id)') && orderSnapshotTests.includes('rejects malformed and overlong order ids') && orderSnapshotTests.includes('rejects duplicate free order ids'));
 check('Driver order polling enforces at most one active trip', orderSnapshot.includes('rawAssigned.length > 1') && orderSnapshotTests.includes('rejects more than one assigned order'));
@@ -448,7 +448,7 @@ check('Assigned active orders are fetched separately from open offers', openOrde
 check('Assigned active orders remain visible even when open-offer GPS is stale', openOrdersRoute.includes("status IN ('driver_assigned','arrived') AND assigned_driver_uid=?"));
 check('Driver API response keeps open and assigned order lists separate', openOrdersRoute.includes('orders: open.results || [], assignedOrders: assignedOrders.results || []'));
 check('Driver UI clears open offers when the driver manually goes offline', app.includes('_driverWantsOnline = false;') && app.includes('_serverOpenOrders = [];'));
-check('Driver order polling can restore assigned trips while offline', app.includes('if (!mounted || _ordersPollInProgress) return;') && app.includes('unawaited(_pollServerOrders());'))
+check('Driver order polling can restore assigned trips while offline', app.includes('if (_ordersPollInProgress) {') && app.includes('unawaited(_pollServerOrders());'))
 
 check('Driver sees availability again after the active order disappears', app.includes('hadAssignedOrder && assigned.isEmpty') && app.includes('Вы снова можете принимать заказы.'));
 
@@ -809,8 +809,8 @@ check('Open-order query still requires the driver to be online', /status='new'[\
 check('Open-order query still requires fresh driver GPS', /available_driver\.location_updated_at BETWEEN \? AND \?/.test(worker));
 check('Assigned-order query is independent of driver online status', /const assignedOrders = await env\.DB\.prepare\([\s\S]*?status IN \('driver_assigned','arrived'\) AND assigned_driver_uid=\?/.test(worker));
 check('Driver screen restores orders immediately even when offline', /if \(_driverWantsOnline\) \{\s*_startLocationTracking\(\);\s*\}\s*\/\/ Also restore an already assigned trip[\s\S]*?unawaited\(_pollServerOrders\(\)\);/.test(app));
-check('Driver order polling does not stop solely because the driver is offline', app.includes('if (!mounted || _ordersPollInProgress) return;') && !app.includes('if (!mounted || !_driverWantsOnline || _ordersPollInProgress) return;'));
-check('Driver order polling remains protected against overlapping requests', app.includes('_ordersPollInProgress) return;') && app.includes('_ordersPollInProgress = true;') && app.includes('_ordersPollInProgress = false;'));
+check('Driver order polling does not stop solely because the driver is offline', app.includes('if (_ordersPollInProgress) {') && !app.includes('if (!mounted || !_driverWantsOnline || _ordersPollInProgress) return;'));
+check('Driver order polling remains protected against overlapping requests', app.includes('if (_ordersPollInProgress) {') && app.includes('_ordersPollInProgress = true;') && app.includes('_ordersPollInProgress = false;') && app.includes('_ordersPollRefreshPending = true;') && app.includes('_ordersPollRefreshPending = false;'));
 check('Passenger screen observes Android app lifecycle', app.includes('class _ClientMapScreenState extends State<ClientMapScreen> with WidgetsBindingObserver'));
 check('Passenger screen registers and removes its lifecycle observer', app.includes('WidgetsBinding.instance.addObserver(this);') && app.includes('WidgetsBinding.instance.removeObserver(this);'));
 check('Passenger GPS and nearby cars refresh when app resumes', app.includes('if (state != AppLifecycleState.resumed || !mounted) return;') && app.includes('unawaited(_locateClient(showMessage: false));') && app.includes('unawaited(_refreshNearbyDrivers());'));

@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:jol_aman_kenchi/services/refresh_gate.dart';
+import 'package:sulyukta_taxi/services/refresh_gate.dart';
 
 void main() {
   group('Coalesced refresh gate', () {
