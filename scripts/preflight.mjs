@@ -203,7 +203,7 @@ const nearbyMarkerStart = app.indexOf('_nearbyDriverPoints.map((entry) => Marker
 const nearbyMarkerBlock = nearbyMarkerStart >= 0 ? app.slice(nearbyMarkerStart, nearbyMarkerStart + 500) : '';
 check("Passenger uses the tested nearby-driver ranking helper", app.includes("selectNearbyDriverLocations(") && app.includes("maxDistanceKm: 20") && app.includes("maxResults: 10"));
 check("Nearby-driver filter rejects invalid pickup and search limits", /maxDistanceKm < 0/.test(read('testapp/lib/services/nearby_driver_filter.dart')) && /maxResults <= 0/.test(read('testapp/lib/services/nearby_driver_filter.dart')));
-check("Nearby-driver filter sorts by distance and caps result count", /ranked\\.sort/.test(read('testapp/lib/services/nearby_driver_filter.dart')) && /ranked\\.take\\(maxResults\\)/.test(read('testapp/lib/services/nearby_driver_filter.dart')));
+check("Nearby-driver filter sorts by distance and caps result count", /ranked\.sort/.test(read('testapp/lib/services/nearby_driver_filter.dart')) && /ranked\.take\(maxResults\)/.test(read('testapp/lib/services/nearby_driver_filter.dart')));
 check("Nearby-driver filter has unit tests for radius, ordering, freshness and result limits", ['sorts fresh nearby cars by distance', 'excludes cars beyond the requested radius', 'limits the number of visible cars', 'excludes stale, future and invalid GPS positions'].every((label) => read('testapp/test/widget_test.dart').includes(label)));
 check("Passenger map renders distinct green taxi markers", nearbyMarkerBlock.includes("point: entry.key") && nearbyMarkerBlock.includes("Icons.local_taxi") && nearbyMarkerBlock.includes("Colors.green"));
 check("Passenger cancels nearby timer when disposed", /_nearbyDriversTimer\?\.cancel\(\)/.test(app));
