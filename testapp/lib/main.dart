@@ -1476,6 +1476,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
   LatLng? _clientCurrentLocation;
   bool _clientMapReady = false;
   bool _clientLocationLoading = false;
+  bool _clientPickupManuallySelected = false;
   // A default regional map center must never be mistaken for a confirmed pickup.
   bool _pickupPointConfirmed = false;
 
@@ -1522,7 +1523,10 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
 
   Future<void> _locateClient({required bool showMessage}) async {
     if (!mounted || _clientLocationLoading || TaxiParkState.activeOrder != null) return;
-    setState(() => _clientLocationLoading = true);
+    setState(() {
+      _clientLocationLoading = true;
+      if (showMessage) _clientPickupManuallySelected = false;
+    });
     try {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
@@ -1555,13 +1559,16 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
         throw Exception('Телефон вернул некорректные GPS-координаты.');
       }
       if (!mounted) return;
+      final keepManualPickup = _clientPickupManuallySelected;
       setState(() {
         _clientCurrentLocation = point;
-        _pickupPoint = point;
-        _pickupPointConfirmed = true;
+        if (!keepManualPickup) {
+          _pickupPoint = point;
+          _pickupPointConfirmed = true;
+        }
         _clientLocationLoading = false;
       });
-      if (_clientMapReady) {
+      if (_clientMapReady && !keepManualPickup) {
         _clientMapController.move(point, 16.0);
       }
     } catch (error) {
@@ -1998,7 +2005,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
                 onMapReady: () {
                   _clientMapReady = true;
                   final current = _clientCurrentLocation;
-                  if (current != null && mounted) {
+                  if (current != null && mounted && !_clientPickupManuallySelected) {
                     _clientMapController.move(current, 16.0);
                   }
                 },
@@ -2007,6 +2014,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
                     setState(() {
                       _pickupPoint = point;
                       _pickupPointConfirmed = true;
+                      _clientPickupManuallySelected = true;
                     });
                   }
                 },
