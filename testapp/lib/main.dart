@@ -2014,8 +2014,8 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
                     child: DecoratedBox(
                       decoration: BoxDecoration(
                         color: _pickupPointConfirmed
-                            ? Colors.green.shade800.withValues(alpha: 0.94)
-                            : Colors.orange.shade900.withValues(alpha: 0.96),
+                            ? Colors.green.shade800.withOpacity(0.94)
+                            : Colors.orange.shade900.withOpacity(0.96),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Padding(
