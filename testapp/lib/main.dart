@@ -2696,6 +2696,8 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
       }
       final open = _normalizeServerOrders(rawOpen);
       final assigned = _normalizeServerOrders(rawAssigned);
+      // Offline drivers may restore an assigned trip, but never see new offers.
+      final visibleOpen = _driverWantsOnline ? open : <Map<String, dynamic>>[];
       if (open.length != rawOpen.length || assigned.length != rawAssigned.length) {
         throw const WorkerApiException('Сервер прислал заказ с неверным номером или повторяющейся записью. Список не заменён.');
       }
@@ -2716,7 +2718,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
       final hadAssignedOrder = _serverAssignedOrders.isNotEmpty;
       final activeAssignedId = assigned.isEmpty ? null : _serverOrderId(assigned.first);
       setState(() {
-        _serverOpenOrders = open;
+        _serverOpenOrders = visibleOpen;
         _serverAssignedOrders = assigned;
         // Never leave the previous passenger's route on the map after an
         // assignment changes or is cancelled.

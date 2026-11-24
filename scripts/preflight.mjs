@@ -319,7 +319,7 @@ check('Assigned active orders are fetched separately from open offers', openOrde
 check('Assigned active orders remain visible even when open-offer GPS is stale', openOrdersRoute.includes("status IN ('driver_assigned','arrived') AND assigned_driver_uid=?"));
 check('Driver API response keeps open and assigned order lists separate', openOrdersRoute.includes('orders: open.results || [], assignedOrders: assignedOrders.results || []'));
 check('Driver UI clears open offers when the driver manually goes offline', app.includes('_driverWantsOnline = false;') && app.includes('_serverOpenOrders = [];'));
-check('Driver UI only polls order offers while the driver wants to be online', app.includes('if (!mounted || !_driverWantsOnline || _ordersPollInProgress) return;'))
+check('Driver order polling can restore assigned trips while offline', app.includes('if (!mounted || _ordersPollInProgress) return;') && app.includes('unawaited(_pollServerOrders());'))
 
 check('Driver sees availability again after the active order disappears', app.includes('hadAssignedOrder && assigned.isEmpty') && app.includes('Вы снова можете принимать заказы.'));
 
@@ -335,7 +335,7 @@ check('Going offline cancels the GPS stream', app.includes('await _positionSubsc
 check('Going offline stops the GPS heartbeat', app.includes('_stopLocationHeartbeat();'));
 check('Going offline is persisted through the Worker API', app.includes('await WorkerApi.setDriverOnline(online: false);'));
 check('Going online restarts GPS tracking', app.includes('_driverWantsOnline = true;') && app.includes('await _startLocationTracking();'));
-check('Offline drivers do not poll for new orders', app.includes('if (!mounted || !_driverWantsOnline || _ordersPollInProgress) return;'));
+check('Offline drivers never display new order offers', app.includes('final visibleOpen = _driverWantsOnline ? open : <Map<String, dynamic>>[];') && app.includes('_serverOpenOrders = visibleOpen;'));
 check('GPS retry scheduling requires desired online state', app.includes('if (!mounted || !_driverWantsOnline || _locationRetryTimer?.isActive == true) return;'));
 check('GPS retry callback rechecks desired online state', app.includes('if (mounted && _driverWantsOnline) unawaited(_startLocationTracking());'));
 check('GPS tracking startup requires desired online state', app.includes('driver == null || !mounted || !_driverWantsOnline || _locationTrackingStarting'));
@@ -346,7 +346,7 @@ check('An in-flight GPS publication restores offline state after a concurrent op
 
 check('Driver availability restores its initial value from the authenticated server profile', app.includes("_driverWantsOnline = TaxiParkState.currentLoggedInDriver?.isOnline ?? false;"));
 check('An offline driver does not start GPS automatically after reopening the driver screen', app.includes('if (_driverWantsOnline) {\n      _startLocationTracking();'));
-check('An offline driver does not fetch new orders on initial screen load', app.includes('if (_driverWantsOnline) {\n      _startLocationTracking();\n      unawaited(_pollServerOrders());'));
+check('An offline driver restores assigned orders without starting GPS on initial screen load', app.includes('if (_driverWantsOnline) {\n      _startLocationTracking();\n    }\n    // Also restore an already assigned trip when the driver is temporarily offline.\n    // The server returns assigned trips separately and keeps the open queue empty.\n    unawaited(_pollServerOrders());'));
 check('The five-second order timer remains available for later online transitions', app.includes("_ordersPollTimer = Timer.periodic(const Duration(seconds: 5)"));
 check('Availability changes have a dedicated in-progress lock', app.includes('bool _availabilityChanging = false;'));
 check('Rapid repeated availability taps are ignored while a change is running', app.includes('if (!mounted || _availabilityChanging) return;'));
