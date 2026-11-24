@@ -3905,7 +3905,11 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
     return Scaffold(
       appBar: AppBar(
         title: Text(
-            'Водитель: ${driver?.name ?? ""} (${driver?.fullCarInfo ?? ""})'),
+          'Водитель: ${driver?.name ?? ""} (${driver?.fullCarInfo ?? ""})',
+          maxLines: 1,
+          softWrap: false,
+          overflow: TextOverflow.ellipsis,
+        ),
         backgroundColor: const Color(0xFF087A42),
         foregroundColor: Colors.white,
         actions: [
@@ -3992,11 +3996,16 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
             ),
           ),
           Container(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
             decoration: BoxDecoration(color: const Color(0xFFFFFEFA), border: Border(top: BorderSide(color: const Color(0xFF087A42), width: 3)), borderRadius: const BorderRadius.vertical(top: Radius.circular(22))),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(context).height * 0.42,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
                 const Text('Заказы и их статусы обновляются с сервера',
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF087A42))),
                 const SizedBox(height: 10),
@@ -4095,7 +4104,9 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
                 ],
                 const SizedBox(height: 10),
                 WalkieTalkieWidget(senderName: driver?.name ?? 'Водитель', allowText: _serverAssignedOrders.isEmpty && (order == null || order.status != 'accepted')),
-              ],
+                  ],
+                ),
+              ),
             ),
           ),
         ],

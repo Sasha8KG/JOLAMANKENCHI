@@ -937,6 +937,19 @@ check('Document receipt metadata is committed before review status is pending', 
 check('Flutter API exposes authenticated document request, polling, token and receipt methods', api.includes('requestDriverDocuments') && api.includes('driverDocumentRequest') && api.includes('driverDocumentsTransferToken') && api.includes('confirmDriverDocumentsReceived'));
 check('Document transfer uses D1 metadata and does not put image bytes in D1', !/CREATE TABLE IF NOT EXISTS driver_document_transfer_requests[\\s\\S]{0,900}BLOB/i.test(worker));
 
+// Responsive green driver/dispatcher surfaces and language-switch regression guards.
+check('Driver header title truncates safely on compact screens', app.includes("maxLines: 1,\n          softWrap: false,\n          overflow: TextOverflow.ellipsis,"));
+check('Driver order controls remain reachable in a bounded scrollable panel on short screens', app.includes('maxHeight: MediaQuery.sizeOf(context).height * 0.42') && app.includes('child: SingleChildScrollView(\n                child: Column('));
+check('Driver green panel keeps its contrast and identity while using compact padding', app.includes('padding: const EdgeInsets.fromLTRB(12, 10, 12, 10)') && app.includes('Color(0xFF087A42)'));
+check('Dispatcher app bar retains a one-line ellipsized title for narrow screens', app.includes("'Диспетчер · ЖОЛ АМАН КЕНЧИ',\n          maxLines: 1,\n          softWrap: false,\n          overflow: TextOverflow.ellipsis,"));
+check('Russian and Kyrgyz language selector remains available in driver and dispatcher headers', (app.match(/TaxiLanguageSwitcher\(\)/g) || []).length >= 3);
+check('Language selector exposes both supported language values', app.includes("DropdownMenuItem(value: 'ru', child: Text('Русский'))") && app.includes("DropdownMenuItem(value: 'ky', child: Text('Кыргызча'))"));
+check('Language change is reactive and localized text listens to the shared language state', app.includes('TaxiLanguage.current.value = value') && app.includes('valueListenable: TaxiLanguage.current') && app.includes("language == 'ky' ? kyrgyz : russian"));
+check('Language switch regression tests cover live switching and narrow layout', read('testapp/test/responsive_language_test.dart').includes("expect(TaxiLanguage.isKyrgyz, isTrue)") && read('testapp/test/responsive_language_test.dart').includes('width: 220'));
+check('Driver route map, location stream and order polling code remain present after layout changes', app.includes('FlutterMap(\n              mapController: _driverMapController') && app.includes('_positionSubscription') && app.includes('_pollServerOrders();'));
+check('Dispatcher refresh and server-backed driver/order loading remain present after layout changes', app.includes('_dispatcherRefreshTimer = Timer.periodic') && app.includes('WorkerApi.dispatcherOverview()') && app.includes('WorkerApi.assignOrder'));
+check('Firebase session restoration and role authorization remain in place', app.includes('FirebaseAuth.instance.currentUser') && app.includes('WorkerApi.checkAuth()') && app.includes("access['dispatcher']") && app.includes("access['driver']"));
+
 for (const item of checks) {
   process.stdout.write(`${item.ok ? 'PASS' : 'FAIL'}  ${item.label}\n`);
 }
