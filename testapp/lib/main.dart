@@ -586,7 +586,7 @@ class _BrandedSplashGateState extends State<BrandedSplashGate>
                               ),
                               const SizedBox(height: 8),
                               const Text(
-                                '— Такси —',
+                                'Такси',
                                 style: TextStyle(color: gold, fontSize: 22, fontWeight: FontWeight.w900),
                               ),
                               const SizedBox(height: 13),
