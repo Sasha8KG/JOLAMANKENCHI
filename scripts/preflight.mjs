@@ -640,10 +640,10 @@ check("Driver cabinet exposes language switcher", driverUi.includes('TaxiLanguag
 check("Driver approach route is high-contrast gold", /PolylineLayer\(polylines: \[Polyline\(points: _driverApproachRoute!\.points, color: const Color\(0xFFFFD400\)/.test(driverUi));
 check("Driver marker has black and gold frame", /color: const Color\(0xFF171717\), shape: BoxShape\.circle, border: Border\.all\(color: const Color\(0xFFFFD400\)/.test(driverUi));
 check("Open pickup marker uses branded gold pin", /color: const Color\(0xFFFFD400\), shape: BoxShape\.circle, border: Border\.all\(color: const Color\(0xFF171717\)/.test(driverUi));
-check("Assigned pickup marker uses contrasting gold flag", /Icons\.flag, color: const Color\(0xFF171717\)/.test(driverUi));
+check("Assigned pickup marker uses contrasting gold flag", driverUi.includes("child: const Icon(Icons.flag, color: Color(0xFF171717), size: 25)"));
 check("Driver order panel uses dark branded surface", /decoration: BoxDecoration\(color: const Color\(0xFF171717\), border: Border\(top: BorderSide\(color: const Color\(0xFFFFD400\)/.test(driverUi));
-check("Driver panel title uses gold", driverUi.includes("Text('Заказы водителя'") && driverUi.includes('color: const Color(0xFFFFD400)'));
-check("Assigned order heading uses gold", driverUi.includes("Text('Назначенный заказ'") && driverUi.includes('color: const Color(0xFFFFD400)'));
+check("Driver panel title uses gold", driverUi.includes("Text('Заказы и их статусы обновляются с сервера'") && driverUi.includes('fontSize: 14, color: Color(0xFFFFD400)'));
+check("Assigned order heading uses gold", driverUi.includes("Text('ВАШ НАЗНАЧЕННЫЙ ЗАКАЗ'") && driverUi.includes('color: Color(0xFFFFD400)'));
 check("Dispatcher header uses dark gold styling", /backgroundColor: const Color\(0xFF171717\)/.test(dispatcherUi) && /foregroundColor: const Color\(0xFFFFD400\)/.test(dispatcherUi));
 
 for (const item of checks) {
