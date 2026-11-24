@@ -1,3 +1,5 @@
+import 'gps_freshness.dart';
+
 /// Shared acceptance policy for GPS fixes used to place passengers and taxis.
 /// Reject cached, future-dated, malformed, or too imprecise positions.
 bool isUsableGpsFix({
