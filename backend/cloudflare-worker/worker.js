@@ -949,10 +949,13 @@ export default {
 
       if (url.pathname === "/orders/cancel" && request.method === "POST") {
         const b = await request.json();
-        const orderId = String(b.order_id || "");
-        const role = String(b.role || "");
-        if (!orderId || !["customer", "driver"].includes(role)) {
-          return response({ status: "error", message: "Не указан заказ или сторона отказа" }, 400);
+        if (!b || typeof b !== "object" || Array.isArray(b)) {
+          return response({ status: "error", message: "Переданы неверные данные отмены заказа" }, 400);
+        }
+        const orderId = typeof b.order_id === "string" ? b.order_id.trim() : "";
+        const role = typeof b.role === "string" ? b.role.trim() : "";
+        if (!/^[A-Za-z0-9_-]{1,128}$/.test(orderId) || !["customer", "driver"].includes(role)) {
+          return response({ status: "error", message: "Не указан корректный номер заказа или сторона отказа" }, 400);
         }
         // Re-check dispatcher approval for driver-side cancellation; offline drivers may still refuse an assigned trip.
         const auth = role === "driver"
@@ -962,13 +965,16 @@ export default {
         if (!order) return response({ status: "error", message: "Заказ не найден" }, 404);
         if (role === "customer") {
           if (order.customer_uid !== auth.user.localId) return response({ status: "error", message: "Можно отменить только свой заказ" }, 403);
-          const result = await env.DB.prepare(`UPDATE orders SET status='cancelled_by_customer', response_deadline=NULL
-            WHERE id=? AND customer_uid=? AND status IN ('new','driver_assigned')`)
-            .bind(orderId, auth.user.localId).run();
-          if (!result.meta || Number(result.meta.changes || 0) !== 1) {
+          // Update the order and clear pending driver responses atomically.
+          const customerCancelResults = await env.DB.batch([
+            env.DB.prepare(`UPDATE orders SET status='cancelled_by_customer', response_deadline=NULL
+              WHERE id=? AND customer_uid=? AND status IN ('new','driver_assigned')`)
+              .bind(orderId, auth.user.localId),
+            env.DB.prepare("DELETE FROM order_responses WHERE order_id=?").bind(orderId)
+          ]);
+          if (Number(customerCancelResults?.[0]?.meta?.changes || 0) !== 1) {
             return response({ status: "error", message: "Отмена уже невозможна: заказ изменил статус или водитель уже прибыл" }, 409);
           }
-          await env.DB.prepare("DELETE FROM order_responses WHERE order_id=?").bind(orderId).run();
           return response({ status: "ok", cancelled: true, statusNow: "cancelled_by_customer" });
         }
         // A driver may report a passenger no-show only after marking arrival.
@@ -1001,16 +1007,19 @@ export default {
         if (order.status !== "driver_assigned") {
           return response({ status: "error", message: "Отказ до прибытия доступен только для назначенного заказа" }, 409);
         }
-        const result = await env.DB.prepare(`UPDATE orders SET status='new', assigned_driver_uid=NULL,
-          assigned_at=NULL, response_deadline=NULL WHERE id=? AND assigned_driver_uid=? AND status='driver_assigned'`)
-          .bind(orderId, auth.user.localId).run();
-        if (!result.meta || Number(result.meta.changes || 0) !== 1) {
+        // Reopen the order, record this driver's refusal and clear their response atomically.
+        const driverRefusalResults = await env.DB.batch([
+          env.DB.prepare(`UPDATE orders SET status='new', assigned_driver_uid=NULL,
+            assigned_at=NULL, response_deadline=NULL WHERE id=? AND assigned_driver_uid=? AND status='driver_assigned'`)
+            .bind(orderId, auth.user.localId),
+          env.DB.prepare("INSERT OR IGNORE INTO order_refusals (order_id,driver_uid,refused_at) VALUES (?,?,unixepoch())")
+            .bind(orderId, auth.user.localId),
+          env.DB.prepare("DELETE FROM order_responses WHERE order_id=? AND driver_uid=?")
+            .bind(orderId, auth.user.localId)
+        ]);
+        if (Number(driverRefusalResults?.[0]?.meta?.changes || 0) !== 1) {
           return response({ status: "error", message: "Заказ уже изменил статус; отказ не выполнен" }, 409);
         }
-        await env.DB.prepare("INSERT OR IGNORE INTO order_refusals (order_id,driver_uid,refused_at) VALUES (?,?,unixepoch())")
-          .bind(orderId, auth.user.localId).run();
-        await env.DB.prepare("DELETE FROM order_responses WHERE order_id=? AND driver_uid=?")
-          .bind(orderId, auth.user.localId).run();
         return response({ status: "ok", cancelled: true, reopened: true, statusNow: "new",
           message: "Вы отказались от заказа. Он снова доступен другим водителям." });
       }

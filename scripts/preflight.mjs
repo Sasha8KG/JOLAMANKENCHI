@@ -665,6 +665,18 @@ check('Offline restore accepts only assigned and arrived active statuses', app.i
 check('Offline restore clears stale route when there is no active assignment', app.includes('if (assigned.isEmpty) {') && app.includes('_driverApproachRoute = null;') && app.includes('_driverRouteOrderId = null;'));
 check('Periodic order refresh continues to recover an assigned trip', app.includes('Timer.periodic(const Duration(seconds: 5), (_) {') && app.includes('_pollServerOrders();'));
 
+// Cancellation safeguards: malformed requests are rejected and state changes are atomic.
+const cancelStart = worker.indexOf('if (url.pathname === "/orders/cancel" && request.method === "POST")');
+const cancelEnd = worker.indexOf('if (url.pathname === "/orders/respond"', cancelStart);
+const cancelRoute = cancelStart >= 0 && cancelEnd > cancelStart ? worker.slice(cancelStart, cancelEnd) : '';
+check('Cancellation rejects non-object and array request bodies', cancelRoute.includes('!b || typeof b !== "object" || Array.isArray(b)'));
+check('Cancellation validates order IDs before database lookup', cancelRoute.includes('/^[A-Za-z0-9_-]{1,128}$/.test(orderId)'));
+check('Cancellation accepts only explicit customer or driver roles', cancelRoute.includes('["customer", "driver"].includes(role)'));
+check('Customer cancellation and response cleanup run in one D1 batch', cancelRoute.includes('const customerCancelResults = await env.DB.batch([') && cancelRoute.includes('DELETE FROM order_responses WHERE order_id=?'));
+check('Customer cancellation checks the conditional status transition result', cancelRoute.includes('customerCancelResults?.[0]?.meta?.changes') && cancelRoute.includes("status IN ('new','driver_assigned')"));
+check('Driver pre-arrival refusal, audit and response cleanup run in one D1 batch', cancelRoute.includes('const driverRefusalResults = await env.DB.batch([') && cancelRoute.includes('INSERT OR IGNORE INTO order_refusals') && cancelRoute.includes('DELETE FROM order_responses WHERE order_id=? AND driver_uid=?'));
+check('Driver refusal cannot reopen an order after a concurrent status change', cancelRoute.includes('driverRefusalResults?.[0]?.meta?.changes') && cancelRoute.includes("status='driver_assigned'"));
+
 for (const item of checks) {
   process.stdout.write(`${item.ok ? 'PASS' : 'FAIL'}  ${item.label}\n`);
 }
