@@ -8,6 +8,17 @@ function check(label, condition) {
   checks.push({ label, ok: Boolean(condition) });
 }
 
+// Check ordered source fragments without fragile multiline regular expressions.
+function containsInOrder(source, fragments) {
+  let offset = 0;
+  for (const fragment of fragments) {
+    const found = source.indexOf(fragment, offset);
+    if (found < 0) return false;
+    offset = found + fragment.length;
+  }
+  return true;
+}
+
 const pubspec = read('testapp/pubspec.yaml');
 const gradle = read('testapp/android/app/build.gradle');
 const manifest = read('testapp/android/app/src/main/AndroidManifest.xml');
@@ -116,8 +127,31 @@ check('Driver map draws a route only for its assigned order', /_driverApproachRo
 
 
 check('Passenger pickup is not treated as confirmed at the regional fallback center', /bool _pickupPointConfirmed = false;/.test(app));
-check('Passenger GPS success confirms the pickup point', /_clientCurrentLocation = point;\\s*_pickupPoint = point;\\s*_pickupPointConfirmed = true;/.test(app));
-check('Manual passenger map selection confirms the pickup point', /_pickupPoint = point;\\s*_pickupPointConfirmed = true;/.test(app));
+const clientLocateStart = app.indexOf('Future<void> _locateClient');
+const clientLocateEnd = app.indexOf('Future<void> _refreshNearbyDrivers', clientLocateStart);
+const clientLocateBlock = clientLocateStart >= 0 && clientLocateEnd > clientLocateStart
+  ? app.slice(clientLocateStart, clientLocateEnd)
+  : '';
+check(
+  'Passenger GPS success confirms the pickup point',
+  containsInOrder(clientLocateBlock, [
+    '_clientCurrentLocation = point;',
+    '_pickupPoint = point;',
+    '_pickupPointConfirmed = true;',
+  ]),
+);
+const passengerMapTapStart = app.indexOf('onTap: (tapPosition, point) {');
+const passengerMapTapEnd = app.indexOf('children: [', passengerMapTapStart);
+const passengerMapTapBlock = passengerMapTapStart >= 0 && passengerMapTapEnd > passengerMapTapStart
+  ? app.slice(passengerMapTapStart, passengerMapTapEnd)
+  : '';
+check(
+  'Manual passenger map selection confirms the pickup point',
+  containsInOrder(passengerMapTapBlock, [
+    '_pickupPoint = point;',
+    '_pickupPointConfirmed = true;',
+  ]),
+);
 check('Passenger cannot submit an order with an unconfirmed fallback pickup', app.includes('if (!_pickupPointConfirmed)') && app.includes('Сначала определите своё местоположение'));
 check('Passenger map explains how to confirm the pickup point', app.includes('Определите местоположение или отметьте точку на карте'));
 
