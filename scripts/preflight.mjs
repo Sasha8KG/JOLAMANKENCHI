@@ -898,6 +898,18 @@ check('Driver logout clears local availability before requesting server offline 
 check('Driver logout only clears the driver session after Firebase sign-out succeeds', app.includes('await FirebaseService.signOut().timeout(const Duration(seconds: 20));\n      TaxiParkState.currentLoggedInDriver = null;'));
 
 
+check('Driver logout always asks the server to confirm offline state, including after a previous failed attempt', app.includes('Always ask the server to confirm offline state') && app.includes('final result = await WorkerApi.setDriverOnline(online: false)') && app.includes('await FirebaseService.signOut().timeout(const Duration(seconds: 20));'));
+check('Driver logout server-offline request is not conditional on the local online flag', (() => { const start=app.indexOf('Future<void> _logoutDriver()'); const end=app.indexOf('\n  @override',start); const block=app.slice(start,end); return block.includes('WorkerApi.setDriverOnline(online: false)') && !block.includes('if (_driverWantsOnline)'); })());
+check('Driver logout cancels any pending offline retry before its final server confirmation', app.includes('_offlineSyncRetryTimer?.cancel();\n      _offlineSyncRetryTimer = null;\n      await _positionSubscription?.cancel();'));
+check('Driver logout confirms server offline state before Firebase sign-out on every path', (() => { const start=app.indexOf('Future<void> _logoutDriver()'); const end=app.indexOf('\n  @override',start); const block=app.slice(start,end); return block.indexOf('WorkerApi.setDriverOnline(online: false)') >= 0 && block.indexOf('WorkerApi.setDriverOnline(online: false)') < block.indexOf('FirebaseService.signOut()'); })());
+check('Driver logout preserves the session if offline confirmation times out or fails', app.includes('Не удалось безопасно выйти. Аккаунт оставлен открытым') && app.includes('if (!_driverWantsOnline) _scheduleOfflineStateRetry();'));
+check('Driver logout cannot bypass a scheduled offline retry by relying only on local online state', app.includes('even if the local') && app.includes('previous failed request must never be bypassed by signing out'));
+check('Driver logout clears local online and GPS-ready flags before server request', app.includes('_driverWantsOnline = false;\n        _driverGpsReady = false;\n        _serverOpenOrders = [];'));
+check('Driver logout cancels GPS retry and stops the position stream before server request', app.includes('_locationRetryTimer?.cancel();\n      _locationRetryTimer = null;') && app.includes('await _positionSubscription?.cancel();\n      _positionSubscription = null;'));
+check('Driver logout stops the heartbeat before server confirmation', app.includes('_positionSubscription = null;\n      _stopLocationHeartbeat();\n\n      final result = await WorkerApi.setDriverOnline(online: false)'));
+check('Driver logout retains the active-trip and initial-order-check safeguards', app.includes('if (!_assignedOrdersLoaded) {') && app.includes('if (_serverAssignedOrders.isNotEmpty) {'));
+
+
 for (const item of checks) {
   process.stdout.write(`${item.ok ? 'PASS' : 'FAIL'}  ${item.label}\n`);
 }

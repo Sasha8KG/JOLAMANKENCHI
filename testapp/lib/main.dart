@@ -3748,29 +3748,29 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
 
     setState(() => _logoutInProgress = true);
     try {
-      // Confirm the server-side offline transition before ending authentication.
-      if (_driverWantsOnline) {
-        setState(() {
-          _driverWantsOnline = false;
-          _driverGpsReady = false;
-          _serverOpenOrders = [];
-          if (TaxiParkState.currentLoggedInDriver != null) {
-            TaxiParkState.currentLoggedInDriver!.isOnline = false;
-          }
-        });
-        _locationRetryTimer?.cancel();
-        _locationRetryTimer = null;
-        _offlineSyncRetryTimer?.cancel();
-        _offlineSyncRetryTimer = null;
-        await _positionSubscription?.cancel();
-        _positionSubscription = null;
-        _stopLocationHeartbeat();
-
-        final result = await WorkerApi.setDriverOnline(online: false)
-            .timeout(const Duration(seconds: 20));
-        if (result['online'] != false) {
-          throw StateError('Сервер не подтвердил отключение от линии.');
+      // Always ask the server to confirm offline state, even if the local
+      // screen already says offline. This closes the retry-timer race: a
+      // previous failed request must never be bypassed by signing out.
+      setState(() {
+        _driverWantsOnline = false;
+        _driverGpsReady = false;
+        _serverOpenOrders = [];
+        if (TaxiParkState.currentLoggedInDriver != null) {
+          TaxiParkState.currentLoggedInDriver!.isOnline = false;
         }
+      });
+      _locationRetryTimer?.cancel();
+      _locationRetryTimer = null;
+      _offlineSyncRetryTimer?.cancel();
+      _offlineSyncRetryTimer = null;
+      await _positionSubscription?.cancel();
+      _positionSubscription = null;
+      _stopLocationHeartbeat();
+
+      final result = await WorkerApi.setDriverOnline(online: false)
+          .timeout(const Duration(seconds: 20));
+      if (result['online'] != false) {
+        throw StateError('Сервер не подтвердил отключение от линии.');
       }
 
       await FirebaseService.signOut().timeout(const Duration(seconds: 20));
