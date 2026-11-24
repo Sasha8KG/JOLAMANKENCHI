@@ -770,6 +770,17 @@ check('Assigned-order query is independent of driver online status', /const assi
 check('Driver screen restores orders immediately even when offline', /if \(_driverWantsOnline\) \{\s*_startLocationTracking\(\);\s*\}\s*\/\/ Also restore an already assigned trip[\s\S]*?unawaited\(_pollServerOrders\(\)\);/.test(app));
 check('Driver order polling does not stop solely because the driver is offline', app.includes('if (!mounted || _ordersPollInProgress) return;') && !app.includes('if (!mounted || !_driverWantsOnline || _ordersPollInProgress) return;'));
 check('Driver order polling remains protected against overlapping requests', app.includes('_ordersPollInProgress) return;') && app.includes('_ordersPollInProgress = true;') && app.includes('_ordersPollInProgress = false;'));
+check('Passenger screen observes Android app lifecycle', app.includes('class _ClientMapScreenState extends State<ClientMapScreen> with WidgetsBindingObserver'));
+check('Passenger screen registers and removes its lifecycle observer', app.includes('WidgetsBinding.instance.addObserver(this);') && app.includes('WidgetsBinding.instance.removeObserver(this);'));
+check('Passenger GPS and nearby cars refresh when app resumes', app.includes('if (state != AppLifecycleState.resumed || !mounted) return;') && app.includes('unawaited(_locateClient(showMessage: false));') && app.includes('unawaited(_refreshNearbyDrivers());'));
+check('Passenger resume GPS refresh does not override manually selected pickup', app.includes('_locateClient(showMessage: false)') && app.includes('_clientPickupManuallySelected'));
+check('Driver screen observes Android app lifecycle', app.includes('class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingObserver'));
+check('Driver screen registers and removes its lifecycle observer', (app.match(/WidgetsBinding\.instance\.addObserver\(this\);/g) || []).length === 2 && (app.match(/WidgetsBinding\.instance\.removeObserver\(this\);/g) || []).length === 2);
+check('Driver order list refreshes immediately after app resumes', app.includes('unawaited(_pollServerOrders());') && app.includes('state != AppLifecycleState.resumed'));
+check('Driver restarts GPS stream after Android paused or dropped it', app.includes('if (_positionSubscription == null)') && app.includes('unawaited(_startLocationTracking());'));
+check('Driver refreshes live GPS heartbeat on resume when stream exists', app.includes('unawaited(_refreshDriverHeartbeat(driver));'));
+check('Driver resume recovery never turns an explicitly offline driver online', app.includes('if (!_driverWantsOnline || driver == null) return;'));
+
 check('GPS and manual pickup changes request a nearby-driver refresh',
   app.includes('unawaited(_refreshNearbyDrivers());') &&
   nearbyRefreshBlock.includes('WorkerApi.nearbyDrivers()'));

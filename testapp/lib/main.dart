@@ -1452,7 +1452,7 @@ class ClientMapScreen extends StatefulWidget {
   State<ClientMapScreen> createState() => _ClientMapScreenState();
 }
 
-class _ClientMapScreenState extends State<ClientMapScreen> {
+class _ClientMapScreenState extends State<ClientMapScreen> with WidgetsBindingObserver {
   LatLng _pickupPoint = TaxiParkState.sulyuktaCenter;
   final TextEditingController _destinationController = TextEditingController();
   // Поле ввода цены клиентом удалено
@@ -1488,6 +1488,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadTariffs();
     // Determine the passenger pickup point from the phone GPS on entry.
     unawaited(_locateClient(showMessage: false));
@@ -1495,6 +1496,16 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
     _nearbyDriversTimer = Timer.periodic(const Duration(seconds: 20), (_) {
       unawaited(_refreshNearbyDrivers());
     });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed || !mounted) return;
+    // Re-check GPS on return without overwriting a pickup pin chosen manually.
+    if (TaxiParkState.activeOrder == null) {
+      unawaited(_locateClient(showMessage: false));
+    }
+    unawaited(_refreshNearbyDrivers());
   }
 
   Future<void> _showClientLocationSettingsDialog() async {
@@ -2353,6 +2364,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _orderStatusTimer?.cancel();
     _nearbyDriversTimer?.cancel();
     _destinationController.dispose();
@@ -2838,7 +2850,7 @@ class DriverMapScreen extends StatefulWidget {
   State<DriverMapScreen> createState() => _DriverMapScreenState();
 }
 
-class _DriverMapScreenState extends State<DriverMapScreen> {
+class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingObserver {
   final TextEditingController _finalPriceController = TextEditingController();
   final MapController _driverMapController = MapController();
   bool _driverMapReady = false;
@@ -2870,6 +2882,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // Restore the server-confirmed line state. A driver who explicitly went
     // offline must stay offline after closing and reopening the app.
     _driverWantsOnline = TaxiParkState.currentLoggedInDriver?.isOnline ?? false;
@@ -2882,6 +2895,20 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
     _ordersPollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       _pollServerOrders();
     });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed || !mounted) return;
+    // Timers and GPS streams can be paused by Android while the app is backgrounded.
+    unawaited(_pollServerOrders());
+    final driver = TaxiParkState.currentLoggedInDriver;
+    if (!_driverWantsOnline || driver == null) return;
+    if (_positionSubscription == null) {
+      unawaited(_startLocationTracking());
+    } else {
+      unawaited(_refreshDriverHeartbeat(driver));
+    }
   }
 
   String _serverOrderId(Map<String, dynamic> order) {
@@ -3500,6 +3527,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _driverWantsOnline = false;
     _positionSubscription?.cancel();
     _heartbeatTimer?.cancel();
