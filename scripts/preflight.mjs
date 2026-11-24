@@ -156,28 +156,33 @@ check(
 check('Passenger cannot submit an order with an unconfirmed fallback pickup', app.includes('if (!_pickupPointConfirmed)') && app.includes('Сначала определите своё местоположение'));
 check('Passenger map explains how to confirm the pickup point', app.includes('Определите местоположение или отметьте точку на карте'));
 
-check('Passenger route requires an active taxi order', /final order = TaxiParkState\.activeOrder/.test(app) && /order\.status != 'accepted'/.test(app));
-check('Passenger route requires an assigned driver', /driverId == null/.test(app));
-check('Passenger route requires a valid order identifier', /orderId\.isEmpty/.test(app));
-check('Passenger route requires the driver to be online', /!driver\.isOnline/.test(app));
-check('Passenger route requires a known GPS timestamp', /gpsAge == null/.test(app));
-check('Passenger route rejects stale GPS older than 60 seconds', /gpsAge > 60/.test(app));
-check('Passenger route cache includes order and driver identity', /final key = '\\$orderId:\\$driverId:/.test(app));
-check('Passenger route cache includes pickup coordinates', /final key = '[^']*pickupPoint\\.latitude\\.toStringAsFixed\\(5\\)/.test(app) && /pickupPoint\\.longitude\\.toStringAsFixed\\(5\\)/.test(app));
-check('Passenger route cache includes driver coordinates', /driverPoint\\.latitude\\.toStringAsFixed\\(3\\)/.test(app) && /driverPoint\\.longitude\\.toStringAsFixed\\(3\\)/.test(app));
-check('Passenger route avoids overlapping route requests', /if \\(_routeLoading\\) return;/.test(app));
-check('Passenger route respects retry cooldown', /_routeRetryAfter == null \\|\\| DateTime\\.now\\(\\)\\.isBefore\\(_routeRetryAfter!\\)/.test(app));
-check('Passenger route clears previous line before refresh', app.includes('_approachRoute = null;') && app.includes('var refreshAfterRoute = false;'));
-check('Passenger route loading state is enabled before request', /_routeLoading = true;\\s*_routeError = null;/.test(app));
-check('Passenger route uses a captured pickup point for the request', /final pickupPoint = _pickupPoint;[\\s\\S]{0,500}RouteService\\.drivingRoute\\(driverPoint, pickupPoint\\)/.test(app));
-check('Passenger route response validates the latest pickup point as well as taxi GPS', (app.match(/final latestPickupPoint = _pickupPoint;/g) || []).length === 2 && /latestPickupPoint\\.latitude\\.toStringAsFixed\\(5\\)/.test(app) && /latestPickupPoint\\.longitude\\.toStringAsFixed\\(5\\)/.test(app));
-check('Passenger route starts at taxi and ends at the captured pickup', /RouteService\\.drivingRoute\\(driverPoint, pickupPoint\\)/.test(app));
-check('Passenger route response checks current order identity', /latestOrder\\?\\.id != orderId/.test(app));
-check('Passenger route response checks current driver identity', /latestOrder\\?\\.assignedDriver\\?\\.id != driverId/.test(app));
-check('Passenger route response is discarded after taxi arrival', /latestOrder\\?\\.status != 'accepted'/.test(app));
-check('Passenger route response rejects outdated endpoint coordinates', /if \\(latestKey != key\\) \\{\\s*refreshAfterRoute = latestOrder\\.status == 'accepted';/.test(app));
-check('Passenger route retries after driver or pickup point changes during request', /unawaited\\(_loadApproachRoute\\(latestDriver\\.currentLocation\\)\\)/.test(app));
-check('Passenger route errors trigger a bounded retry delay', /_routeRetryAfter = DateTime\\.now\\(\\)\\.add\\(const Duration\\(seconds: 30\\)\\)/.test(app));
+const passengerRouteStart = app.indexOf('Future<void> _loadApproachRoute');
+const passengerRouteEnd = app.indexOf('double? _readValidCoordinate', passengerRouteStart);
+const passengerRouteBlock = passengerRouteStart >= 0 && passengerRouteEnd > passengerRouteStart
+  ? app.slice(passengerRouteStart, passengerRouteEnd)
+  : '';
+check('Passenger route requires an active taxi order', passengerRouteBlock.includes("final order = TaxiParkState.activeOrder") && passengerRouteBlock.includes("order.status != 'accepted'"));
+check('Passenger route requires an assigned driver', passengerRouteBlock.includes('driverId == null'));
+check('Passenger route requires a valid order identifier', passengerRouteBlock.includes('orderId.isEmpty'));
+check('Passenger route requires the driver to be online', passengerRouteBlock.includes('!driver.isOnline'));
+check('Passenger route requires a known GPS timestamp', passengerRouteBlock.includes('gpsAge == null'));
+check('Passenger route rejects stale GPS older than 60 seconds', passengerRouteBlock.includes('gpsAge > 60'));
+check('Passenger route cache includes order and driver identity', passengerRouteBlock.includes("final key = '$orderId:$driverId:"));
+check('Passenger route cache includes pickup coordinates', passengerRouteBlock.includes('pickupPoint.latitude.toStringAsFixed(5)') && passengerRouteBlock.includes('pickupPoint.longitude.toStringAsFixed(5)'));
+check('Passenger route cache includes driver coordinates', passengerRouteBlock.includes('driverPoint.latitude.toStringAsFixed(3)') && passengerRouteBlock.includes('driverPoint.longitude.toStringAsFixed(3)'));
+check('Passenger route avoids overlapping route requests', passengerRouteBlock.includes('if (_routeLoading) return;'));
+check('Passenger route respects retry cooldown', passengerRouteBlock.includes('_routeRetryAfter == null') && passengerRouteBlock.includes('DateTime.now().isBefore(_routeRetryAfter!)'));
+check('Passenger route clears previous line before refresh', passengerRouteBlock.includes('_approachRoute = null;') && passengerRouteBlock.includes('var refreshAfterRoute = false;'));
+check('Passenger route loading state is enabled before request', passengerRouteBlock.includes('_routeLoading = true;') && passengerRouteBlock.includes('_routeError = null;'));
+check('Passenger route uses a captured pickup point for the request', passengerRouteBlock.includes('final pickupPoint = _pickupPoint;') && passengerRouteBlock.includes('RouteService.drivingRoute(driverPoint, pickupPoint)'));
+check('Passenger route response validates the latest pickup point as well as taxi GPS', (passengerRouteBlock.match(/final latestPickupPoint = _pickupPoint;/g) || []).length === 2 && passengerRouteBlock.includes('latestPickupPoint.latitude.toStringAsFixed(5)') && passengerRouteBlock.includes('latestPickupPoint.longitude.toStringAsFixed(5)'));
+check('Passenger route starts at taxi and ends at the captured pickup', passengerRouteBlock.includes('RouteService.drivingRoute(driverPoint, pickupPoint)'));
+check('Passenger route response checks current order identity', passengerRouteBlock.includes('latestOrder?.id != orderId'));
+check('Passenger route response checks current driver identity', passengerRouteBlock.includes('latestOrder?.assignedDriver?.id != driverId'));
+check('Passenger route response is discarded after taxi arrival', passengerRouteBlock.includes("latestOrder?.status != 'accepted'"));
+check('Passenger route response rejects outdated endpoint coordinates', passengerRouteBlock.includes('if (latestKey != key)') && passengerRouteBlock.includes("refreshAfterRoute = latestOrder.status == 'accepted';"));
+check('Passenger route retries after driver or pickup point changes during request', passengerRouteBlock.includes('unawaited(_loadApproachRoute(latestDriver.currentLocation))'));
+check('Passenger route errors trigger a bounded retry delay', passengerRouteBlock.includes('_routeRetryAfter = DateTime.now().add(const Duration(seconds: 30))'));
 
 check("Nearby endpoint requires Firebase authentication", /url\.pathname === "\/drivers\/nearby"[\s\S]{0,100}verifyFirebaseUser\(request\)/.test(worker));
 const nearbyEndpointStart = worker.indexOf('if (url.pathname === "/drivers/nearby"');
