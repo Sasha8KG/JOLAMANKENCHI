@@ -774,7 +774,7 @@ check('Client map keeps manual pickup selection when GPS is unavailable', client
 check('Passenger order screen uses branded yellow black app bar and language switcher', app.includes('ЖОЛ АМАН КЕНЧИ • ТАКСИ') && app.includes('child: TaxiLanguageSwitcher()'));
 check('Passenger order form is presented in a rounded gold bordered card', app.includes('BorderRadius.vertical(top: Radius.circular(24))') && app.includes('Border.all(color: const Color(0xFFE6A900), width: 1.5)'));
 check('Passenger city and intercity tariff chips use gold selected state with dark readable text', app.includes('selectedColor: const Color(0xFFFFD400)') && app.includes('color: !_isIntercity ? const Color(0xFF171717)') && app.includes('color: _isIntercity ? const Color(0xFF171717)'));
-check('Passenger tariff section has a clear visual heading', app.includes("Text('ВЫБЕРИТЕ ТАРИФ'") && app.includes('letterSpacing: 0.8'));
+check('Passenger tariff section has a localized visual heading', app.includes("TaxiLocalizedText(russian: 'ВЫБЕРИТЕ ТАРИФ'") && app.includes('letterSpacing: 0.8'));
 check('Passenger pickup instructions are highlighted with a location icon', app.includes('Точка подачи: нажмите на карту') && app.includes('Icons.location_on_rounded'));
 check('Passenger destination field has a flag icon and branded focus border', app.includes('Icons.flag_rounded') && app.includes('focusedBorder: OutlineInputBorder'));
 check('Passenger order action is a large taxi button with branded colors', app.includes('ElevatedButton.icon(') && app.includes('minimumSize: const Size.fromHeight(60)') && app.includes('ВЫЗВАТЬ МАШИНУ'));
@@ -816,8 +816,8 @@ check("Driver marker has black and gold frame", /color: const Color\(0xFF171717\
 check("Open pickup marker uses branded gold pin", /color: const Color\(0xFFFFD400\), shape: BoxShape\.circle, border: Border\.all\(color: const Color\(0xFF171717\)/.test(driverUi));
 check("Assigned pickup marker uses contrasting gold flag", driverUi.includes("child: const Icon(Icons.flag, color: Color(0xFF171717), size: 25)"));
 check("Driver order panel uses light surface with green accent", /decoration: BoxDecoration\(color: const Color\(0xFFFFFEFA\), border: Border\(top: BorderSide\(color: const Color\(0xFF087A42\)/.test(driverUi));
-check("Driver panel title uses green", driverUi.includes("Text('Заказы и их статусы обновляются с сервера'") && driverUi.includes('fontSize: 14, color: Color(0xFF087A42)'));
-check("Assigned order heading uses gold", driverUi.includes("Text('ВАШ НАЗНАЧЕННЫЙ ЗАКАЗ'") && driverUi.includes('color: Color(0xFFFFD400)'));
+check("Driver panel title uses green and supports live localization", driverUi.includes("TaxiLocalizedText(russian: 'Заказы и их статусы обновляются с сервера'") && driverUi.includes('fontSize: 14, color: Color(0xFF087A42)'));
+check("Assigned order heading is localized and retains the driver accent", driverUi.includes("TaxiLocalizedText(russian: 'ВАШ НАЗНАЧЕННЫЙ ЗАКАЗ'") && driverUi.includes('color: Color(0xFF087A42)'));
 check("Dispatcher header uses branded green styling", /backgroundColor: const Color\(0xFF087A42\)/.test(dispatcherUi) && /foregroundColor: Colors\.white/.test(dispatcherUi));
 
 
@@ -893,15 +893,15 @@ check('Dispatcher dashboard copies validated immutable rows into UI state', app.
 check('Dispatcher snapshot regression tests cover malformed and duplicate data', read('testapp/test/dispatcher_overview_snapshot_test.dart').includes('rejects a malformed row') && read('testapp/test/dispatcher_overview_snapshot_test.dart').includes('returns immutable row maps and lists'));
 
 
-check('Dispatcher section headings wrap inside the available phone width', app.includes('Expanded(\n          child: Text(\n            value,') && app.includes('softWrap: true,'));
-check('Dispatcher cancellation history actions wrap instead of overflowing in a narrow row', app.includes('                Wrap(\n                  spacing: 8,\n                  runSpacing: 4,') && app.includes("label: const Text('Загрузить ещё')"));
+check('Dispatcher section headings wrap and localize inside the available phone width', app.includes('Expanded(\n          child: TaxiLocalizedText(\n            russian: value,') && app.includes('softWrap: true,') && app.includes('kyrgyz: TaxiLanguage.translate(value)'));
+check('Dispatcher cancellation history actions wrap instead of overflowing in a narrow row', app.includes('Wrap(spacing: 8, runSpacing: 8,') && app.includes("label: const TaxiLocalizedText(russian: 'Загрузить ещё'"));
 check('Dispatcher app-bar title truncates safely on narrow devices', app.includes("'Диспетчер · ЖОЛ АМАН КЕНЧИ',\n          maxLines: 1,\n          softWrap: false,\n          overflow: TextOverflow.ellipsis,"));
 check('Dispatcher trip completion action label can occupy two lines', app.includes("'ЗАВЕРШИТЬ И ЗАПИСАТЬ ОПЛАТУ',\n                          maxLines: 2,"));
 check('Closed-shift earnings trailing text has a bounded responsive width', app.includes('trailing: SizedBox(\n                    width: 116,') && app.includes('maxLines: 2,\n                      softWrap: true,'));
 
 
 check('Passenger taxi screen provides an explicit logout action', app.includes("tooltip: 'Выйти из аккаунта пассажира'") && app.includes('onPressed: _clientLoggingOut ? null : _logoutClient'));
-check('Passenger logout asks for confirmation and warns that an active order is not cancelled', app.includes("title: const Text('Выйти из аккаунта?')") && app.includes('Текущий заказ не будет отменён'));
+check('Passenger logout asks for confirmation and warns that an active order is not cancelled', app.includes("title: const TaxiLocalizedText(russian: 'Выйти из аккаунта?'") && app.includes('Текущий заказ не будет отменён'));
 check('Passenger logout signs out, clears local client state and returns to role selection', app.includes('await FirebaseService.signOut().timeout(const Duration(seconds: 20));') && app.includes('TaxiParkState.currentLoggedInClient = null;') && app.includes('Navigator.of(context).pushAndRemoveUntil('));
 check('Passenger logout prevents duplicate taps and cancels local polling timers', app.includes('bool _clientLoggingOut = false;') && app.includes('_orderStatusTimer?.cancel();\n      _nearbyDriversTimer?.cancel();'));
 check('Shared radio message input uses dark text on an explicit white background', app.includes('color: Color(0xFF171717),\n                fontSize: 15,') && app.includes('filled: true,\n                fillColor: Colors.white,'));
@@ -960,7 +960,7 @@ check('Driver green panel keeps its contrast and identity while using compact pa
 check('Dispatcher app bar retains a one-line ellipsized title for narrow screens', app.includes("'Диспетчер · ЖОЛ АМАН КЕНЧИ',\n          maxLines: 1,\n          softWrap: false,\n          overflow: TextOverflow.ellipsis,"));
 check('Russian and Kyrgyz language selector remains available in driver and dispatcher headers', (app.match(/TaxiLanguageSwitcher\(\)/g) || []).length >= 3);
 check('Language selector exposes both supported language values', app.includes("DropdownMenuItem(value: 'ru', child: Text('Русский'))") && app.includes("DropdownMenuItem(value: 'ky', child: Text('Кыргызча'))"));
-check('Language change is reactive and localized text listens to the shared language state', app.includes('TaxiLanguage.current.value = value') && app.includes('valueListenable: TaxiLanguage.current') && app.includes("language == 'ky' ? kyrgyz : russian"));
+check('Language change is reactive and localized text listens to the shared language state', app.includes('TaxiLanguage.current.value = value') && app.includes('valueListenable: TaxiLanguage.current') && app.includes("language == 'ky' ? (kyrgyz ?? TaxiLanguage.translate(russian)) : russian") && app.includes('static String translate(String russian) => _translations[russian] ?? russian;'));
 check('Language switch regression tests cover live switching and narrow layout', read('testapp/test/responsive_language_test.dart').includes("expect(TaxiLanguage.isKyrgyz, isTrue)") && read('testapp/test/responsive_language_test.dart').includes('width: 220'));
 check('Driver route map, location stream and order polling code remain present after layout changes', app.includes('FlutterMap(\n              mapController: _driverMapController') && app.includes('_positionSubscription') && app.includes('_pollServerOrders();'));
 check('Dispatcher refresh and server-backed driver/order loading remain present after layout changes', app.includes('_dispatcherRefreshTimer = Timer.periodic') && app.includes('WorkerApi.dispatcherOverview()') && app.includes('WorkerApi.assignOrder'));
