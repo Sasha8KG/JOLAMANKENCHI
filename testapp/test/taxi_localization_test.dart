@@ -20,7 +20,7 @@ void main() {
   });
 
   testWidgets('language selector fits a narrow registration header', (tester) async {
-    await tester.pumpWidget(const MaterialApp(home: Scaffold(
+    await tester.pumpWidget(MaterialApp(home: Scaffold(
       appBar: AppBar(actions: [TaxiLanguageSwitcher()]),
       body: SizedBox(width: 220, child: TaxiText('Фотографии для проверки диспетчером')),
     )));
