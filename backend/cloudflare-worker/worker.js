@@ -652,8 +652,7 @@ export default {
           hasNewLocalDocuments = transfer?.status === "received" &&
             Number(transfer?.document_count || 0) === 3;
         }
-        const hasLegacyStoragePaths = Boolean(docs && docs.license_url && docs.driver_photo_url && docs.car_photo_url);
-        const hasAllDocuments = hasNewLocalDocuments || hasLegacyStoragePaths;
+        const hasAllDocuments = hasNewLocalDocuments;
         if (decision === "approved" && !hasAllDocuments)
           return response({ status: "error", message: "Сервер пока не подтвердил получение всех трёх документов. Обновите заявку и повторите передачу с телефона водителя." }, 409);
         if (!docs && decision === "rejected") {
