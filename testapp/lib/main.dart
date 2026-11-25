@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -473,7 +474,6 @@ class BrandedSplashGate extends StatefulWidget {
 class _BrandedSplashGateState extends State<BrandedSplashGate>
     with SingleTickerProviderStateMixin {
   Timer? _navigationTimer;
-  late final Future<ByteData> _logoData;
   late final AnimationController _entrance;
   late final Animation<double> _fade;
   late final Animation<double> _scale;
@@ -481,7 +481,6 @@ class _BrandedSplashGateState extends State<BrandedSplashGate>
   @override
   void initState() {
     super.initState();
-    _logoData = rootBundle.load('assets/jak_splash.webp');
     _entrance = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1100),
@@ -513,49 +512,33 @@ class _BrandedSplashGateState extends State<BrandedSplashGate>
 
   @override
   Widget build(BuildContext context) {
-    final side = MediaQuery.of(context).size.shortestSide * 0.96;
+    final size = MediaQuery.of(context).size;
     return Scaffold(
       backgroundColor: const Color(0xFFFFD400),
       body: SafeArea(
         child: Center(
-          child: FutureBuilder<ByteData>(
-            future: _logoData,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState != ConnectionState.done) {
-                return const CircularProgressIndicator(color: Colors.black);
-              }
-              if (snapshot.hasError || !snapshot.hasData) {
-                return const TaxiText(
-                  'ЖОЛ АМАН КЕНЧИ · Такси',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: Colors.black),
-                );
-              }
-              return FadeTransition(
-                opacity: _fade,
-                child: ScaleTransition(
-                  scale: _scale,
-                  child: Semantics(
-                    label: 'ЖОЛ АМАН КЕНЧИ Такси',
-                    image: true,
-                    child: Image.memory(
-                      snapshot.data!.buffer.asUint8List(),
-                      width: side,
-                      height: side,
-                      fit: BoxFit.contain,
-                      gaplessPlayback: true,
-                      filterQuality: FilterQuality.high,
-                    ),
-                  ),
+          child: FadeTransition(
+            opacity: _fade,
+            child: ScaleTransition(
+              scale: _scale,
+              child: Semantics(
+                label: 'ЖОЛ АМАН КЕНЧИ Такси',
+                image: true,
+                child: SvgPicture.asset(
+                  'assets/jak_splash.svg',
+                  width: size.width * 0.98,
+                  height: size.height * 0.96,
+                  fit: BoxFit.contain,
                 ),
-              );
-            },
+              ),
+            ),
           ),
         ),
       ),
     );
   }
 }
+
 class _TaxiCheckSquare extends StatelessWidget {
   const _TaxiCheckSquare({this.dark = false});
   final bool dark;
