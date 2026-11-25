@@ -175,11 +175,12 @@ class DriverDocumentTransferLiveKit {
         DriverDocumentTransferAssembler.new,
       );
       assembler.add(chunk);
-      // ACK only after the packet has passed validation and entered the
-      // assembler. Repeated chunks receive another ACK without duplicating data.
-      unawaited(_publishChunkAck(chunk.documentType, chunk.index));
-      if (assembler.isComplete && !_received.containsKey(chunk.documentType) &&
-          _persisting.add(chunk.documentType)) {
+      // Do not acknowledge in-memory chunks: the dispatcher may lose them if
+      // its app closes before the complete document is written to local disk.
+      // Once the document is durable, acknowledge all its chunks below.
+      if (_received.containsKey(chunk.documentType)) {
+        unawaited(_publishChunkAck(chunk.documentType, chunk.index));
+      } else if (assembler.isComplete && _persisting.add(chunk.documentType)) {
         unawaited(_persistCompletedDocument(chunk.documentType, assembler));
       }
     } catch (_) {
@@ -224,6 +225,12 @@ class DriverDocumentTransferLiveKit {
       );
       if (_disposed) return;
       _received[type] = saved;
+      // Acknowledge only after the file is durably saved and its hash verified.
+      // If an ACK is lost, a duplicate packet will be acknowledged by the
+      // receive handler because this document is already in _received.
+      for (var index = 0; index < assembler.expectedChunks; index++) {
+        await _publishChunkAck(type, index);
+      }
       if (isComplete) await _confirmReceipt();
     } catch (_) {
       // Keep the assembler in memory so the dispatcher can retry persistence
