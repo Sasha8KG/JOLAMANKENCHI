@@ -10,6 +10,7 @@ dependencies:
   flutter:
     sdk: flutter
   flutter_map: ^6.0.0
+  flutter_svg: ^2.0.10+1
   latlong2: ^0.9.0
   geolocator: ^10.1.0
   firebase_core: ^2.24.2
@@ -30,4 +31,4 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/jak_splash.webp
+    - assets/jak_splash.svg
