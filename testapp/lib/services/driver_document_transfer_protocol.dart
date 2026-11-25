@@ -137,3 +137,58 @@ class DocumentTransferAck {
   const DocumentTransferAck({required this.requestId,required this.driverUid,
     required this.documentType,required this.index});
 }
+
+
+/// Reassembles out-of-order LiveKit data packets and verifies the final hash.
+class DriverDocumentTransferAssembler {
+  String? _requestId, _driverUid, _documentType, _digest;
+  int? _count, _total;
+  final Map<int, Uint8List> _parts = {};
+  int get receivedChunks => _parts.length;
+  int get expectedChunks => _count ?? 0;
+  bool get isComplete => _count != null && _parts.length == _count;
+
+  /// Returns false for an identical retry; conflicting retries are rejected.
+  bool add(DocumentTransferChunk chunk) {
+    if (_requestId == null) {
+      _requestId = chunk.requestId; _driverUid = chunk.driverUid;
+      _documentType = chunk.documentType; _digest = chunk.digest;
+      _count = chunk.count; _total = chunk.total;
+    } else if (_requestId != chunk.requestId || _driverUid != chunk.driverUid ||
+        _documentType != chunk.documentType || _digest != chunk.digest ||
+        _count != chunk.count || _total != chunk.total) {
+      throw const FormatException('Части относятся к разным передачам документов.');
+    }
+    final previous = _parts[chunk.index];
+    if (previous != null) {
+      if (previous.length != chunk.payload.length) {
+        throw const FormatException('Повторная часть документа отличается.');
+      }
+      for (var i = 0; i < previous.length; i++) {
+        if (previous[i] != chunk.payload[i]) {
+          throw const FormatException('Повторная часть документа повреждена.');
+        }
+      }
+      return false;
+    }
+    _parts[chunk.index] = Uint8List.fromList(chunk.payload);
+    return true;
+  }
+
+  Uint8List assemble() {
+    if (!isComplete || _count == null || _total == null || _digest == null) {
+      throw const FormatException('Передача документа ещё не завершена.');
+    }
+    final builder = BytesBuilder(copy: false);
+    for (var i = 0; i < _count!; i++) {
+      final part = _parts[i];
+      if (part == null) throw const FormatException('В передаче отсутствует часть документа.');
+      builder.add(part);
+    }
+    final bytes = builder.takeBytes();
+    if (bytes.length != _total || DriverDocumentTransferProtocol.sha256Of(bytes) != _digest) {
+      throw const FormatException('Контрольная сумма документа не совпала.');
+    }
+    return bytes;
+  }
+}
