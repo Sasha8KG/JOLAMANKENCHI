@@ -1052,7 +1052,6 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
 
   @override
   Widget build(BuildContext context) {
-    const burgundy = Color(0xFF087A42);
     const ink = Color(0xFF171F1D);
     const gold = Color(0xFFFFC928);
     return Scaffold(
