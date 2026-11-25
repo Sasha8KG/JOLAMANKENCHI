@@ -35,6 +35,7 @@ class DriverDocumentTransferLiveKit {
   late final EventsListener<RoomEvent> _listener;
   final Map<String, DriverDocumentTransferAssembler> _assemblers = {};
   final Map<String, StoredDriverDocument> _received = {};
+  final Set<String> _persisting = <String>{};
   bool _disposed = false;
   bool _confirming = false;
   bool _confirmed = false;
@@ -153,7 +154,8 @@ class DriverDocumentTransferLiveKit {
         DriverDocumentTransferAssembler.new,
       );
       assembler.add(chunk);
-      if (assembler.isComplete && !_received.containsKey(chunk.documentType)) {
+      if (assembler.isComplete && !_received.containsKey(chunk.documentType) &&
+          _persisting.add(chunk.documentType)) {
         unawaited(_persistCompletedDocument(chunk.documentType, assembler));
       }
     } catch (_) {
@@ -182,6 +184,8 @@ class DriverDocumentTransferLiveKit {
     } catch (_) {
       // Keep the assembler in memory so the dispatcher can retry persistence
       // after reconnecting instead of acknowledging an unsaved file.
+    } finally {
+      _persisting.remove(type);
     }
   }
 
