@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -13,6 +14,7 @@ import 'services/firebase_service.dart';
 import 'driver_registration_screen.dart';
 import 'services/worker_api.dart';
 import 'services/driver_document_store.dart';
+import 'services/driver_document_transfer_livekit.dart';
 import 'services/route_service.dart';
 import 'services/route_cache_policy.dart';
 import 'services/gps_freshness.dart';
@@ -2867,11 +2869,77 @@ class _DriverReviewStatusScreenState extends State<DriverReviewStatusScreen> {
   XFile? _carPhoto;
   bool _busy = false;
   final ImagePicker _picker = ImagePicker();
+  Timer? _documentRequestTimer;
+  bool _documentRequestCheckRunning = false;
+  String? _documentTransferMessage;
+  String? _lastHandledRequestId;
+  DriverDocumentTransferLiveKit? _activeDocumentTransfer;
 
   @override
   void initState() {
     super.initState();
-    _restoreLocalDocuments();
+    unawaited(_startDocumentRequestPolling());
+  }
+
+  Future<void> _startDocumentRequestPolling() async {
+    await _restoreLocalDocuments();
+    if (!mounted || (widget.profile['review_status'] ?? 'pending').toString() == 'rejected') return;
+    await _checkDocumentRequest();
+    _documentRequestTimer = Timer.periodic(const Duration(seconds: 6), (_) => unawaited(_checkDocumentRequest()));
+  }
+
+  Future<void> _checkDocumentRequest() async {
+    if (!mounted || _documentRequestCheckRunning || _busy) return;
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null || uid.isEmpty) return;
+    _documentRequestCheckRunning = true;
+    try {
+      final data = await WorkerApi.driverDocumentRequest();
+      final raw = data['request'];
+      if (raw is! Map) {
+        final previous = _activeDocumentTransfer;
+        _activeDocumentTransfer = null;
+        _lastHandledRequestId = null;
+        if (previous != null) await previous.dispose();
+        return;
+      }
+      final request = Map<String, dynamic>.from(raw);
+      final requestId = (request['request_id'] ?? '').toString().trim();
+      final status = (request['status'] ?? '').toString();
+      if (requestId.isEmpty || !{'requested', 'transferring'}.contains(status)) return;
+      if (_lastHandledRequestId == requestId && _activeDocumentTransfer != null) return;
+      final docs = await Future.wait([
+        DriverDocumentStore.find(uid: uid, documentType: 'license'),
+        DriverDocumentStore.find(uid: uid, documentType: 'driver_photo'),
+        DriverDocumentStore.find(uid: uid, documentType: 'car_photo'),
+      ]);
+      if (docs.any((file) => file == null)) {
+        if (mounted) setState(() => _documentTransferMessage = 'Диспетчер запросил документы, но на телефоне не хватает одной или нескольких фотографий. Выберите недостающие фото повторно.');
+        return;
+      }
+      final session = await DriverDocumentTransferLiveKit.connect(requestId: requestId, driverUid: uid, isDispatcher: false);
+      if (!mounted) { await session.dispose(); return; }
+      _activeDocumentTransfer = session;
+      _lastHandledRequestId = requestId;
+      setState(() => _documentTransferMessage = 'Диспетчер запросил документы. Отправляем три фотографии…');
+      await session.sendDriverDocuments();
+      if (mounted) setState(() => _documentTransferMessage = 'Фотографии отправлены по защищённому каналу. Ожидаем подтверждения диспетчера…');
+    } catch (error) {
+      final failed = _activeDocumentTransfer;
+      _activeDocumentTransfer = null;
+      if (failed != null) await failed.dispose();
+      if (mounted) setState(() => _documentTransferMessage = 'Не удалось передать документы: $error. Повторим автоматически.');
+    } finally {
+      _documentRequestCheckRunning = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    _documentRequestTimer?.cancel();
+    final session = _activeDocumentTransfer;
+    if (session != null) unawaited(session.dispose());
+    super.dispose();
   }
 
   Future<void> _restoreLocalDocuments() async {
@@ -3053,6 +3121,17 @@ class _DriverReviewStatusScreenState extends State<DriverReviewStatusScreen> {
           if (rejected) ...[const SizedBox(height: 8), TaxiText('Причина: ${widget.profile['rejection_reason'] ?? 'Не указана'}')],
           if (!rejected) const TaxiLocalizedText(russian: 'Диспетчер проверит документы. До одобрения выход на линию недоступен.', kyrgyz: 'Диспетчер документтерди текшерет. Бекитилгенге чейин линияга чыгууга болбойт.'),
         ]))),
+        if (!rejected && _documentTransferMessage != null) ...[
+          const SizedBox(height: 10),
+          Card(color: Colors.blue.shade50, child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Icon(Icons.sync, color: Colors.blue),
+              const SizedBox(width: 8),
+              Expanded(child: TaxiText(_documentTransferMessage!)),
+            ]),
+          )),
+        ],
         if (rejected) ...[
           const SizedBox(height: 14),
           const TaxiLocalizedText(russian: 'Исправьте замечания и отправьте фотографии повторно:', kyrgyz: 'Эскертүүлөрдү оңдоп, сүрөттөрдү кайра жөнөтүңүз:', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -4145,6 +4224,9 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
   bool _dispatcherRefreshPending = false;
   String? _dispatcherRefreshError;
   Timer? _dispatcherRefreshTimer;
+  Timer? _documentTransferMonitor;
+  final Map<String, DriverDocumentTransferLiveKit> _documentTransferSessions = {};
+  final Map<String, String> _documentTransferStates = {};
 
   @override
   void initState() {
@@ -4154,17 +4236,69 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
     _dispatcherRefreshTimer = Timer.periodic(const Duration(seconds: 15), (_) {
       if (mounted && !_working) {
         unawaited(_load(showLoading: false));
-        if (_cancellations.length <= 50) {
-          unawaited(_refreshCancellationHistory(silent: true));
-        }
+        if (_cancellations.length <= 50) unawaited(_refreshCancellationHistory(silent: true));
       }
     });
+    _documentTransferMonitor = Timer.periodic(const Duration(seconds: 2), (_) => unawaited(_monitorDocumentTransfers()));
   }
 
   @override
   void dispose() {
     _dispatcherRefreshTimer?.cancel();
+    _documentTransferMonitor?.cancel();
+    for (final session in _documentTransferSessions.values) { unawaited(session.dispose()); }
+    _documentTransferSessions.clear();
     super.dispose();
+  }
+
+  Future<void> _requestDriverDocuments(Map<String, dynamic> driver) async {
+    final uid = (driver['uid'] ?? '').toString().trim();
+    if (uid.isEmpty || uid.length > 128 || _documentTransferSessions.containsKey(uid)) return;
+    setState(() => _documentTransferStates[uid] = 'Подключаемся к телефону водителя…');
+    try {
+      final request = await WorkerApi.requestDriverDocuments(uid);
+      final requestId = (request['request_id'] ?? '').toString().trim();
+      if (requestId.isEmpty) throw const FormatException('Сервер не вернул номер запроса.');
+      final session = await DriverDocumentTransferLiveKit.connect(requestId: requestId, driverUid: uid, isDispatcher: true);
+      if (!mounted) { await session.dispose(); return; }
+      _documentTransferSessions[uid] = session;
+      setState(() => _documentTransferStates[uid] = 'Ожидаем фотографии: 0 из 3');
+      _notice('Запрос отправлен. Телефон водителя должен быть подключён к интернету.');
+    } catch (error) {
+      if (mounted) setState(() => _documentTransferStates[uid] = 'Ошибка передачи: $error');
+    }
+  }
+
+  Future<void> _monitorDocumentTransfers() async {
+    if (!mounted || _documentTransferSessions.isEmpty) return;
+    for (final entry in List<MapEntry<String, DriverDocumentTransferLiveKit>>.from(_documentTransferSessions.entries)) {
+      final uid = entry.key, session = entry.value;
+      if (!mounted || !identical(_documentTransferSessions[uid], session)) continue;
+      if (!session.isComplete) {
+        final status = 'Получено фотографий: ${session.receivedDocumentCount} из 3';
+        if (_documentTransferStates[uid] != status) setState(() => _documentTransferStates[uid] = status);
+        continue;
+      }
+      if (!session.isConfirmed) {
+        try { await session.retryConfirmation(); } catch (_) {
+          if (mounted) setState(() => _documentTransferStates[uid] = 'Все фото получены, подтверждаем получение…');
+          continue;
+        }
+      }
+      if (!session.isConfirmed) continue;
+      final docs = await Future.wait([
+        DriverDocumentStore.find(uid: uid, documentType: 'license'),
+        DriverDocumentStore.find(uid: uid, documentType: 'driver_photo'),
+        DriverDocumentStore.find(uid: uid, documentType: 'car_photo'),
+      ]);
+      if (docs.any((file) => file == null)) {
+        if (mounted) setState(() => _documentTransferStates[uid] = 'Не удалось проверить сохранённые файлы. Запросите повторно.');
+        continue;
+      }
+      _documentTransferSessions.remove(uid);
+      if (mounted) setState(() => _documentTransferStates[uid] = 'Все 3 документа получены и сохранены на телефоне диспетчера');
+      await session.dispose();
+    }
   }
 
   Future<void> _load({bool showLoading = true}) async {
@@ -4645,29 +4779,37 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
     return Uri.decodeComponent(uri.path.substring(index + marker.length));
   }
 
-  Future<void> _showDriverDocument(String label, dynamic rawPath) async {
+  Future<void> _showDriverDocument(String label, dynamic rawPath, {String? driverUid, String? documentType}) async {
     final path = _storageObjectPath(rawPath);
-    if (path.isEmpty) { _notice('Файл документа не найден'); return; }
+    File? localFile;
+    if (driverUid != null && documentType != null) {
+      localFile = await DriverDocumentStore.find(uid: driverUid, documentType: documentType);
+    }
+    if (!mounted) return;
+    if (localFile == null && path.isEmpty) { _notice('Документ ещё не получен. Запросите фотографии у водителя.'); return; }
     await showDialog<void>(context: context, builder: (ctx) => AlertDialog(
       title: TaxiText(label),
-      content: SizedBox(width: 420, child: FutureBuilder<Uint8List?>(
-        future: taxiFirebaseStorage.ref(path).getData(8 * 1024 * 1024),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) return const SizedBox(height: 180, child: Center(child: CircularProgressIndicator()));
-          if (snapshot.hasError || snapshot.data == null) return const TaxiText('Не удалось загрузить документ. Проверьте правила Firebase Storage и подключение.');
-          return InteractiveViewer(child: Image.memory(snapshot.data!, fit: BoxFit.contain));
-        },
-      )),
+      content: SizedBox(width: 420, child: localFile != null
+        ? InteractiveViewer(child: Image.file(localFile, fit: BoxFit.contain))
+        : FutureBuilder<Uint8List?>(
+            future: taxiFirebaseStorage.ref(path).getData(8 * 1024 * 1024),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState != ConnectionState.done) return const SizedBox(height: 180, child: Center(child: CircularProgressIndicator()));
+              if (snapshot.hasError || snapshot.data == null) return const TaxiText('Не удалось загрузить документ. Проверьте правила Firebase Storage и подключение.');
+              return InteractiveViewer(child: Image.memory(snapshot.data!, fit: BoxFit.contain));
+            },
+          )),
       actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const TaxiLocalizedText(russian: 'Закрыть', kyrgyz: 'Жабуу'))],
     ));
   }
 
-  Widget _documentLink(String label, dynamic value) {
+  Widget _documentLink(String label, dynamic value, {String? driverUid, String? documentType}) {
     final path = _storageObjectPath(value);
+    final canOpen = path.isNotEmpty || (driverUid != null && documentType != null);
     return TextButton.icon(
-      onPressed: path.isEmpty ? null : () => _showDriverDocument(label, value),
+      onPressed: canOpen ? () => _showDriverDocument(label, value, driverUid: driverUid, documentType: documentType) : null,
       icon: const Icon(Icons.image_search, size: 16),
-      label: TaxiText(path.isEmpty ? '$label · нет' : label),
+      label: TaxiText(canOpen ? label : '$label · нет'),
     );
   }
 
@@ -4857,9 +4999,9 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
                     TaxiText('${d['phone'] ?? ''} · ${d['car_model'] ?? ''} · ${d['car_number'] ?? ''}'),
                     TaxiText('UID: ${d['uid'] ?? ''}', style: const TextStyle(fontSize: 11, color: Colors.black54)),
                     Wrap(spacing: 8, children: [
-                      _documentLink('Удостоверение', d['license_url']),
-                      _documentLink('Фото водителя', d['driver_photo_url']),
-                      _documentLink('Фото авто', d['car_photo_url']),
+                      _documentLink('Удостоверение', d['license_url'], driverUid: (d['uid'] ?? '').toString(), documentType: 'license'),
+                      _documentLink('Фото водителя', d['driver_photo_url'], driverUid: (d['uid'] ?? '').toString(), documentType: 'driver_photo'),
+                      _documentLink('Фото авто', d['car_photo_url'], driverUid: (d['uid'] ?? '').toString(), documentType: 'car_photo'),
                     ]),
                     if ((d['license_url'] ?? '').toString().isEmpty ||
                         (d['driver_photo_url'] ?? '').toString().isEmpty ||
@@ -4869,6 +5011,13 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
                         child: TaxiLocalizedText(russian: 'Не все документы загружены. Проверьте заявку перед одобрением.', kyrgyz: 'Бардык документтер жүктөлгөн эмес. Бекитүүдөн мурун арызды текшериңиз.',
                           style: TextStyle(color: Colors.deepOrange, fontSize: 12)),
                       ),
+                    if (_documentTransferStates[(d['uid'] ?? '').toString()] != null)
+                      Padding(padding: const EdgeInsets.only(top: 6), child: TaxiText(_documentTransferStates[(d['uid'] ?? '').toString()]!, style: const TextStyle(fontSize: 12, color: Colors.blueGrey))),
+                    SizedBox(width: double.infinity, child: OutlinedButton.icon(
+                      onPressed: _working || _documentTransferSessions.containsKey((d['uid'] ?? '').toString()) ? null : () => _requestDriverDocuments(d),
+                      icon: const Icon(Icons.download_for_offline),
+                      label: const TaxiLocalizedText(russian: 'ЗАПРОСИТЬ ДОКУМЕНТЫ С ТЕЛЕФОНА', kyrgyz: 'ТЕЛЕФОНДОН ДОКУМЕНТТЕРДИ СУРОО'),
+                    )),
                     Row(children: [
                       Expanded(child: OutlinedButton.icon(onPressed: _working ? null : () => _review(d, 'rejected'), icon: const Icon(Icons.close, color: Colors.red), label: const TaxiLocalizedText(russian: 'Отклонить', kyrgyz: 'Четке кагуу'))),
                       const SizedBox(width: 8),
@@ -4883,10 +5032,17 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
                     TaxiText((d['name'] ?? 'Водитель').toString(), style: const TextStyle(fontWeight: FontWeight.bold)),
                     TaxiText('Причина: ${d['rejection_reason'] ?? 'Не указана'}'),
                     Wrap(spacing: 8, children: [
-                      _documentLink('Удостоверение', d['license_url']),
-                      _documentLink('Фото водителя', d['driver_photo_url']),
-                      _documentLink('Фото авто', d['car_photo_url']),
+                      _documentLink('Удостоверение', d['license_url'], driverUid: (d['uid'] ?? '').toString(), documentType: 'license'),
+                      _documentLink('Фото водителя', d['driver_photo_url'], driverUid: (d['uid'] ?? '').toString(), documentType: 'driver_photo'),
+                      _documentLink('Фото авто', d['car_photo_url'], driverUid: (d['uid'] ?? '').toString(), documentType: 'car_photo'),
                     ]),
+                    if (_documentTransferStates[(d['uid'] ?? '').toString()] != null)
+                      Padding(padding: const EdgeInsets.only(top: 6), child: TaxiText(_documentTransferStates[(d['uid'] ?? '').toString()]!)),
+                    SizedBox(width: double.infinity, child: OutlinedButton.icon(
+                      onPressed: _working || _documentTransferSessions.containsKey((d['uid'] ?? '').toString()) ? null : () => _requestDriverDocuments(d),
+                      icon: const Icon(Icons.download_for_offline),
+                      label: const TaxiLocalizedText(russian: 'ЗАПРОСИТЬ ДОКУМЕНТЫ С ТЕЛЕФОНА', kyrgyz: 'ТЕЛЕФОНДОН ДОКУМЕНТТЕРДИ СУРОО'),
+                    )),
                   ]),
                 ))),
                 _sectionTitle('Все водители', Icons.directions_car),
