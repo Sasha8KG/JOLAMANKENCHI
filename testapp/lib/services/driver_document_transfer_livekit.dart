@@ -37,9 +37,11 @@ class DriverDocumentTransferLiveKit {
   final Map<String, StoredDriverDocument> _received = {};
   bool _disposed = false;
   bool _confirming = false;
+  bool _confirmed = false;
   Object? _confirmationError;
 
   int get receivedDocumentCount => _received.length;
+  bool get isConfirmed => _confirmed;
   bool get isComplete => _documentOrder.every(_received.containsKey);
   Object? get confirmationError => _confirmationError;
 
@@ -196,6 +198,7 @@ class DriverDocumentTransferLiveKit {
         files: files,
       );
       _confirmationError = null;
+      _confirmed = true;
     } catch (error) {
       _confirmationError = error;
       rethrow;
