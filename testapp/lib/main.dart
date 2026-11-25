@@ -2648,7 +2648,7 @@ class _DriverEntryScreenState extends State<DriverEntryScreen> {
       MaterialPageRoute(builder: (_) => const DriverRegistrationScreen()),
     );
     if (submitted == true && mounted) {
-      _showMessage('Анкета и фотографии отправлены. Дождитесь проверки диспетчера.');
+      _showMessage('Анкета отправлена. Фотографии при регистрации необязательны; диспетчер запросит их отдельно. Дождитесь проверки.');
     }
   }
 
