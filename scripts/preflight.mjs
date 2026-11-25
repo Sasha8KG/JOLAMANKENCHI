@@ -735,7 +735,7 @@ check('GPS tests cover sub-second future timestamps and exact custom age boundar
 
 
 check('Branded animated splash is the first app screen', app.includes('home: const BrandedSplashGate()'));
-check('Branded splash loads the user-provided taxi emblem asset', app.includes("rootBundle.load('assets/jak_splash.webp')") && pubspec.includes('assets/jak_splash.webp'));
+check('Branded splash loads the user-provided taxi emblem asset', app.includes("rootBundle.load('assets/jak_splash.webp')") && pubspec.includes('assets/jak_splash.webp') && read('testapp/assets/jak_splash.webp').length > 1000);
 check('Branded splash stays visible for a bounded interval before the existing session gate', app.includes('Timer(const Duration(milliseconds: 4000)') && app.includes('const SessionGate()'));
 check('Branded splash cancels its navigation timer on dispose', app.includes('_navigationTimer?.cancel();'));
 check('Branded splash guards navigation after widget disposal', app.includes('if (!mounted) return;'));
