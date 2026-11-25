@@ -86,6 +86,13 @@ void main(){
       expect(ack.requestId,id);expect(ack.driverUid,uid);
       expect(ack.documentType,'driver_photo');expect(ack.index,17);
     });
+    test('accepts the last valid chunk index and rejects an index beyond the 8 MiB limit',(){
+      expect(DriverDocumentTransferProtocol.decodeAck(
+        DriverDocumentTransferProtocol.encodeAck(requestId:id,driverUid:uid,
+          documentType:'license',index:819)).index,819);
+      expect(()=>DriverDocumentTransferProtocol.encodeAck(requestId:id,driverUid:uid,
+        documentType:'license',index:820),throwsFormatException);
+    });
   });
   group('DriverDocumentStore',(){
     late Directory root;

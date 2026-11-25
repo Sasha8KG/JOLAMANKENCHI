@@ -84,7 +84,7 @@ class DriverDocumentTransferLiveKit {
       );
       session._listener = room.createListener()
         ..on<DataReceivedEvent>(session._handleDataReceived);
-      await room.connect(url, token);
+      await room.connect(url, token).timeout(const Duration(seconds: 25));
       return session;
     } catch (_) {
       await room.disconnect();
@@ -140,7 +140,7 @@ class DriverDocumentTransferLiveKit {
           packet,
           reliable: true,
           topic: topic,
-        );
+        ).timeout(const Duration(seconds: 15));
       }
     }
   }
@@ -203,7 +203,7 @@ class DriverDocumentTransferLiveKit {
         ),
         reliable: true,
         topic: topic,
-      );
+      ).timeout(const Duration(seconds: 10));
     } catch (_) {
       // The driver will resend unacknowledged chunks on its next retry cycle.
     }
