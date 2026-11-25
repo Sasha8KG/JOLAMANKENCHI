@@ -38,9 +38,11 @@ class DriverDocumentTransferLiveKit {
   final Map<String, StoredDriverDocument> _received = {};
   bool _disposed = false;
   bool _confirming = false;
+  Object? _confirmationError;
 
   int get receivedDocumentCount => _received.length;
   bool get isComplete => _documentOrder.every(_received.containsKey);
+  Object? get confirmationError => _confirmationError;
 
   static Future<DriverDocumentTransferLiveKit> connect({
     required String requestId,
@@ -62,7 +64,10 @@ class DriverDocumentTransferLiveKit {
     final url = (credentials['url'] ?? '').toString().trim();
     final token = (credentials['token'] ?? '').toString().trim();
     final responseRequest = (credentials['request_id'] ?? '').toString();
-    if (url.isEmpty || token.isEmpty || responseRequest != normalizedRequest) {
+    final expectedRoom = 'jol-aman-kenchi-docs-' + normalizedRequest.replaceAll('-', '');
+    final responseRoom = (credentials['room'] ?? '').toString();
+    if (url.isEmpty || token.isEmpty || responseRequest != normalizedRequest ||
+        responseRoom != expectedRoom) {
       throw const FormatException('Сервер не выдал корректные параметры передачи документов.');
     }
 
@@ -191,10 +196,17 @@ class DriverDocumentTransferLiveKit {
         driverUid: driverUid,
         files: files,
       );
+      _confirmationError = null;
+    } catch (error) {
+      _confirmationError = error;
+      rethrow;
     } finally {
       _confirming = false;
     }
   }
+
+  /// Retries the server receipt after a temporary network failure.
+  Future<void> retryConfirmation() => _confirmReceipt();
 
   void _ensureActive() {
     if (_disposed) throw StateError('Передача документов уже закрыта.');
