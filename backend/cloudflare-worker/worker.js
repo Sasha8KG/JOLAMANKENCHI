@@ -458,6 +458,32 @@ export default {
         });
       }
 
+      if (url.pathname === "/drivers/documents/resubmit" && request.method === "POST") {
+        const auth = await verifyFirebaseUser(request);
+        const driver = await driverRow(env, auth.user.localId);
+        if (!driver) return response({ status: "error", message: "Сначала отправьте анкету водителя" }, 409);
+        // The three files remain on the driver's and dispatcher's phones.
+        // This endpoint only reopens review; approval still requires a fresh
+        // server receipt for all three files from a new LiveKit transfer.
+        const results = await env.DB.batch([
+          env.DB.prepare(`INSERT INTO driver_documents
+            (driver_uid,license_url,driver_photo_url,car_photo_url,submitted_at,review_status,rejection_reason,reviewed_at,reviewed_by,local_transfer_request_id)
+            VALUES (?,'','','',unixepoch(),'pending',NULL,NULL,NULL,NULL)
+            ON CONFLICT(driver_uid) DO UPDATE SET
+              license_url='',driver_photo_url='',car_photo_url='',
+              submitted_at=unixepoch(),review_status='pending',rejection_reason=NULL,
+              reviewed_at=NULL,reviewed_by=NULL,local_transfer_request_id=NULL`)
+            .bind(auth.user.localId),
+          env.DB.prepare("UPDATE drivers SET approved=0, online=0, updated_at=unixepoch() WHERE uid=?")
+            .bind(auth.user.localId)
+        ]);
+        if (Number(results?.[0]?.meta?.changes || 0) !== 1 ||
+            Number(results?.[1]?.meta?.changes || 0) !== 1) {
+          return response({ status: "error", message: "Не удалось открыть повторную проверку. Повторите попытку." }, 409);
+        }
+        return response({ status: "ok", review_status: "pending", documents_required_for_approval: 3 });
+      }
+
       if (url.pathname === "/drivers/documents" && request.method === "POST") {
         const auth = await verifyFirebaseUser(request);
         const driver = await driverRow(env, auth.user.localId);
