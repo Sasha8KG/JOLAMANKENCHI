@@ -330,7 +330,8 @@ export default {
         ["review_status", "TEXT NOT NULL DEFAULT 'pending'"],
         ["rejection_reason", "TEXT"],
         ["reviewed_at", "INTEGER"],
-        ["reviewed_by", "TEXT"]
+        ["reviewed_by", "TEXT"],
+        ["local_transfer_request_id", "TEXT"]
       ]) {
         if (!knownDocColumns.has(name)) {
           await env.DB.prepare(`ALTER TABLE driver_documents ADD COLUMN ${name} ${definition}`).run();
@@ -457,6 +458,32 @@ export default {
         });
       }
 
+      if (url.pathname === "/drivers/documents/resubmit" && request.method === "POST") {
+        const auth = await verifyFirebaseUser(request);
+        const driver = await driverRow(env, auth.user.localId);
+        if (!driver) return response({ status: "error", message: "Сначала отправьте анкету водителя" }, 409);
+        // The three files remain on the driver's and dispatcher's phones.
+        // This endpoint only reopens review. Any photos are optional; the
+        // dispatcher can approve the application without a file receipt.
+        const results = await env.DB.batch([
+          env.DB.prepare(`INSERT INTO driver_documents
+            (driver_uid,license_url,driver_photo_url,car_photo_url,submitted_at,review_status,rejection_reason,reviewed_at,reviewed_by,local_transfer_request_id)
+            VALUES (?,'','','',unixepoch(),'pending',NULL,NULL,NULL,NULL)
+            ON CONFLICT(driver_uid) DO UPDATE SET
+              license_url='',driver_photo_url='',car_photo_url='',
+              submitted_at=unixepoch(),review_status='pending',rejection_reason=NULL,
+              reviewed_at=NULL,reviewed_by=NULL,local_transfer_request_id=NULL`)
+            .bind(auth.user.localId),
+          env.DB.prepare("UPDATE drivers SET approved=0, online=0, updated_at=unixepoch() WHERE uid=?")
+            .bind(auth.user.localId)
+        ]);
+        if (Number(results?.[0]?.meta?.changes || 0) !== 1 ||
+            Number(results?.[1]?.meta?.changes || 0) !== 1) {
+          return response({ status: "error", message: "Не удалось открыть повторную проверку. Повторите попытку." }, 409);
+        }
+        return response({ status: "ok", review_status: "pending", documents_optional: true });
+      }
+
       if (url.pathname === "/drivers/documents" && request.method === "POST") {
         const auth = await verifyFirebaseUser(request);
         const driver = await driverRow(env, auth.user.localId);
@@ -473,11 +500,11 @@ export default {
         if (!valid) return response({ status: "error", message: "Укажите три документа в правильном порядке из личной папки Firebase Storage" }, 400);
         // Save the new submission and revoke line access in the same D1 batch.
         const documentResults = await env.DB.batch([
-          env.DB.prepare(`INSERT INTO driver_documents (driver_uid,license_url,driver_photo_url,car_photo_url,submitted_at,review_status,rejection_reason,reviewed_at,reviewed_by)
-            VALUES (?,?,?,?,unixepoch(),'pending',NULL,NULL,NULL) ON CONFLICT(driver_uid) DO UPDATE SET
+          env.DB.prepare(`INSERT INTO driver_documents (driver_uid,license_url,driver_photo_url,car_photo_url,submitted_at,review_status,rejection_reason,reviewed_at,reviewed_by,local_transfer_request_id)
+            VALUES (?,?,?,?,unixepoch(),'pending',NULL,NULL,NULL,NULL) ON CONFLICT(driver_uid) DO UPDATE SET
             license_url=excluded.license_url, driver_photo_url=excluded.driver_photo_url,
             car_photo_url=excluded.car_photo_url, submitted_at=unixepoch(), review_status='pending',
-            rejection_reason=NULL, reviewed_at=NULL, reviewed_by=NULL`)
+            rejection_reason=NULL, reviewed_at=NULL, reviewed_by=NULL, local_transfer_request_id=NULL`)
             .bind(auth.user.localId, ...paths),
           env.DB.prepare("UPDATE drivers SET approved=0, online=0, updated_at=unixepoch() WHERE uid=?")
             .bind(auth.user.localId)
@@ -582,10 +609,11 @@ export default {
           ON CONFLICT(request_id,document_type) DO UPDATE SET byte_size=excluded.byte_size,sha256=excluded.sha256,received_at=excluded.received_at`)
           .bind(requestId, uid, file.type, file.size, file.sha, now));
         statements.push(env.DB.prepare(`INSERT INTO driver_documents
-          (driver_uid,license_url,driver_photo_url,car_photo_url,submitted_at,review_status,rejection_reason,reviewed_at,reviewed_by)
-          VALUES (?,'','','',?,'pending',NULL,NULL,NULL)
+          (driver_uid,license_url,driver_photo_url,car_photo_url,submitted_at,review_status,rejection_reason,reviewed_at,reviewed_by,local_transfer_request_id)
+          VALUES (?,'','','',?,'pending',NULL,NULL,NULL,?)
           ON CONFLICT(driver_uid) DO UPDATE SET license_url='',driver_photo_url='',car_photo_url='',
-          submitted_at=excluded.submitted_at,review_status='pending',rejection_reason=NULL,reviewed_at=NULL,reviewed_by=NULL`).bind(uid, now));
+          submitted_at=excluded.submitted_at,review_status='pending',rejection_reason=NULL,reviewed_at=NULL,
+          reviewed_by=NULL,local_transfer_request_id=excluded.local_transfer_request_id`).bind(uid, now, requestId));
         statements.push(env.DB.prepare(`UPDATE drivers SET approved=0,online=0,updated_at=? WHERE uid=?`).bind(now, uid));
         statements.push(env.DB.prepare(`UPDATE driver_document_transfer_requests SET status='received',completed_at=?
           WHERE request_id=? AND status IN ('requested','transferring')`).bind(now, requestId));
@@ -608,16 +636,11 @@ export default {
           return response({ status: "error", message: "Напишите причину отказа (не менее 5 символов)" }, 400);
         const exists = await env.DB.prepare("SELECT uid FROM drivers WHERE uid=?").bind(uid).first();
         if (!exists) return response({ status: "error", message: "Водитель не найден" }, 404);
-        let docs = await env.DB.prepare("SELECT license_url,driver_photo_url,car_photo_url,review_status FROM driver_documents WHERE driver_uid=?").bind(uid).first();
-        const receiptCount = await env.DB.prepare("SELECT COUNT(*) AS count FROM driver_document_receipts r JOIN driver_document_transfer_requests q ON q.request_id=r.request_id WHERE r.driver_uid=? AND q.status='received'").bind(uid).first();
-        const hasNewLocalDocuments = Number(receiptCount?.count || 0) >= 3;
-        const hasLegacyStoragePaths = Boolean(docs && docs.license_url && docs.driver_photo_url && docs.car_photo_url);
-        const hasAllDocuments = hasNewLocalDocuments || hasLegacyStoragePaths;
-        // Approval requires all three files. Rejection must remain possible for
-        // incomplete applications so the dispatcher can explain what is missing.
-        if (decision === "approved" && !hasAllDocuments)
-          return response({ status: "error", message: "Для одобрения водителю нужны все три документа" }, 409);
-        if (!docs && decision === "rejected") {
+        let docs = await env.DB.prepare("SELECT license_url,driver_photo_url,car_photo_url,review_status,local_transfer_request_id FROM driver_documents WHERE driver_uid=?").bind(uid).first();
+        // Photos and documents are optional at registration. The dispatcher is
+        // the authority for approval; a server-side file receipt is not a gate.
+        // Create an empty pending review row when the driver submitted no files.
+        if (!docs) {
           await env.DB.prepare(`INSERT OR IGNORE INTO driver_documents
             (driver_uid,license_url,driver_photo_url,car_photo_url,submitted_at,review_status,rejection_reason,reviewed_at,reviewed_by)
             VALUES (?,'','','',unixepoch(),'pending',NULL,NULL,NULL)`).bind(uid).run();
@@ -814,7 +837,7 @@ export default {
             AND active.status IN ('driver_assigned','arrived')
             ORDER BY active.assigned_at DESC LIMIT 1) AS active_order_id,
           docs.license_url, docs.driver_photo_url, docs.car_photo_url, docs.submitted_at AS documents_submitted_at,
-          docs.review_status, docs.rejection_reason, docs.reviewed_at
+          docs.review_status, docs.rejection_reason, docs.reviewed_at, docs.local_transfer_request_id
           FROM drivers d LEFT JOIN driver_documents docs ON docs.driver_uid=d.uid
           ORDER BY d.approved ASC, d.name ASC`).all();
         const orders = await env.DB.prepare(`SELECT o.id, o.firebase_order_id, o.pickup_address, o.pickup_lat, o.pickup_lng,

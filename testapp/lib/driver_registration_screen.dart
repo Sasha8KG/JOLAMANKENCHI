@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'services/firebase_service.dart';
@@ -108,40 +107,10 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
     }
   }
 
-  Future<String> _upload(XFile file, String uid, String kind) async {
-    _ensureActiveAccount(uid);
-    const allowedKinds = {'license', 'driver_photo', 'car_photo'};
-    if (!allowedKinds.contains(kind)) {
-      throw const WorkerApiException('Неизвестный тип документа водителя.');
-    }
-    final expectedSize = await file.length().timeout(const Duration(seconds: 15));
-    if (expectedSize <= 0 || expectedSize > 8 * 1024 * 1024) {
-      throw const WorkerApiException('Фотография пустая или превышает 8 МБ. Выберите её заново.');
-    }
-    final bytes = await file.readAsBytes().timeout(const Duration(seconds: 30));
-    if (bytes.isEmpty || bytes.length != expectedSize || bytes.length > 8 * 1024 * 1024) {
-      throw const WorkerApiException('Фотография изменилась или превышает 8 МБ. Выберите её заново.');
-    }
-    final ref = FirebaseStorage.instanceFor(bucket: 'gs://jol-aman-kenchi.firebasestorage.app').ref().child('drivers/$uid/$kind.jpg');
-    final task = await ref.putData(
-      bytes,
-      SettableMetadata(
-        contentType: 'image/jpeg',
-        customMetadata: {'ownerUid': uid, 'documentType': kind},
-      ),
-    ).timeout(const Duration(seconds: 90));
-    _ensureActiveAccount(uid);
-    final uploadedPath = task.ref.fullPath;
-    if (uploadedPath != 'drivers/$uid/$kind.jpg') {
-      throw const WorkerApiException('Хранилище вернуло неверный путь документа.');
-    }
-    return uploadedPath;
-  }
-
   Future<bool> _validatePhotoSizes() async {
     const maxPhotoBytes = 8 * 1024 * 1024;
     const maxTotalBytes = 18 * 1024 * 1024;
-    final files = [_license!, _driverPhoto!, _carPhoto!];
+    final files = [_license, _driverPhoto, _carPhoto].whereType<XFile>().toList();
     var totalBytes = 0;
     for (var i = 0; i < files.length; i++) {
       final size = await files[i].length().timeout(const Duration(seconds: 15));
@@ -161,11 +130,6 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
 
   Future<void> _submit() async {
     if (_busy || !_formKey.currentState!.validate()) return;
-    if (_license == null || _driverPhoto == null || _carPhoto == null) {
-      _message('Добавьте фото водительского удостоверения, водителя и автомобиля.');
-      return;
-    }
-
     // Блокируем повторное нажатие уже на время предварительной проверки файлов.
     setState(() {
       _busy = true;
@@ -214,40 +178,17 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
       );
       if (!mounted) return;
       _ensureActiveAccount(uid);
-      _setStage('Сохраняем оригиналы документов на телефоне…');
-      final localLicense = await DriverDocumentStore.persistPickedImage(
-        uid: uid, documentType: 'license', source: _license!,
-      );
-      final localDriverPhoto = await DriverDocumentStore.persistPickedImage(
-        uid: uid, documentType: 'driver_photo', source: _driverPhoto!,
-      );
-      final localCarPhoto = await DriverDocumentStore.persistPickedImage(
-        uid: uid, documentType: 'car_photo', source: _carPhoto!,
-      );
-      _license = XFile(localLicense.path);
-      _driverPhoto = XFile(localDriverPhoto.path);
-      _carPhoto = XFile(localCarPhoto.path);
+      _setStage('Сохраняем выбранные фотографии на телефоне…');
+      if (_license != null) {
+        await DriverDocumentStore.persistPickedImage(uid: uid, documentType: 'license', source: _license!);
+      }
+      if (_driverPhoto != null) {
+        await DriverDocumentStore.persistPickedImage(uid: uid, documentType: 'driver_photo', source: _driverPhoto!);
+      }
+      if (_carPhoto != null) {
+        await DriverDocumentStore.persistPickedImage(uid: uid, documentType: 'car_photo', source: _carPhoto!);
+      }
       _ensureActiveAccount(uid);
-      _setStage('Загружаем водительское удостоверение…');
-      final licensePath = await _upload(_license!, uid, 'license');
-      if (!mounted) return;
-      _ensureActiveAccount(uid);
-      _setStage('Загружаем фото водителя…');
-      final driverPath = await _upload(_driverPhoto!, uid, 'driver_photo');
-      if (!mounted) return;
-      _ensureActiveAccount(uid);
-      _setStage('Загружаем фото автомобиля…');
-      final carPath = await _upload(_carPhoto!, uid, 'car_photo');
-      if (!mounted) return;
-      _ensureActiveAccount(uid);
-
-      if (!mounted) return;
-      _setStage('Отправляем документы диспетчеру…');
-      await WorkerApi.saveDriverDocuments(
-        licenseUrl: licensePath,
-        driverPhotoUrl: driverPath,
-        carPhotoUrl: carPath,
-      );
 
       await FirebaseService.signOut().timeout(const Duration(seconds: 20));
       if (!mounted) return;
@@ -257,12 +198,6 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
       _message('Операция заняла слишком много времени. Проверьте интернет и повторите отправку.');
     } on FirebaseAuthException catch (e) {
       _message(_firebaseMessage(e));
-    } on FirebaseException catch (e) {
-      _message(e.code == 'unauthorized' || e.code == 'unauthenticated'
-          ? 'Firebase не разрешил загрузку документов. Повторите вход и отправку.'
-          : e.code == 'object-not-found'
-              ? 'Firebase Storage не нашёл указанное хранилище. Проверьте, что в проекте jol-aman-kenchi создано хранилище jol-aman-kenchi.firebasestorage.app и опубликованы правила доступа.'
-              : 'Ошибка хранилища фотографий (${e.code}) на этапе: ${_stage ?? 'загрузка'}. Проверьте интернет и повторите попытку.');
     } on WorkerApiException catch (e) {
       // Не удаляем созданный Firebase-аккаунт и не выходим из него:
       // следующая попытка сможет продолжить анкету на том же номере.
@@ -441,14 +376,14 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
                   },
                 ),
                 const SizedBox(height: 18),
-                const TaxiText('Фотографии для проверки диспетчером',
+                const TaxiText('Фотографии для проверки диспетчером (необязательно при регистрации)',
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                 _photoTile('Водительское удостоверение', _license, 'license'),
                 _photoTile('Фото водителя', _driverPhoto, 'driver'),
                 _photoTile('Фото автомобиля', _carPhoto, 'car'),
                 const SizedBox(height: 8),
                 const TaxiText(
-                  'После отправки анкеты диспетчер проверит документы. До одобрения заявки вход в рабочий кабинет и приём заказов будут недоступны.',
+                  'Фотографии можно приложить сейчас или позже. Регистрация доступна и без фотографий. Перед одобрением диспетчер запросит три документа с телефона водителя. До одобрения заявки приём заказов недоступен.',
                   style: TextStyle(color: Colors.black54, fontSize: 12),
                 ),
                 const SizedBox(height: 18),

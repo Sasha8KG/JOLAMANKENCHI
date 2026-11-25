@@ -632,25 +632,18 @@ check('Transfer protocol validates payload size and SHA-256 format', transferPro
 check('Transfer protocol supports chunk acknowledgements', transferProtocol.includes('encodeAck') && transferProtocol.includes('decodeAck'));
 check('Driver registration stores selected originals locally before cloud upload', registration.includes("uid: 'pending-registration'") && registration.includes("uid: uid, documentType: 'license'"));
 check('Driver review screen restores local documents on entry', app.includes('_restoreLocalDocuments()') && app.includes('DriverDocumentStore.find'));
-// Driver registration, document upload and dispatcher approval regression checks.
-check('Driver registration requires all three identity and vehicle photos', registration.includes('_license == null || _driverPhoto == null || _carPhoto == null'));
-check('Driver upload accepts only the three supported document kinds', registration.includes("const allowedKinds = {'license', 'driver_photo', 'car_photo'};"));
-check('Each driver photo is limited to 8 MB before upload', registration.includes('expectedSize > 8 * 1024 * 1024'));
-check('Uploaded photo bytes are checked against the original file size', registration.includes('bytes.length != expectedSize'));
-check('Driver photo upload has a 90-second timeout', registration.includes('.timeout(const Duration(seconds: 90))'));
-check('Driver upload writes to the authenticated UID folder', registration.includes("child('drivers/$uid/$kind.jpg')"));
-check('Driver upload explicitly targets the configured Firebase Storage bucket', registration.includes("instanceFor(bucket: 'gs://jol-aman-kenchi.firebasestorage.app')"));
-check('Driver upload records owner UID metadata', registration.includes("'ownerUid': uid"));
-check('Driver upload records the document type metadata', registration.includes("'documentType': kind"));
-check('Driver upload verifies the final Storage path', registration.includes("uploadedPath != 'drivers/$uid/$kind.jpg'"));
-check('Driver account identity is rechecked before upload', registration.includes('_ensureActiveAccount(uid);'));
+// Driver registration and local phone-to-phone document transfer regression checks.
+check('Driver registration photos are optional', registration.includes('whereType<XFile>()') && !registration.includes('_license == null || _driverPhoto == null || _carPhoto == null'));
+check('Driver registration does not depend on Firebase Storage', !registration.includes('firebase_storage') && !registration.includes('FirebaseStorage') && !registration.includes('_upload('));
+check('Selected registration photos are saved locally under the authenticated driver UID', registration.includes('DriverDocumentStore.persistPickedImage(uid: uid') && registration.includes('documentType:'));
+check('Optional selected photos are individually saved only when present', registration.includes('if (_license != null)') && registration.includes('if (_driverPhoto != null)') && registration.includes('if (_carPhoto != null)'));
+check('Selected local photos remain bounded to 8 MB each and 18 MB total', registration.includes('size > maxPhotoBytes') && registration.includes('totalBytes > maxTotalBytes'));
 check('Registration reuses an existing Firebase account after email-already-in-use', registration.includes("e.code != 'email-already-in-use'") && registration.includes('FirebaseService.signInWithPhone(phone: phone, password: password)'));
-check('Driver profile is saved before uploading identity documents', registration.includes('await WorkerApi.registerDriver(') && registration.indexOf('await WorkerApi.registerDriver(') < registration.indexOf("_upload(_license!, uid, 'license')"));
-check('Registration uploads the driving licence', registration.includes("_upload(_license!, uid, 'license')"));
-check('Registration uploads the driver portrait', registration.includes("_upload(_driverPhoto!, uid, 'driver_photo')"));
-check('Registration uploads the vehicle photo', registration.includes("_upload(_carPhoto!, uid, 'car_photo')"));
-check('Registration submits document paths only after all three uploads', registration.indexOf("_upload(_carPhoto!, uid, 'car_photo')") < registration.indexOf('await WorkerApi.saveDriverDocuments('));
-check('Registration signs out only after the document submission request', registration.indexOf('await WorkerApi.saveDriverDocuments(') < registration.indexOf('await FirebaseService.signOut()'));
+check('Driver profile is saved before optional local photos', registration.includes('await WorkerApi.registerDriver(') && registration.indexOf('await WorkerApi.registerDriver(') < registration.indexOf('DriverDocumentStore.persistPickedImage(uid: uid'));
+check('Registration signs out after optional local photo persistence', registration.indexOf('DriverDocumentStore.persistPickedImage(uid: uid') < registration.indexOf('await FirebaseService.signOut()'));
+check('Rejected driver resubmission saves photos locally and uses the local review endpoint', app.includes('await WorkerApi.resubmitDriverDocuments()') && app.includes('DriverDocumentStore.persistPickedImage(') && !app.includes('await WorkerApi.saveDriverDocuments('));
+check('Worker reopens rejected document review without Firebase Storage paths', worker.includes('url.pathname === "/drivers/documents/resubmit"') && worker.includes("local_transfer_request_id=NULL"));
+check('Dispatcher approval is not blocked by missing or unreceived photos', worker.includes('Photos and documents are optional at registration') && !worker.includes('const hasAllDocuments = hasNewLocalDocuments') && !worker.includes('Сервер пока не подтвердил получение всех трёх документов'));
 check('Storage document names are restricted to the three approved file names', ["'license.jpg'","'driver_photo.jpg'","'car_photo.jpg'"].every(name => storageRules.includes(name)));
 check('Storage reads are limited to the document owner or dispatcher', storageRules.includes('request.auth.uid == driverUid || isDispatcher()'));
 check('Storage writes are limited to the authenticated document owner', storageRules.includes('request.auth.uid == driverUid') && storageRules.includes('allow create, update:'));
@@ -670,14 +663,14 @@ check('Document submission requires Firebase authentication', documentsRoute.inc
 check('Document submission requires an existing driver profile', documentsRoute.includes('if (!driver)'));
 check('Document submission constructs paths under the authenticated UID', documentsRoute.includes('`drivers/${auth.user.localId}/license.jpg`') && documentsRoute.includes('`drivers/${auth.user.localId}/driver_photo.jpg`') && documentsRoute.includes('`drivers/${auth.user.localId}/car_photo.jpg`'));
 check('Document submission rejects paths in the wrong order or from another UID', documentsRoute.includes('paths.every((value, index) => value === expectedPaths[index])'));
-check('Document submission stores a pending review state', documentsRoute.includes("VALUES (?,?,?,?,unixepoch(),'pending',NULL,NULL,NULL)"));
+check('Document submission stores a pending review state and clears any previous local-transfer marker', documentsRoute.includes("VALUES (?,?,?,?,unixepoch(),'pending',NULL,NULL,NULL,NULL)") && documentsRoute.includes('local_transfer_request_id=NULL'));
 check('Resubmitted documents reset the review state to pending', documentsRoute.includes("review_status='pending'"));
 check('Document submission clears previous rejection details', documentsRoute.includes('rejection_reason=NULL, reviewed_at=NULL, reviewed_by=NULL'));
 check('Document submission immediately disables driver approval and online status', documentsRoute.includes('UPDATE drivers SET approved=0, online=0'));
 check('Driver review endpoint requires dispatcher authentication', reviewRoute.includes('await requireDispatcher(request)'));
 check('Driver review accepts only approved or rejected decisions', reviewRoute.includes('!["approved", "rejected"].includes(decision)'));
 check('Driver rejection requires a meaningful reason', reviewRoute.includes("decision === \"rejected\" && reason.length < 5"));
-check('Driver approval requires all three submitted documents', reviewRoute.includes('decision === "approved" && !hasAllDocuments'));
+check('Driver approval can proceed when no document row exists', reviewRoute.includes('if (!docs)') && reviewRoute.includes('INSERT OR IGNORE INTO driver_documents'));
 check('Dispatcher can reject an incomplete driver application with a reason', reviewRoute.includes('decision === "rejected"') && reviewRoute.includes("VALUES (?,'','','',unixepoch(),'pending',NULL,NULL,NULL)") && reviewRoute.includes('reason.length < 5'));
 check('Driver review only acts on a pending document submission', reviewRoute.includes('docs.review_status !== "pending"'));
 check('Driver review records reviewer identity and timestamp', reviewRoute.includes('reviewed_at=unixepoch(), reviewed_by=?'));
@@ -735,21 +728,14 @@ check('GPS tests cover sub-second future timestamps and exact custom age boundar
 
 
 check('Branded animated splash is the first app screen', app.includes('home: const BrandedSplashGate()'));
-check('Branded splash has a bounded multi-phase entrance animation', app.includes('duration: const Duration(milliseconds: 3800)'));
-check('Branded splash fades in the brand and taxi separately from the slogan', app.includes('opacity: _brandFade,') && app.includes('opacity: _sloganFade,'));
-check('Branded splash cross-fades the emblem out before the slogan finishes appearing', app.includes('begin: 1, end: 0') && app.includes('weight: 25') && app.includes('curve: Curves.easeInOut'));
-check('Branded splash slides the taxi emblem smoothly into place', app.includes('late final Animation<Offset> _carSlide;') && app.includes('position: _carSlide,') && app.includes('Offset(-0.16, 0.06)'));
-check('App title uses the approved Cyrillic spelling and capitalization', app.includes("title: '«Жол Аман Кенчи» Такси'"));
-check('Branded splash scales the yellow taxi emblem into view', app.includes('scale: _carScale,') && app.includes('Icons.local_taxi_rounded, size: 88, color: ink'));
-check('Branded splash transitions to the existing session gate after the animation', app.includes('Timer(const Duration(milliseconds: 4700)') && app.includes('const SessionGate()'));
+check('Branded splash loads the scalable high-resolution SVG artwork', app.includes("'assets/jak_splash.svg'") && pubspec.includes('assets/jak_splash.svg') && pubspec.includes('flutter_svg:') && read('testapp/assets/jak_splash.svg').includes('ЖОЛ АМАН КЕНЧИ'));
+check('Branded splash stays visible for a bounded interval before the existing session gate', app.includes('Timer(const Duration(milliseconds: 4200)') && app.includes('const SessionGate()'));
+check('Branded splash animates its logo entrance and fades into the app', app.includes('SingleTickerProviderStateMixin') && app.includes('FadeTransition(') && app.includes('ScaleTransition(') && app.includes('transitionDuration: const Duration(milliseconds: 450)'));
 check('Branded splash cancels its navigation timer on dispose', app.includes('_navigationTimer?.cancel();'));
 check('Branded splash guards navigation after widget disposal', app.includes('if (!mounted) return;'));
-check('Branded splash shows the approved taxi fleet brand', app.includes('ЖОЛ АМАН КЕНЧИ') && app.includes('ТАКСИ'));
-check('Branded splash includes the Kyrgyz slogan and welcome phrase', app.includes('Ылдам, коопсуз, ишенимдүү') && app.includes('Жолуңуз ар дайым шыдыр болсун!'));
-check('Branded splash keeps Kyrgyz ornament and service area details', app.includes('❧  ✥  ❧') && app.includes('СҮЛҮКТҮ  •  ЛЕЙЛЕК  •  БАТКЕН'));
-check('Branded splash exposes an accessible semantic brand label', app.includes("label: 'Жол Аман Кенчи Такси'"));
-check('Branded splash uses a blue premium background with gold taxi accents', app.includes('Color(0xFF0754A6), Color(0xFF087DE0), Color(0xFF061A35)') && app.includes('border: Border.all(color: gold, width: 4)'));
-check('Branded splash keeps the yellow taxi inside a high-contrast badge', app.includes('width: 150,') && app.includes('height: 112,') && app.includes('Icons.local_taxi_rounded, size: 88, color: ink'));
+check('Branded splash exposes an accessible semantic brand label', app.includes("label: 'ЖОЛ АМАН КЕНЧИ Такси'"));
+check('Branded splash uses the yellow brand background without a blue frame', app.includes('backgroundColor: const Color(0xFFFFD400)') && app.includes('fit: BoxFit.contain') && !app.includes('Border.all(color: gold, width: 4)'));
+check('Branded splash renders its vector asset without raster upscaling', app.includes('SvgPicture.asset(') && app.includes('BoxFit.contain'));
 check('Driver and dispatcher sections use the requested green header palette', app.includes('backgroundColor: const Color(0xFF087A42)') && app.includes('foregroundColor: Colors.white'));
 check('Passenger order action uses a gold button with dark text', app.includes('backgroundColor: const Color(0xFFFFD400)') && app.includes('foregroundColor: const Color(0xFF171717)'));
 check('Global app bars use the gold and black brand palette', app.includes('backgroundColor: Color(0xFFFFD400)') && app.includes('foregroundColor: Color(0xFF171717)'));
@@ -780,7 +766,7 @@ check('Passenger pickup instructions are highlighted with a location icon', app.
 check('Passenger destination field has a flag icon and branded focus border', app.includes('Icons.flag_rounded') && app.includes('focusedBorder: OutlineInputBorder'));
 check('Passenger order action is a large taxi button with branded colors', app.includes('ElevatedButton.icon(') && app.includes('minimumSize: const Size.fromHeight(60)') && app.includes('ВЫЗВАТЬ МАШИНУ'));
 check('Passenger count controls are grouped in a readable surface', app.includes('Icons.people_alt_rounded') && app.includes('Пассажиры: '));
-check('Widget test covers splash brand, slogan and service area', read('testapp/test/widget_test.dart').includes('Branded splash screen') && read('testapp/test/widget_test.dart').includes('shows the approved brand and Kyrgyz slogan'));
+check('Widget test covers the supplied splash emblem and yellow borderless background', read('testapp/test/widget_test.dart').includes('shows the supplied taxi emblem on a yellow background'));
 
 
 check('Language switch offers Russian and Kyrgyz', localization.includes("DropdownMenuItem(value: 'ru', child: Text('Русский'))") && localization.includes("DropdownMenuItem(value: 'ky', child: Text('Кыргызча'))"));
@@ -933,16 +919,11 @@ check('Driver logout stops the heartbeat before server confirmation', app.includ
 check('Driver logout retains the active-trip and initial-order-check safeguards', app.includes('if (!_assignedOrdersLoaded) {') && app.includes('if (_serverAssignedOrders.isNotEmpty) {'));
 
 
-check('Driver document uploads use the explicit Firebase project bucket', app.includes("const String taxiFirebaseStorageBucket =\n    'gs://jol-aman-kenchi.firebasestorage.app';"));
-check('Firebase Storage helper binds the configured bucket with instanceFor', app.includes('FirebaseStorage.instanceFor(bucket: taxiFirebaseStorageBucket)'));
-check('Initial driver document upload uses the explicit bucket', app.includes('final ref = taxiFirebaseStorage.ref().child(\'drivers/$uid/$kind.jpg\');'));
-check('Driver application document upload uses the explicit bucket', app.includes('final ref = taxiFirebaseStorage.ref().child(\'drivers/$uid/$kind.jpg\');'));
-check('Dispatcher document preview uses the same explicit bucket', app.includes('future: taxiFirebaseStorage.ref(path).getData(8 * 1024 * 1024)'));
-check('No driver upload path falls back to the Firebase default bucket', !app.includes('FirebaseStorage.instance.ref()'));
+check('Legacy Firebase Storage helper retains the configured project bucket for existing previews', app.includes("const String taxiFirebaseStorageBucket =\n    'gs://jol-aman-kenchi.firebasestorage.app';") && app.includes('FirebaseStorage.instanceFor(bucket: taxiFirebaseStorageBucket)'));
+check('Dispatcher legacy document preview uses the configured bucket', app.includes('future: taxiFirebaseStorage.ref(path).getData(8 * 1024 * 1024)'));
 check('No dispatcher document preview falls back to the Firebase default bucket', !app.includes('FirebaseStorage.instance.ref(path)'));
 check('Configured Firebase bucket retains the exact project identifier', app.includes('jol-aman-kenchi.firebasestorage.app'));
-check('Firebase Storage upload helper is available to driver registration', app.includes('FirebaseStorage get taxiFirebaseStorage'));
-check('Firebase Storage reads and writes share one configured bucket helper', app.split('taxiFirebaseStorage.ref').length >= 4);
+check('Firebase Storage reads share one configured bucket helper', app.split('taxiFirebaseStorage.ref').length >= 2);
 
 
 check('Worker stores document transfer requests as metadata only', worker.includes('CREATE TABLE IF NOT EXISTS driver_document_transfer_requests') && worker.includes('CREATE TABLE IF NOT EXISTS driver_document_receipts'));

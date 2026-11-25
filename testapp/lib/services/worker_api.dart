@@ -480,6 +480,14 @@ class WorkerApi {
     });
   }
 
+  static Future<Map<String, dynamic>> resubmitDriverDocuments() {
+    final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    if (uid.isEmpty || uid.length > 128 || _hasControlCharacters(uid)) {
+      throw const WorkerApiException('Не удалось определить аккаунт водителя.');
+    }
+    return _request('/drivers/documents/resubmit', method: 'POST', body: const {});
+  }
+
   static Future<Map<String, dynamic>> saveDriverDocuments({
     required String licenseUrl,
     required String driverPhotoUrl,

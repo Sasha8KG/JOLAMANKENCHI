@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -13,6 +15,7 @@ import 'services/firebase_service.dart';
 import 'driver_registration_screen.dart';
 import 'services/worker_api.dart';
 import 'services/driver_document_store.dart';
+import 'services/driver_document_transfer_livekit.dart';
 import 'services/route_service.dart';
 import 'services/route_cache_policy.dart';
 import 'services/gps_freshness.dart';
@@ -469,60 +472,32 @@ class BrandedSplashGate extends StatefulWidget {
 
 class _BrandedSplashGateState extends State<BrandedSplashGate>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-  late final Animation<double> _brandFade;
-  late final Animation<double> _carScale;
-  late final Animation<Offset> _carSlide;
-  late final Animation<double> _sloganFade;
   Timer? _navigationTimer;
+  late final AnimationController _entrance;
+  late final Animation<double> _fade;
+  late final Animation<double> _scale;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
+    _entrance = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 3800),
+      duration: const Duration(milliseconds: 1100),
     );
-    // The emblem appears first, holds briefly, then fades away as the
-    // Kyrgyz slogan comes forward. This is a real cross-fade.
-    _brandFade = TweenSequence<double>([
-      TweenSequenceItem<double>(
-        tween: Tween<double>(begin: 0, end: 1)
-            .chain(CurveTween(curve: Curves.easeOut)),
-        weight: 35,
-      ),
-      TweenSequenceItem<double>(tween: ConstantTween<double>(1), weight: 20),
-      TweenSequenceItem<double>(
-        tween: Tween<double>(begin: 1, end: 0)
-            .chain(CurveTween(curve: Curves.easeInOut)),
-        weight: 25,
-      ),
-      TweenSequenceItem<double>(tween: ConstantTween<double>(0), weight: 20),
-    ]).animate(_controller);
-    _carScale = Tween<double>(begin: 0.72, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.02, 0.48, curve: Curves.easeOutBack),
-      ),
+    _fade = CurvedAnimation(parent: _entrance, curve: Curves.easeOut);
+    _scale = Tween<double>(begin: 0.94, end: 1.0).animate(
+      CurvedAnimation(parent: _entrance, curve: Curves.easeOutBack),
     );
-    _carSlide = Tween<Offset>(
-      begin: const Offset(-0.16, 0.06),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.02, 0.48, curve: Curves.easeOutCubic),
-      ),
-    );
-    _sloganFade = CurvedAnimation(
-      parent: _controller,
-      curve: const Interval(0.54, 0.91, curve: Curves.easeInOut),
-    );
-    _controller.forward();
-    _navigationTimer = Timer(const Duration(milliseconds: 4700), () {
+    _entrance.forward();
+    _navigationTimer = Timer(const Duration(milliseconds: 4200), () {
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute<void>(builder: (_) => const SessionGate()),
+        PageRouteBuilder<void>(
+          transitionDuration: const Duration(milliseconds: 450),
+          pageBuilder: (_, animation, secondaryAnimation) => const SessionGate(),
+          transitionsBuilder: (_, animation, secondaryAnimation, child) =>
+              FadeTransition(opacity: animation, child: child),
+        ),
       );
     });
   }
@@ -530,141 +505,30 @@ class _BrandedSplashGateState extends State<BrandedSplashGate>
   @override
   void dispose() {
     _navigationTimer?.cancel();
-    _controller.dispose();
+    _entrance.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    const ink = Color(0xFF071A32);
-    const gold = Color(0xFFFFD400);
+    final size = MediaQuery.of(context).size;
     return Scaffold(
-      backgroundColor: ink,
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Color(0xFF0754A6), Color(0xFF087DE0), Color(0xFF061A35)],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            stops: [0.0, 0.48, 1.0],
-          ),
-        ),
-        child: SafeArea(
-          child: Center(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 28),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  FadeTransition(
-                    opacity: _brandFade,
-                    child: SlideTransition(
-                      position: _carSlide,
-                      child: ScaleTransition(
-                        scale: _carScale,
-                        child: Semantics(
-                        label: 'Жол Аман Кенчи Такси',
-                        child: Container(
-                          width: 244,
-                          padding: const EdgeInsets.fromLTRB(18, 22, 18, 20),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF080B10),
-                            borderRadius: BorderRadius.circular(38),
-                            border: Border.all(color: gold, width: 4),
-                            boxShadow: const [
-                              BoxShadow(
-                                color: Color(0xAA000000),
-                                blurRadius: 30,
-                                offset: Offset(0, 14),
-                              ),
-                              BoxShadow(
-                                color: Color(0x66FFD400),
-                                blurRadius: 28,
-                                spreadRadius: 2,
-                              ),
-                            ],
-                          ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const TaxiText('❧  ✥  ❧',
-                                style: TextStyle(color: gold, fontSize: 25, fontWeight: FontWeight.w900)),
-                              const SizedBox(height: 12),
-                              Container(
-                                width: 150,
-                                height: 112,
-                                decoration: BoxDecoration(
-                                  color: gold,
-                                  borderRadius: BorderRadius.circular(28),
-                                  border: Border.all(color: const Color(0xFFFFF1A8), width: 3),
-                                ),
-                                child: const Icon(Icons.local_taxi_rounded, size: 88, color: ink),
-                              ),
-                              const SizedBox(height: 17),
-                              const TaxiText(
-                                'ЖОЛ АМАН КЕНЧИ',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 25,
-                                  height: 1.0,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              const TaxiText(
-                                'Такси',
-                                style: TextStyle(color: gold, fontSize: 22, fontWeight: FontWeight.w900),
-                              ),
-                              const SizedBox(height: 13),
-                              Container(height: 3, decoration: const BoxDecoration(
-                                gradient: LinearGradient(colors: [Colors.transparent, gold, Colors.transparent]),
-                              )),
-                            ],
-                          ),
-                        ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 38),
-                  FadeTransition(
-                    opacity: _sloganFade,
-                    child: Column(
-                      children: [
-                        const TaxiText(
-                          'Ылдам, коопсуз, ишенимдүү',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 25,
-                            height: 1.15,
-                            fontWeight: FontWeight.w900,
-                            fontStyle: FontStyle.italic,
-                            shadows: [Shadow(color: Colors.black54, blurRadius: 12, offset: Offset(0, 3))],
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                        Container(
-                          width: 190,
-                          height: 4,
-                          decoration: BoxDecoration(color: gold, borderRadius: BorderRadius.circular(8)),
-                        ),
-                        const SizedBox(height: 16),
-                        const TaxiText(
-                          'Жолуңуз ар дайым шыдыр болсун!',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700),
-                        ),
-                        const SizedBox(height: 12),
-                        const TaxiText(
-                          'СҮЛҮКТҮ  •  ЛЕЙЛЕК  •  БАТКЕН',
-                          style: TextStyle(color: gold, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.2),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+      backgroundColor: const Color(0xFFFFD400),
+      body: SafeArea(
+        child: Center(
+          child: FadeTransition(
+            opacity: _fade,
+            child: ScaleTransition(
+              scale: _scale,
+              child: Semantics(
+                label: 'ЖОЛ АМАН КЕНЧИ Такси',
+                image: true,
+                child: SvgPicture.asset(
+                  'assets/jak_splash.svg',
+                  width: size.width * 0.98,
+                  height: size.height * 0.96,
+                  fit: BoxFit.contain,
+                ),
               ),
             ),
           ),
@@ -673,6 +537,7 @@ class _BrandedSplashGateState extends State<BrandedSplashGate>
     );
   }
 }
+
 class _TaxiCheckSquare extends StatelessWidget {
   const _TaxiCheckSquare({this.dark = false});
   final bool dark;
@@ -2789,7 +2654,7 @@ class _DriverEntryScreenState extends State<DriverEntryScreen> {
       MaterialPageRoute(builder: (_) => const DriverRegistrationScreen()),
     );
     if (submitted == true && mounted) {
-      _showMessage('Анкета и фотографии отправлены. Дождитесь проверки диспетчера.');
+      _showMessage('Анкета отправлена. Фотографии при регистрации необязательны; диспетчер запросит их отдельно. Дождитесь проверки.');
     }
   }
 
@@ -2867,11 +2732,90 @@ class _DriverReviewStatusScreenState extends State<DriverReviewStatusScreen> {
   XFile? _carPhoto;
   bool _busy = false;
   final ImagePicker _picker = ImagePicker();
+  Timer? _documentRequestTimer;
+  bool _documentRequestCheckRunning = false;
+  String? _documentTransferMessage;
+  String? _lastHandledRequestId;
+  DateTime? _lastDocumentSendAt;
+  DriverDocumentTransferLiveKit? _activeDocumentTransfer;
 
   @override
   void initState() {
     super.initState();
-    _restoreLocalDocuments();
+    unawaited(_startDocumentRequestPolling());
+  }
+
+  Future<void> _startDocumentRequestPolling() async {
+    await _restoreLocalDocuments();
+    if (!mounted || (widget.profile['review_status'] ?? 'pending').toString() == 'rejected') return;
+    await _checkDocumentRequest();
+    _documentRequestTimer = Timer.periodic(const Duration(seconds: 6), (_) => unawaited(_checkDocumentRequest()));
+  }
+
+  Future<void> _checkDocumentRequest() async {
+    if (!mounted || _documentRequestCheckRunning || _busy) return;
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null || uid.isEmpty) return;
+    _documentRequestCheckRunning = true;
+    try {
+      final data = await WorkerApi.driverDocumentRequest();
+      final raw = data['request'];
+      if (raw is! Map) {
+        final previous = _activeDocumentTransfer;
+        _activeDocumentTransfer = null;
+        _lastHandledRequestId = null;
+        _lastDocumentSendAt = null;
+        if (previous != null) await previous.dispose();
+        return;
+      }
+      final request = Map<String, dynamic>.from(raw);
+      final requestId = (request['request_id'] ?? '').toString().trim();
+      final status = (request['status'] ?? '').toString();
+      if (requestId.isEmpty || !{'requested', 'transferring'}.contains(status)) return;
+      if (_lastHandledRequestId == requestId && _activeDocumentTransfer != null) {
+        final lastSent = _lastDocumentSendAt;
+        if (lastSent != null && DateTime.now().difference(lastSent) < const Duration(seconds: 20)) return;
+        // Re-send the same immutable local files periodically. Reliable
+        // delivery covers a single connection, while this retry also recovers
+        // packets lost during a temporary disconnect/reconnect.
+        await _activeDocumentTransfer!.sendDriverDocuments();
+        _lastDocumentSendAt = DateTime.now();
+        if (mounted) setState(() => _documentTransferMessage = 'Повторно отправляем документы для проверки получения…');
+        return;
+      }
+      final docs = await Future.wait([
+        DriverDocumentStore.find(uid: uid, documentType: 'license'),
+        DriverDocumentStore.find(uid: uid, documentType: 'driver_photo'),
+        DriverDocumentStore.find(uid: uid, documentType: 'car_photo'),
+      ]);
+      if (docs.any((file) => file == null)) {
+        if (mounted) setState(() => _documentTransferMessage = 'Диспетчер запросил документы, но на телефоне не хватает одной или нескольких фотографий. Выберите недостающие фото повторно.');
+        return;
+      }
+      final session = await DriverDocumentTransferLiveKit.connect(requestId: requestId, driverUid: uid, isDispatcher: false);
+      if (!mounted) { await session.dispose(); return; }
+      _activeDocumentTransfer = session;
+      _lastHandledRequestId = requestId;
+      setState(() => _documentTransferMessage = 'Диспетчер запросил документы. Отправляем три фотографии…');
+      await session.sendDriverDocuments();
+      _lastDocumentSendAt = DateTime.now();
+      if (mounted) setState(() => _documentTransferMessage = 'Фотографии отправлены по защищённому каналу. Ожидаем подтверждения диспетчера…');
+    } catch (error) {
+      final failed = _activeDocumentTransfer;
+      _activeDocumentTransfer = null;
+      if (failed != null) await failed.dispose();
+      if (mounted) setState(() => _documentTransferMessage = 'Не удалось передать документы: $error. Повторим автоматически.');
+    } finally {
+      _documentRequestCheckRunning = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    _documentRequestTimer?.cancel();
+    final session = _activeDocumentTransfer;
+    if (session != null) unawaited(session.dispose());
+    super.dispose();
   }
 
   Future<void> _restoreLocalDocuments() async {
@@ -2937,30 +2881,6 @@ class _DriverReviewStatusScreenState extends State<DriverReviewStatusScreen> {
     }
   }
 
-  Future<String> _upload(XFile file, String kind, String uid) async {
-    if (uid.trim().isEmpty ||
-        !{'license', 'driver_photo', 'car_photo'}.contains(kind)) {
-      throw const WorkerApiException('Не удалось определить документ водителя.');
-    }
-    final size = await file.length().timeout(const Duration(seconds: 15));
-    if (size <= 0 || size > 8 * 1024 * 1024) {
-      throw const WorkerApiException('Фото пустое или превышает 8 МБ. Выберите его заново.');
-    }
-    final bytes = await file.readAsBytes().timeout(const Duration(seconds: 30));
-    if (bytes.isEmpty || bytes.length != size || bytes.length > 8 * 1024 * 1024) {
-      throw const WorkerApiException('Не удалось прочитать фотографию полностью. Выберите её заново.');
-    }
-    final ref = taxiFirebaseStorage.ref().child('drivers/$uid/$kind.jpg');
-    final task = await ref.putData(
-      bytes,
-      SettableMetadata(
-        contentType: 'image/jpeg',
-        customMetadata: {'ownerUid': uid},
-      ),
-    ).timeout(const Duration(seconds: 90));
-    return task.ref.fullPath;
-  }
-
   Future<void> _logout() async {
     if (_busy) return;
     setState(() => _busy = true);
@@ -2977,12 +2897,12 @@ class _DriverReviewStatusScreenState extends State<DriverReviewStatusScreen> {
   Future<void> _resubmit() async {
     if (_busy) return;
     if (_license == null || _driverPhoto == null || _carPhoto == null) {
-      _message('Выберите все три фотографии.');
+      _message('Для повторной проверки выберите все три фотографии.');
       return;
     }
     final user = FirebaseAuth.instance.currentUser;
     if (user == null || user.uid.isEmpty) {
-      _message('Срок входа истёк. Войдите в аккаунт водителя и повторите отправку.');
+      _message('Срок входа истёк. Войдите снова.');
       return;
     }
     final files = [_license!, _driverPhoto!, _carPhoto!];
@@ -3003,29 +2923,29 @@ class _DriverReviewStatusScreenState extends State<DriverReviewStatusScreen> {
       }
       setState(() => _busy = true);
       final uid = user.uid;
-      final licensePath = await _upload(_license!, 'license', uid);
-      if (!mounted) return;
-      final driverPath = await _upload(_driverPhoto!, 'driver_photo', uid);
-      if (!mounted) return;
-      final carPath = await _upload(_carPhoto!, 'car_photo', uid);
-      if (!mounted) return;
-      if (FirebaseAuth.instance.currentUser?.uid != uid) {
-        throw const WorkerApiException('Аккаунт изменился во время отправки. Войдите снова.');
+      for (var i = 0; i < files.length; i++) {
+        if (FirebaseAuth.instance.currentUser?.uid != uid) {
+          throw const WorkerApiException('Аккаунт изменился. Войдите снова.');
+        }
+        await DriverDocumentStore.persistPickedImage(
+          uid: uid,
+          documentType: const ['license', 'driver_photo', 'car_photo'][i],
+          source: files[i],
+        );
       }
-      await WorkerApi.saveDriverDocuments(
-        licenseUrl: licensePath,
-        driverPhotoUrl: driverPath,
-        carPhotoUrl: carPath,
-      );
+      await WorkerApi.resubmitDriverDocuments();
       if (!mounted) return;
+      widget.profile['review_status'] = 'pending';
+      widget.profile['rejection_reason'] = null;
       setState(() {
         _license = null;
         _driverPhoto = null;
         _carPhoto = null;
       });
-      _message('Документы отправлены повторно. Ожидайте новой проверки диспетчера.');
+      await _startDocumentRequestPolling();
+      _message('Фотографии сохранены на телефоне. Диспетчер сможет запросить их для повторной проверки.');
     } catch (e) {
-      _message('Не удалось отправить документы: $e');
+      _message('Не удалось подготовить повторную проверку: $e');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -3053,14 +2973,33 @@ class _DriverReviewStatusScreenState extends State<DriverReviewStatusScreen> {
           if (rejected) ...[const SizedBox(height: 8), TaxiText('Причина: ${widget.profile['rejection_reason'] ?? 'Не указана'}')],
           if (!rejected) const TaxiLocalizedText(russian: 'Диспетчер проверит документы. До одобрения выход на линию недоступен.', kyrgyz: 'Диспетчер документтерди текшерет. Бекитилгенге чейин линияга чыгууга болбойт.'),
         ]))),
+        if (!rejected && _documentTransferMessage != null) ...[
+          const SizedBox(height: 10),
+          Card(color: Colors.blue.shade50, child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Icon(Icons.sync, color: Colors.blue),
+              const SizedBox(width: 8),
+              Expanded(child: TaxiText(_documentTransferMessage!)),
+            ]),
+          )),
+        ],
+        const SizedBox(height: 14),
+        TaxiLocalizedText(
+          russian: rejected
+              ? 'Выберите три фотографии для повторной проверки. Они сохранятся на телефоне и будут переданы диспетчеру по его запросу.'
+              : 'Фотографии можно добавить сейчас или позже. Регистрация и ожидание одобрения не требуют вложения фотографий. Для одобрения диспетчер запросит три документа с телефона.',
+          kyrgyz: rejected
+              ? 'Кайра текшерүү үчүн үч сүрөттү тандаңыз. Алар телефондо сакталып, диспетчердин суроосу боюнча жөнөтүлөт.'
+              : 'Сүрөттөрдү азыр же кийин кошсоңуз болот. Катталуу үчүн сүрөттөр милдеттүү эмес. Бекитүү үчүн диспетчер телефондон үч документти сурайт.',
+          style: const TextStyle(fontWeight: FontWeight.w500),
+        ),
+        _pickRow('Водительское удостоверение', _license, 'license'),
+        _pickRow('Фото водителя', _driverPhoto, 'driver'),
+        _pickRow('Фото автомобиля', _carPhoto, 'car'),
         if (rejected) ...[
-          const SizedBox(height: 14),
-          const TaxiLocalizedText(russian: 'Исправьте замечания и отправьте фотографии повторно:', kyrgyz: 'Эскертүүлөрдү оңдоп, сүрөттөрдү кайра жөнөтүңүз:', style: TextStyle(fontWeight: FontWeight.bold)),
-          _pickRow('Водительское удостоверение', _license, 'license'),
-          _pickRow('Фото водителя', _driverPhoto, 'driver'),
-          _pickRow('Фото автомобиля', _carPhoto, 'car'),
           const SizedBox(height: 12),
-          ElevatedButton.icon(onPressed: _busy ? null : _resubmit, icon: const Icon(Icons.upload), label: TaxiText(_busy ? 'ОТПРАВКА...' : 'ОТПРАВИТЬ ПОВТОРНО')),
+          ElevatedButton.icon(onPressed: _busy ? null : _resubmit, icon: const Icon(Icons.check), label: TaxiText(_busy ? 'СОХРАНЕНИЕ...' : 'СОХРАНИТЬ И ОТПРАВИТЬ НА ПРОВЕРКУ')),
         ],
       ]))),
     );
@@ -4145,6 +4084,10 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
   bool _dispatcherRefreshPending = false;
   String? _dispatcherRefreshError;
   Timer? _dispatcherRefreshTimer;
+  Timer? _documentTransferMonitor;
+  final Map<String, DriverDocumentTransferLiveKit> _documentTransferSessions = {};
+  final Map<String, String> _documentTransferStates = {};
+  bool _documentTransferMonitorRunning = false;
 
   @override
   void initState() {
@@ -4154,17 +4097,77 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
     _dispatcherRefreshTimer = Timer.periodic(const Duration(seconds: 15), (_) {
       if (mounted && !_working) {
         unawaited(_load(showLoading: false));
-        if (_cancellations.length <= 50) {
-          unawaited(_refreshCancellationHistory(silent: true));
-        }
+        if (_cancellations.length <= 50) unawaited(_refreshCancellationHistory(silent: true));
       }
     });
+    _documentTransferMonitor = Timer.periodic(const Duration(seconds: 2), (_) => unawaited(_monitorDocumentTransfers()));
   }
 
   @override
   void dispose() {
     _dispatcherRefreshTimer?.cancel();
+    _documentTransferMonitor?.cancel();
+    for (final session in _documentTransferSessions.values) { unawaited(session.dispose()); }
+    _documentTransferSessions.clear();
     super.dispose();
+  }
+
+  Future<void> _requestDriverDocuments(Map<String, dynamic> driver) async {
+    final uid = (driver['uid'] ?? '').toString().trim();
+    if (uid.isEmpty || uid.length > 128 || _documentTransferSessions.containsKey(uid)) return;
+    setState(() => _documentTransferStates[uid] = 'Подключаемся к телефону водителя…');
+    try {
+      final request = await WorkerApi.requestDriverDocuments(uid);
+      final requestId = (request['request_id'] ?? '').toString().trim();
+      if (requestId.isEmpty) throw const FormatException('Сервер не вернул номер запроса.');
+      final session = await DriverDocumentTransferLiveKit.connect(requestId: requestId, driverUid: uid, isDispatcher: true);
+      if (!mounted) { await session.dispose(); return; }
+      _documentTransferSessions[uid] = session;
+      setState(() => _documentTransferStates[uid] = 'Ожидаем фотографии: 0 из 3');
+      _notice('Запрос отправлен. Телефон водителя должен быть подключён к интернету.');
+    } catch (error) {
+      if (mounted) setState(() => _documentTransferStates[uid] = 'Ошибка передачи: $error');
+    }
+  }
+
+  Future<void> _monitorDocumentTransfers() async {
+    if (!mounted || _documentTransferSessions.isEmpty || _documentTransferMonitorRunning) return;
+    _documentTransferMonitorRunning = true;
+    try {
+      for (final entry in List<MapEntry<String, DriverDocumentTransferLiveKit>>.from(_documentTransferSessions.entries)) {
+      final uid = entry.key, session = entry.value;
+      if (!mounted || !identical(_documentTransferSessions[uid], session)) continue;
+      if (!session.isComplete) {
+        // Retry a completed chunk assembly when an earlier local file write
+        // failed; otherwise no new network packet may arrive to trigger it.
+        await session.retryPendingPersistence();
+        final status = 'Получено фотографий: ${session.receivedDocumentCount} из 3';
+        if (_documentTransferStates[uid] != status) setState(() => _documentTransferStates[uid] = status);
+        continue;
+      }
+      if (!session.isConfirmed) {
+        try { await session.retryConfirmation(); } catch (_) {
+          if (mounted) setState(() => _documentTransferStates[uid] = 'Все фото получены, подтверждаем получение…');
+          continue;
+        }
+      }
+      if (!session.isConfirmed) continue;
+      final docs = await Future.wait([
+        DriverDocumentStore.find(uid: uid, documentType: 'license'),
+        DriverDocumentStore.find(uid: uid, documentType: 'driver_photo'),
+        DriverDocumentStore.find(uid: uid, documentType: 'car_photo'),
+      ]);
+      if (docs.any((file) => file == null)) {
+        if (mounted) setState(() => _documentTransferStates[uid] = 'Не удалось проверить сохранённые файлы. Запросите повторно.');
+        continue;
+      }
+      _documentTransferSessions.remove(uid);
+      if (mounted) setState(() => _documentTransferStates[uid] = 'Все 3 документа получены и сохранены на телефоне диспетчера');
+      await session.dispose();
+      }
+    } finally {
+      _documentTransferMonitorRunning = false;
+    }
   }
 
   Future<void> _load({bool showLoading = true}) async {
@@ -4645,29 +4648,37 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
     return Uri.decodeComponent(uri.path.substring(index + marker.length));
   }
 
-  Future<void> _showDriverDocument(String label, dynamic rawPath) async {
+  Future<void> _showDriverDocument(String label, dynamic rawPath, {String? driverUid, String? documentType}) async {
     final path = _storageObjectPath(rawPath);
-    if (path.isEmpty) { _notice('Файл документа не найден'); return; }
+    File? localFile;
+    if (driverUid != null && documentType != null) {
+      localFile = await DriverDocumentStore.find(uid: driverUid, documentType: documentType);
+    }
+    if (!mounted) return;
+    if (localFile == null && path.isEmpty) { _notice('Документ ещё не получен. Запросите фотографии у водителя.'); return; }
     await showDialog<void>(context: context, builder: (ctx) => AlertDialog(
       title: TaxiText(label),
-      content: SizedBox(width: 420, child: FutureBuilder<Uint8List?>(
-        future: taxiFirebaseStorage.ref(path).getData(8 * 1024 * 1024),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) return const SizedBox(height: 180, child: Center(child: CircularProgressIndicator()));
-          if (snapshot.hasError || snapshot.data == null) return const TaxiText('Не удалось загрузить документ. Проверьте правила Firebase Storage и подключение.');
-          return InteractiveViewer(child: Image.memory(snapshot.data!, fit: BoxFit.contain));
-        },
-      )),
+      content: SizedBox(width: 420, child: localFile != null
+        ? InteractiveViewer(child: Image.file(localFile, fit: BoxFit.contain))
+        : FutureBuilder<Uint8List?>(
+            future: taxiFirebaseStorage.ref(path).getData(8 * 1024 * 1024),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState != ConnectionState.done) return const SizedBox(height: 180, child: Center(child: CircularProgressIndicator()));
+              if (snapshot.hasError || snapshot.data == null) return const TaxiText('Не удалось загрузить документ. Проверьте правила Firebase Storage и подключение.');
+              return InteractiveViewer(child: Image.memory(snapshot.data!, fit: BoxFit.contain));
+            },
+          )),
       actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const TaxiLocalizedText(russian: 'Закрыть', kyrgyz: 'Жабуу'))],
     ));
   }
 
-  Widget _documentLink(String label, dynamic value) {
+  Widget _documentLink(String label, dynamic value, {String? driverUid, String? documentType}) {
     final path = _storageObjectPath(value);
+    final canOpen = path.isNotEmpty || (driverUid != null && documentType != null);
     return TextButton.icon(
-      onPressed: path.isEmpty ? null : () => _showDriverDocument(label, value),
+      onPressed: canOpen ? () => _showDriverDocument(label, value, driverUid: driverUid, documentType: documentType) : null,
       icon: const Icon(Icons.image_search, size: 16),
-      label: TaxiText(path.isEmpty ? '$label · нет' : label),
+      label: TaxiText(canOpen ? label : '$label · нет'),
     );
   }
 
@@ -4857,18 +4868,26 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
                     TaxiText('${d['phone'] ?? ''} · ${d['car_model'] ?? ''} · ${d['car_number'] ?? ''}'),
                     TaxiText('UID: ${d['uid'] ?? ''}', style: const TextStyle(fontSize: 11, color: Colors.black54)),
                     Wrap(spacing: 8, children: [
-                      _documentLink('Удостоверение', d['license_url']),
-                      _documentLink('Фото водителя', d['driver_photo_url']),
-                      _documentLink('Фото авто', d['car_photo_url']),
+                      _documentLink('Удостоверение', d['license_url'], driverUid: (d['uid'] ?? '').toString(), documentType: 'license'),
+                      _documentLink('Фото водителя', d['driver_photo_url'], driverUid: (d['uid'] ?? '').toString(), documentType: 'driver_photo'),
+                      _documentLink('Фото авто', d['car_photo_url'], driverUid: (d['uid'] ?? '').toString(), documentType: 'car_photo'),
                     ]),
-                    if ((d['license_url'] ?? '').toString().isEmpty ||
-                        (d['driver_photo_url'] ?? '').toString().isEmpty ||
-                        (d['car_photo_url'] ?? '').toString().isEmpty)
+                    if ((d['local_transfer_request_id'] ?? '').toString().isEmpty &&
+                        ((d['license_url'] ?? '').toString().isEmpty ||
+                         (d['driver_photo_url'] ?? '').toString().isEmpty ||
+                         (d['car_photo_url'] ?? '').toString().isEmpty))
                       const Padding(
                         padding: EdgeInsets.only(top: 6),
                         child: TaxiLocalizedText(russian: 'Не все документы загружены. Проверьте заявку перед одобрением.', kyrgyz: 'Бардык документтер жүктөлгөн эмес. Бекитүүдөн мурун арызды текшериңиз.',
                           style: TextStyle(color: Colors.deepOrange, fontSize: 12)),
                       ),
+                    if (_documentTransferStates[(d['uid'] ?? '').toString()] != null)
+                      Padding(padding: const EdgeInsets.only(top: 6), child: TaxiText(_documentTransferStates[(d['uid'] ?? '').toString()]!, style: const TextStyle(fontSize: 12, color: Colors.blueGrey))),
+                    SizedBox(width: double.infinity, child: OutlinedButton.icon(
+                      onPressed: _working || _documentTransferSessions.containsKey((d['uid'] ?? '').toString()) ? null : () => _requestDriverDocuments(d),
+                      icon: const Icon(Icons.download_for_offline),
+                      label: const TaxiLocalizedText(russian: 'ЗАПРОСИТЬ ДОКУМЕНТЫ С ТЕЛЕФОНА', kyrgyz: 'ТЕЛЕФОНДОН ДОКУМЕНТТЕРДИ СУРОО'),
+                    )),
                     Row(children: [
                       Expanded(child: OutlinedButton.icon(onPressed: _working ? null : () => _review(d, 'rejected'), icon: const Icon(Icons.close, color: Colors.red), label: const TaxiLocalizedText(russian: 'Отклонить', kyrgyz: 'Четке кагуу'))),
                       const SizedBox(width: 8),
@@ -4883,10 +4902,17 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
                     TaxiText((d['name'] ?? 'Водитель').toString(), style: const TextStyle(fontWeight: FontWeight.bold)),
                     TaxiText('Причина: ${d['rejection_reason'] ?? 'Не указана'}'),
                     Wrap(spacing: 8, children: [
-                      _documentLink('Удостоверение', d['license_url']),
-                      _documentLink('Фото водителя', d['driver_photo_url']),
-                      _documentLink('Фото авто', d['car_photo_url']),
+                      _documentLink('Удостоверение', d['license_url'], driverUid: (d['uid'] ?? '').toString(), documentType: 'license'),
+                      _documentLink('Фото водителя', d['driver_photo_url'], driverUid: (d['uid'] ?? '').toString(), documentType: 'driver_photo'),
+                      _documentLink('Фото авто', d['car_photo_url'], driverUid: (d['uid'] ?? '').toString(), documentType: 'car_photo'),
                     ]),
+                    if (_documentTransferStates[(d['uid'] ?? '').toString()] != null)
+                      Padding(padding: const EdgeInsets.only(top: 6), child: TaxiText(_documentTransferStates[(d['uid'] ?? '').toString()]!)),
+                    SizedBox(width: double.infinity, child: OutlinedButton.icon(
+                      onPressed: _working || _documentTransferSessions.containsKey((d['uid'] ?? '').toString()) ? null : () => _requestDriverDocuments(d),
+                      icon: const Icon(Icons.download_for_offline),
+                      label: const TaxiLocalizedText(russian: 'ЗАПРОСИТЬ ДОКУМЕНТЫ С ТЕЛЕФОНА', kyrgyz: 'ТЕЛЕФОНДОН ДОКУМЕНТТЕРДИ СУРОО'),
+                    )),
                   ]),
                 ))),
                 _sectionTitle('Все водители', Icons.directions_car),
