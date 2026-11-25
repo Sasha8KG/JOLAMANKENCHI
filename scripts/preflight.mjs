@@ -632,25 +632,18 @@ check('Transfer protocol validates payload size and SHA-256 format', transferPro
 check('Transfer protocol supports chunk acknowledgements', transferProtocol.includes('encodeAck') && transferProtocol.includes('decodeAck'));
 check('Driver registration stores selected originals locally before cloud upload', registration.includes("uid: 'pending-registration'") && registration.includes("uid: uid, documentType: 'license'"));
 check('Driver review screen restores local documents on entry', app.includes('_restoreLocalDocuments()') && app.includes('DriverDocumentStore.find'));
-// Driver registration, document upload and dispatcher approval regression checks.
-check('Driver registration requires all three identity and vehicle photos', registration.includes('_license == null || _driverPhoto == null || _carPhoto == null'));
-check('Driver upload accepts only the three supported document kinds', registration.includes("const allowedKinds = {'license', 'driver_photo', 'car_photo'};"));
-check('Each driver photo is limited to 8 MB before upload', registration.includes('expectedSize > 8 * 1024 * 1024'));
-check('Uploaded photo bytes are checked against the original file size', registration.includes('bytes.length != expectedSize'));
-check('Driver photo upload has a 90-second timeout', registration.includes('.timeout(const Duration(seconds: 90))'));
-check('Driver upload writes to the authenticated UID folder', registration.includes("child('drivers/$uid/$kind.jpg')"));
-check('Driver upload explicitly targets the configured Firebase Storage bucket', registration.includes("instanceFor(bucket: 'gs://jol-aman-kenchi.firebasestorage.app')"));
-check('Driver upload records owner UID metadata', registration.includes("'ownerUid': uid"));
-check('Driver upload records the document type metadata', registration.includes("'documentType': kind"));
-check('Driver upload verifies the final Storage path', registration.includes("uploadedPath != 'drivers/$uid/$kind.jpg'"));
-check('Driver account identity is rechecked before upload', registration.includes('_ensureActiveAccount(uid);'));
+// Driver registration and local phone-to-phone document transfer regression checks.
+check('Driver registration photos are optional', registration.includes('whereType<XFile>()') && !registration.includes('_license == null || _driverPhoto == null || _carPhoto == null'));
+check('Driver registration does not depend on Firebase Storage', !registration.includes('firebase_storage') && !registration.includes('FirebaseStorage') && !registration.includes('_upload('));
+check('Selected registration photos are saved locally under the authenticated driver UID', registration.includes('DriverDocumentStore.persistPickedImage(uid: uid') && registration.includes('documentType:'));
+check('Optional selected photos are individually saved only when present', registration.includes('if (_license != null)') && registration.includes('if (_driverPhoto != null)') && registration.includes('if (_carPhoto != null)'));
+check('Selected local photos remain bounded to 8 MB each and 18 MB total', registration.includes('size > maxPhotoBytes') && registration.includes('totalBytes > maxTotalBytes'));
 check('Registration reuses an existing Firebase account after email-already-in-use', registration.includes("e.code != 'email-already-in-use'") && registration.includes('FirebaseService.signInWithPhone(phone: phone, password: password)'));
-check('Driver profile is saved before uploading identity documents', registration.includes('await WorkerApi.registerDriver(') && registration.indexOf('await WorkerApi.registerDriver(') < registration.indexOf("_upload(_license!, uid, 'license')"));
-check('Registration uploads the driving licence', registration.includes("_upload(_license!, uid, 'license')"));
-check('Registration uploads the driver portrait', registration.includes("_upload(_driverPhoto!, uid, 'driver_photo')"));
-check('Registration uploads the vehicle photo', registration.includes("_upload(_carPhoto!, uid, 'car_photo')"));
-check('Registration submits document paths only after all three uploads', registration.indexOf("_upload(_carPhoto!, uid, 'car_photo')") < registration.indexOf('await WorkerApi.saveDriverDocuments('));
-check('Registration signs out only after the document submission request', registration.indexOf('await WorkerApi.saveDriverDocuments(') < registration.indexOf('await FirebaseService.signOut()'));
+check('Driver profile is saved before optional local photos', registration.includes('await WorkerApi.registerDriver(') && registration.indexOf('await WorkerApi.registerDriver(') < registration.indexOf('DriverDocumentStore.persistPickedImage(uid: uid'));
+check('Registration signs out after optional local photo persistence', registration.indexOf('DriverDocumentStore.persistPickedImage(uid: uid') < registration.indexOf('await FirebaseService.signOut()'));
+check('Rejected driver resubmission saves photos locally and uses the local review endpoint', app.includes('await WorkerApi.resubmitDriverDocuments()') && app.includes('DriverDocumentStore.persistPickedImage(') && !app.includes('await WorkerApi.saveDriverDocuments('));
+check('Worker reopens rejected document review without Firebase Storage paths', worker.includes('url.pathname === "/drivers/documents/resubmit"') && worker.includes("local_transfer_request_id=NULL"));
+check('Driver approval requires a complete current local transfer', worker.includes('const hasAllDocuments = hasNewLocalDocuments;') && !worker.includes('hasLegacyStoragePaths'));
 check('Storage document names are restricted to the three approved file names', ["'license.jpg'","'driver_photo.jpg'","'car_photo.jpg'"].every(name => storageRules.includes(name)));
 check('Storage reads are limited to the document owner or dispatcher', storageRules.includes('request.auth.uid == driverUid || isDispatcher()'));
 check('Storage writes are limited to the authenticated document owner', storageRules.includes('request.auth.uid == driverUid') && storageRules.includes('allow create, update:'));
@@ -925,16 +918,11 @@ check('Driver logout stops the heartbeat before server confirmation', app.includ
 check('Driver logout retains the active-trip and initial-order-check safeguards', app.includes('if (!_assignedOrdersLoaded) {') && app.includes('if (_serverAssignedOrders.isNotEmpty) {'));
 
 
-check('Driver document uploads use the explicit Firebase project bucket', app.includes("const String taxiFirebaseStorageBucket =\n    'gs://jol-aman-kenchi.firebasestorage.app';"));
-check('Firebase Storage helper binds the configured bucket with instanceFor', app.includes('FirebaseStorage.instanceFor(bucket: taxiFirebaseStorageBucket)'));
-check('Initial driver document upload uses the explicit bucket', app.includes('final ref = taxiFirebaseStorage.ref().child(\'drivers/$uid/$kind.jpg\');'));
-check('Driver application document upload uses the explicit bucket', app.includes('final ref = taxiFirebaseStorage.ref().child(\'drivers/$uid/$kind.jpg\');'));
-check('Dispatcher document preview uses the same explicit bucket', app.includes('future: taxiFirebaseStorage.ref(path).getData(8 * 1024 * 1024)'));
-check('No driver upload path falls back to the Firebase default bucket', !app.includes('FirebaseStorage.instance.ref()'));
+check('Legacy Firebase Storage helper retains the configured project bucket for existing previews', app.includes("const String taxiFirebaseStorageBucket =\n    'gs://jol-aman-kenchi.firebasestorage.app';") && app.includes('FirebaseStorage.instanceFor(bucket: taxiFirebaseStorageBucket)'));
+check('Dispatcher legacy document preview uses the configured bucket', app.includes('future: taxiFirebaseStorage.ref(path).getData(8 * 1024 * 1024)'));
 check('No dispatcher document preview falls back to the Firebase default bucket', !app.includes('FirebaseStorage.instance.ref(path)'));
 check('Configured Firebase bucket retains the exact project identifier', app.includes('jol-aman-kenchi.firebasestorage.app'));
-check('Firebase Storage upload helper is available to driver registration', app.includes('FirebaseStorage get taxiFirebaseStorage'));
-check('Firebase Storage reads and writes share one configured bucket helper', app.split('taxiFirebaseStorage.ref').length >= 4);
+check('Firebase Storage reads share one configured bucket helper', app.split('taxiFirebaseStorage.ref').length >= 2);
 
 
 check('Worker stores document transfer requests as metadata only', worker.includes('CREATE TABLE IF NOT EXISTS driver_document_transfer_requests') && worker.includes('CREATE TABLE IF NOT EXISTS driver_document_receipts'));
