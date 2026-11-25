@@ -282,7 +282,7 @@ class DriverDocumentTransferLiveKit {
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;
-    if (isDispatcher) _listener.dispose();
+    _listener.dispose();
     await _room.disconnect();
     await _room.dispose();
   }
