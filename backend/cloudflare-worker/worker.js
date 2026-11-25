@@ -637,25 +637,10 @@ export default {
         const exists = await env.DB.prepare("SELECT uid FROM drivers WHERE uid=?").bind(uid).first();
         if (!exists) return response({ status: "error", message: "Водитель не найден" }, 404);
         let docs = await env.DB.prepare("SELECT license_url,driver_photo_url,car_photo_url,review_status,local_transfer_request_id FROM driver_documents WHERE driver_uid=?").bind(uid).first();
-        // Verify the exact completed local transfer linked to this submission.
-        // Old receipt rows from earlier requests can never satisfy this check.
-        let hasNewLocalDocuments = false;
-        const transferRequestId = String(docs?.local_transfer_request_id || "");
-        if (transferRequestId) {
-          const transfer = await env.DB.prepare(`SELECT q.request_id,q.status,
-            COUNT(DISTINCT r.document_type) AS document_count
-            FROM driver_document_transfer_requests q
-            LEFT JOIN driver_document_receipts r
-              ON r.request_id=q.request_id AND r.driver_uid=q.driver_uid
-            WHERE q.request_id=? AND q.driver_uid=?
-            GROUP BY q.request_id,q.status`).bind(transferRequestId, uid).first();
-          hasNewLocalDocuments = transfer?.status === "received" &&
-            Number(transfer?.document_count || 0) === 3;
-        }
-        const hasAllDocuments = hasNewLocalDocuments;
-        if (decision === "approved" && !hasAllDocuments)
-          return response({ status: "error", message: "Сервер пока не подтвердил получение всех трёх документов. Обновите заявку и повторите передачу с телефона водителя." }, 409);
-        if (!docs && decision === "rejected") {
+        // Photos and documents are optional at registration. The dispatcher is
+        // the authority for approval; a server-side file receipt is not a gate.
+        // Create an empty pending review row when the driver submitted no files.
+        if (!docs) {
           await env.DB.prepare(`INSERT OR IGNORE INTO driver_documents
             (driver_uid,license_url,driver_photo_url,car_photo_url,submitted_at,review_status,rejection_reason,reviewed_at,reviewed_by)
             VALUES (?,'','','',unixepoch(),'pending',NULL,NULL,NULL)`).bind(uid).run();
