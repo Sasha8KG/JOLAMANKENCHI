@@ -75,6 +75,18 @@ void main(){
       expect(saved.sha256Hex,DriverDocumentTransferProtocol.sha256Of(bytes));
       expect(saved.toReceipt()['type'],'license');
     });
+    test('replaces an existing document without leaving temporary files',()async{
+      final first=Uint8List.fromList([1,2,3,4]);
+      final second=Uint8List.fromList([9,8,7,6,5]);
+      final original=await DriverDocumentStore.persistBytes(root:root,uid:'driver_UID_123',
+        documentType:'license',bytes:first);
+      final replacement=await DriverDocumentStore.persistBytes(root:root,uid:'driver_UID_123',
+        documentType:'license',bytes:second);
+      expect(replacement.path,original.path);
+      expect(await File(replacement.path).readAsBytes(),orderedEquals(second));
+      final files=await Directory(root.path).list(recursive:true).toList();
+      expect(files.whereType<File>().where((file)=>file.path.endsWith('.tmp')||file.path.endsWith('.bak')),isEmpty);
+    });
     test('rejects unsafe uid, unknown type, empty and oversized file',(){
       expect(()=>DriverDocumentStore.persistBytes(root:root,uid:'../bad',
         documentType:'license',bytes:Uint8List.fromList([1])),throwsFormatException);
