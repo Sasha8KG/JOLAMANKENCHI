@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
@@ -473,12 +472,12 @@ class BrandedSplashGate extends StatefulWidget {
 
 class _BrandedSplashGateState extends State<BrandedSplashGate> {
   Timer? _navigationTimer;
-  late final Future<String> _logoData;
+  late final Future<ByteData> _logoData;
 
   @override
   void initState() {
     super.initState();
-    _logoData = rootBundle.loadString('assets/jak_splash.jpg.b64');
+    _logoData = rootBundle.load('assets/jak_splash.webp');
     _navigationTimer = Timer(const Duration(milliseconds: 4000), () {
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
@@ -500,7 +499,7 @@ class _BrandedSplashGateState extends State<BrandedSplashGate> {
       backgroundColor: const Color(0xFFFFD400),
       body: SafeArea(
         child: Center(
-          child: FutureBuilder<String>(
+          child: FutureBuilder<ByteData>(
             future: _logoData,
             builder: (context, snapshot) {
               if (snapshot.connectionState != ConnectionState.done) {
@@ -517,7 +516,7 @@ class _BrandedSplashGateState extends State<BrandedSplashGate> {
                 label: 'ЖОЛ АМАН КЕНЧИ Такси',
                 image: true,
                 child: Image.memory(
-                  base64Decode(snapshot.data!.trim()),
+                  snapshot.data!.buffer.asUint8List(),
                   width: side,
                   height: side,
                   fit: BoxFit.contain,
