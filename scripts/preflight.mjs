@@ -728,14 +728,14 @@ check('GPS tests cover sub-second future timestamps and exact custom age boundar
 
 
 check('Branded animated splash is the first app screen', app.includes('home: const BrandedSplashGate()'));
-check('Branded splash loads the user-provided taxi emblem asset', app.includes("rootBundle.load('assets/jak_splash.webp')") && pubspec.includes('assets/jak_splash.webp') && read('testapp/assets/jak_splash.webp').length > 1000);
+check('Branded splash loads the scalable high-resolution SVG artwork', app.includes("'assets/jak_splash.svg'") && pubspec.includes('assets/jak_splash.svg') && pubspec.includes('flutter_svg:') && read('testapp/assets/jak_splash.svg').includes('ЖОЛ АМАН КЕНЧИ'));
 check('Branded splash stays visible for a bounded interval before the existing session gate', app.includes('Timer(const Duration(milliseconds: 4200)') && app.includes('const SessionGate()'));
 check('Branded splash animates its logo entrance and fades into the app', app.includes('SingleTickerProviderStateMixin') && app.includes('FadeTransition(') && app.includes('ScaleTransition(') && app.includes('transitionDuration: const Duration(milliseconds: 450)'));
 check('Branded splash cancels its navigation timer on dispose', app.includes('_navigationTimer?.cancel();'));
 check('Branded splash guards navigation after widget disposal', app.includes('if (!mounted) return;'));
 check('Branded splash exposes an accessible semantic brand label', app.includes("label: 'ЖОЛ АМАН КЕНЧИ Такси'"));
 check('Branded splash uses the yellow brand background without a blue frame', app.includes('backgroundColor: const Color(0xFFFFD400)') && app.includes('fit: BoxFit.contain') && !app.includes('Border.all(color: gold, width: 4)'));
-check('Branded splash has a readable fallback if the emblem asset cannot load', app.includes('snapshot.hasError || !snapshot.hasData') && app.includes('ЖОЛ АМАН КЕНЧИ · Такси'));
+check('Branded splash renders its vector asset without raster upscaling', app.includes('SvgPicture.asset(') && app.includes('BoxFit.contain'));
 check('Driver and dispatcher sections use the requested green header palette', app.includes('backgroundColor: const Color(0xFF087A42)') && app.includes('foregroundColor: Colors.white'));
 check('Passenger order action uses a gold button with dark text', app.includes('backgroundColor: const Color(0xFFFFD400)') && app.includes('foregroundColor: const Color(0xFF171717)'));
 check('Global app bars use the gold and black brand palette', app.includes('backgroundColor: Color(0xFFFFD400)') && app.includes('foregroundColor: Color(0xFF171717)'));
