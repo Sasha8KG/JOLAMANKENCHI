@@ -54,6 +54,31 @@ void main(){
       final receiver=DriverDocumentTransferAssembler()..add(chunks.first);
       expect(receiver.assemble,throwsFormatException);
     });
+    test('assembler rejects malformed public chunk objects before storing bytes',(){
+      final bytes=Uint8List.fromList(List<int>.generate(10240,(i)=>i%239));
+      final valid=DriverDocumentTransferProtocol.decodeChunk(
+        DriverDocumentTransferProtocol.encodeChunks(requestId:id,driverUid:uid,
+          documentType:'license',bytes:bytes).single);
+      final short=DocumentTransferChunk(requestId:valid.requestId,driverUid:valid.driverUid,
+        documentType:valid.documentType,index:valid.index,count:valid.count,total:valid.total,
+        digest:valid.digest,payload:Uint8List.fromList([1,2,3]));
+      expect(()=>DriverDocumentTransferAssembler().add(short),throwsFormatException);
+      final invalidCount=DocumentTransferChunk(requestId:valid.requestId,driverUid:valid.driverUid,
+        documentType:valid.documentType,index:valid.index,count:valid.count+1,total:valid.total,
+        digest:valid.digest,payload:valid.payload);
+      expect(()=>DriverDocumentTransferAssembler().add(invalidCount),throwsFormatException);
+    });
+    test('assembler detects corrupted complete payload by SHA-256',(){
+      final bytes=Uint8List.fromList(List<int>.generate(10240,(i)=>i%239));
+      final valid=DriverDocumentTransferProtocol.decodeChunk(
+        DriverDocumentTransferProtocol.encodeChunks(requestId:id,driverUid:uid,
+          documentType:'license',bytes:bytes).single);
+      final altered=DocumentTransferChunk(requestId:valid.requestId,driverUid:valid.driverUid,
+        documentType:valid.documentType,index:valid.index,count:valid.count,total:valid.total,
+        digest:List<String>.filled(64,'0').join(),payload:valid.payload);
+      final receiver=DriverDocumentTransferAssembler()..add(altered);
+      expect(receiver.assemble,throwsFormatException);
+    });
     test('acknowledgement retains request, document and chunk sequence',(){
       final packet=DriverDocumentTransferProtocol.encodeAck(requestId:id,driverUid:uid,
         documentType:'driver_photo',index:17);
