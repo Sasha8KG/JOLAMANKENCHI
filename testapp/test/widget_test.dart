@@ -46,13 +46,18 @@ void main() {
   });
 
   group('Branded splash screen', () {
-    testWidgets('shows the approved brand and Kyrgyz slogan', (tester) async {
+    testWidgets('shows the supplied taxi emblem on a yellow background', (tester) async {
       await tester.pumpWidget(const MaterialApp(home: BrandedSplashGate()));
-      expect(find.text('ЖОЛ АМАН КЕНЧИ'), findsOneWidget);
-      expect(find.text('Такси'), findsOneWidget);
-      expect(find.text('Ылдам, коопсуз, ишенимдүү'), findsOneWidget);
-      expect(find.text('Жолуңуз ар дайым шыдыр болсун!'), findsOneWidget);
-      expect(find.text('СҮЛҮКТҮ  •  ЛЕЙЛЕК  •  БАТКЕН'), findsOneWidget);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      final scaffold = tester.widget<Scaffold>(find.byType(Scaffold).first);
+      expect(scaffold.backgroundColor, const Color(0xFFFFD400));
+      expect(find.byType(Image), findsOneWidget);
+      final image = tester.widget<Image>(find.byType(Image));
+      expect(image.fit, BoxFit.contain);
+      expect(find.byWidgetPredicate((widget) =>
+          widget is Semantics && widget.properties.label == 'ЖОЛ АМАН КЕНЧИ Такси'),
+          findsOneWidget);
       await tester.pump(const Duration(milliseconds: 100));
     });
   });

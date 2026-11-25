@@ -37,18 +37,31 @@ class DriverDocumentStore {
     final target=File(dir.path+sep+documentType+'.image');
     final temp=File(dir.path+sep+'.'+documentType+'.'+DateTime.now().microsecondsSinceEpoch.toString()+'.tmp');
     final digest=sha256.convert(bytes).toString();
+    final backup=File(dir.path+sep+'.'+documentType+'.'+DateTime.now().microsecondsSinceEpoch.toString()+'.bak');
+    var backedUp=false;
     try {
       await temp.writeAsBytes(bytes,flush:true);
       final saved=await temp.readAsBytes();
       if(saved.length!=bytes.length || sha256.convert(saved).toString()!=digest) {
         throw const FileSystemException('Не удалось проверить сохранённую фотографию.');
       }
-      if(await target.exists()) await target.delete();
-      final result=await temp.rename(target.path);
-      return StoredDriverDocument(uid:uid,documentType:documentType,path:result.path,
-        size:bytes.length,sha256Hex:digest);
+      if(await target.exists()) { await target.rename(backup.path); backedUp=true; }
+      try {
+        final result=await temp.rename(target.path);
+        if(backedUp && await backup.exists()) await backup.delete();
+        return StoredDriverDocument(uid:uid,documentType:documentType,path:result.path,
+          size:bytes.length,sha256Hex:digest);
+      } catch (_) {
+        if(backedUp && await backup.exists() && !await target.exists()) {
+          await backup.rename(target.path);
+        }
+        rethrow;
+      }
     } catch (_) {
       if(await temp.exists()) await temp.delete();
+      if(backedUp && await backup.exists() && !await target.exists()) {
+        await backup.rename(target.path);
+      }
       rethrow;
     }
   }
