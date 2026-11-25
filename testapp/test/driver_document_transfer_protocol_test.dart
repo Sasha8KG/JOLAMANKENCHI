@@ -33,6 +33,27 @@ void main(){
         DriverDocumentTransferProtocol.maxDocumentBytes+1),throwsFormatException);
       expect(()=>DriverDocumentTransferProtocol.decodeChunk([123,34]),throwsFormatException);
     });
+
+    test('reassembles chunks received out of order and tolerates identical retry',(){
+      final bytes=Uint8List.fromList(List<int>.generate(25001,(i)=>i%239));
+      final chunks=DriverDocumentTransferProtocol.encodeChunks(requestId:id,driverUid:uid,
+        documentType:'license',bytes:bytes).map(DriverDocumentTransferProtocol.decodeChunk).toList();
+      final receiver=DriverDocumentTransferAssembler();
+      expect(receiver.add(chunks[2]),isTrue);
+      expect(receiver.add(chunks[0]),isTrue);
+      expect(receiver.add(chunks[0]),isFalse);
+      expect(receiver.isComplete,isFalse);
+      expect(receiver.add(chunks[1]),isTrue);
+      expect(receiver.isComplete,isTrue);
+      expect(receiver.assemble(),orderedEquals(bytes));
+    });
+    test('does not assemble before all parts arrive',(){
+      final bytes=Uint8List.fromList(List<int>.generate(15000,(i)=>i%239));
+      final chunks=DriverDocumentTransferProtocol.encodeChunks(requestId:id,driverUid:uid,
+        documentType:'driver_photo',bytes:bytes).map(DriverDocumentTransferProtocol.decodeChunk).toList();
+      final receiver=DriverDocumentTransferAssembler()..add(chunks.first);
+      expect(receiver.assemble,throwsFormatException);
+    });
     test('acknowledgement retains request, document and chunk sequence',(){
       final packet=DriverDocumentTransferProtocol.encodeAck(requestId:id,driverUid:uid,
         documentType:'driver_photo',index:17);
