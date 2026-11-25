@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -469,59 +471,15 @@ class BrandedSplashGate extends StatefulWidget {
   State<BrandedSplashGate> createState() => _BrandedSplashGateState();
 }
 
-class _BrandedSplashGateState extends State<BrandedSplashGate>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-  late final Animation<double> _brandFade;
-  late final Animation<double> _carScale;
-  late final Animation<Offset> _carSlide;
-  late final Animation<double> _sloganFade;
+class _BrandedSplashGateState extends State<BrandedSplashGate> {
   Timer? _navigationTimer;
+  late final Future<String> _logoData;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 3800),
-    );
-    // The emblem appears first, holds briefly, then fades away as the
-    // Kyrgyz slogan comes forward. This is a real cross-fade.
-    _brandFade = TweenSequence<double>([
-      TweenSequenceItem<double>(
-        tween: Tween<double>(begin: 0, end: 1)
-            .chain(CurveTween(curve: Curves.easeOut)),
-        weight: 35,
-      ),
-      TweenSequenceItem<double>(tween: ConstantTween<double>(1), weight: 20),
-      TweenSequenceItem<double>(
-        tween: Tween<double>(begin: 1, end: 0)
-            .chain(CurveTween(curve: Curves.easeInOut)),
-        weight: 25,
-      ),
-      TweenSequenceItem<double>(tween: ConstantTween<double>(0), weight: 20),
-    ]).animate(_controller);
-    _carScale = Tween<double>(begin: 0.72, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.02, 0.48, curve: Curves.easeOutBack),
-      ),
-    );
-    _carSlide = Tween<Offset>(
-      begin: const Offset(-0.16, 0.06),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.02, 0.48, curve: Curves.easeOutCubic),
-      ),
-    );
-    _sloganFade = CurvedAnimation(
-      parent: _controller,
-      curve: const Interval(0.54, 0.91, curve: Curves.easeInOut),
-    );
-    _controller.forward();
-    _navigationTimer = Timer(const Duration(milliseconds: 4700), () {
+    _logoData = rootBundle.loadString('assets/jak_splash.jpg.b64');
+    _navigationTimer = Timer(const Duration(milliseconds: 4000), () {
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute<void>(builder: (_) => const SessionGate()),
@@ -532,149 +490,49 @@ class _BrandedSplashGateState extends State<BrandedSplashGate>
   @override
   void dispose() {
     _navigationTimer?.cancel();
-    _controller.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    const ink = Color(0xFF071A32);
-    const gold = Color(0xFFFFD400);
+    final side = MediaQuery.of(context).size.shortestSide * 0.92;
     return Scaffold(
-      backgroundColor: ink,
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Color(0xFF0754A6), Color(0xFF087DE0), Color(0xFF061A35)],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            stops: [0.0, 0.48, 1.0],
-          ),
-        ),
-        child: SafeArea(
-          child: Center(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 28),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  FadeTransition(
-                    opacity: _brandFade,
-                    child: SlideTransition(
-                      position: _carSlide,
-                      child: ScaleTransition(
-                        scale: _carScale,
-                        child: Semantics(
-                        label: 'Жол Аман Кенчи Такси',
-                        child: Container(
-                          width: 244,
-                          padding: const EdgeInsets.fromLTRB(18, 22, 18, 20),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF080B10),
-                            borderRadius: BorderRadius.circular(38),
-                            border: Border.all(color: gold, width: 4),
-                            boxShadow: const [
-                              BoxShadow(
-                                color: Color(0xAA000000),
-                                blurRadius: 30,
-                                offset: Offset(0, 14),
-                              ),
-                              BoxShadow(
-                                color: Color(0x66FFD400),
-                                blurRadius: 28,
-                                spreadRadius: 2,
-                              ),
-                            ],
-                          ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const TaxiText('❧  ✥  ❧',
-                                style: TextStyle(color: gold, fontSize: 25, fontWeight: FontWeight.w900)),
-                              const SizedBox(height: 12),
-                              Container(
-                                width: 150,
-                                height: 112,
-                                decoration: BoxDecoration(
-                                  color: gold,
-                                  borderRadius: BorderRadius.circular(28),
-                                  border: Border.all(color: const Color(0xFFFFF1A8), width: 3),
-                                ),
-                                child: const Icon(Icons.local_taxi_rounded, size: 88, color: ink),
-                              ),
-                              const SizedBox(height: 17),
-                              const TaxiText(
-                                'ЖОЛ АМАН КЕНЧИ',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 25,
-                                  height: 1.0,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              const TaxiText(
-                                'Такси',
-                                style: TextStyle(color: gold, fontSize: 22, fontWeight: FontWeight.w900),
-                              ),
-                              const SizedBox(height: 13),
-                              Container(height: 3, decoration: const BoxDecoration(
-                                gradient: LinearGradient(colors: [Colors.transparent, gold, Colors.transparent]),
-                              )),
-                            ],
-                          ),
-                        ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 38),
-                  FadeTransition(
-                    opacity: _sloganFade,
-                    child: Column(
-                      children: [
-                        const TaxiText(
-                          'Ылдам, коопсуз, ишенимдүү',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 25,
-                            height: 1.15,
-                            fontWeight: FontWeight.w900,
-                            fontStyle: FontStyle.italic,
-                            shadows: [Shadow(color: Colors.black54, blurRadius: 12, offset: Offset(0, 3))],
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                        Container(
-                          width: 190,
-                          height: 4,
-                          decoration: BoxDecoration(color: gold, borderRadius: BorderRadius.circular(8)),
-                        ),
-                        const SizedBox(height: 16),
-                        const TaxiText(
-                          'Жолуңуз ар дайым шыдыр болсун!',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700),
-                        ),
-                        const SizedBox(height: 12),
-                        const TaxiText(
-                          'СҮЛҮКТҮ  •  ЛЕЙЛЕК  •  БАТКЕН',
-                          style: TextStyle(color: gold, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.2),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
+      backgroundColor: const Color(0xFFFFD400),
+      body: SafeArea(
+        child: Center(
+          child: FutureBuilder<String>(
+            future: _logoData,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState != ConnectionState.done) {
+                return const CircularProgressIndicator(color: Colors.black);
+              }
+              if (snapshot.hasError || !snapshot.hasData) {
+                return const TaxiText(
+                  'ЖОЛ АМАН КЕНЧИ · Такси',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: Colors.black),
+                );
+              }
+              return Semantics(
+                label: 'ЖОЛ АМАН КЕНЧИ Такси',
+                image: true,
+                child: Image.memory(
+                  base64Decode(snapshot.data!.trim()),
+                  width: side,
+                  height: side,
+                  fit: BoxFit.contain,
+                  gaplessPlayback: true,
+                  filterQuality: FilterQuality.high,
+                ),
+              );
+            },
           ),
         ),
       ),
     );
   }
 }
+
 class _TaxiCheckSquare extends StatelessWidget {
   const _TaxiCheckSquare({this.dark = false});
   final bool dark;
@@ -5025,9 +4883,10 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
                       _documentLink('Фото водителя', d['driver_photo_url'], driverUid: (d['uid'] ?? '').toString(), documentType: 'driver_photo'),
                       _documentLink('Фото авто', d['car_photo_url'], driverUid: (d['uid'] ?? '').toString(), documentType: 'car_photo'),
                     ]),
-                    if ((d['license_url'] ?? '').toString().isEmpty ||
-                        (d['driver_photo_url'] ?? '').toString().isEmpty ||
-                        (d['car_photo_url'] ?? '').toString().isEmpty)
+                    if ((d['local_transfer_request_id'] ?? '').toString().isEmpty &&
+                        ((d['license_url'] ?? '').toString().isEmpty ||
+                         (d['driver_photo_url'] ?? '').toString().isEmpty ||
+                         (d['car_photo_url'] ?? '').toString().isEmpty))
                       const Padding(
                         padding: EdgeInsets.only(top: 6),
                         child: TaxiLocalizedText(russian: 'Не все документы загружены. Проверьте заявку перед одобрением.', kyrgyz: 'Бардык документтер жүктөлгөн эмес. Бекитүүдөн мурун арызды текшериңиз.',
