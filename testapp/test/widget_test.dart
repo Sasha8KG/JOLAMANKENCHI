@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:sulyukta_taxi/main.dart' show BrandedSplashGate, ClientAuthScreen, RoleSelectionScreen, TaxiLanguage;
 import 'package:latlong2/latlong.dart';
 import 'package:sulyukta_taxi/services/firebase_service.dart';
@@ -52,8 +53,8 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
       final scaffold = tester.widget<Scaffold>(find.byType(Scaffold).first);
       expect(scaffold.backgroundColor, const Color(0xFFFFD400));
-      expect(find.byType(Image), findsOneWidget);
-      final image = tester.widget<Image>(find.byType(Image));
+      expect(find.byType(SvgPicture), findsOneWidget);
+      final image = tester.widget<SvgPicture>(find.byType(SvgPicture));
       expect(image.fit, BoxFit.contain);
       expect(find.byWidgetPredicate((widget) =>
           widget is Semantics && widget.properties.label == 'ЖОЛ АМАН КЕНЧИ Такси'),
