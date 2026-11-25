@@ -211,6 +211,23 @@ class DriverDocumentTransferLiveKit {
     }
   }
 
+  /// Retries saving complete documents if a previous local disk write failed.
+  /// This is called by the dispatcher's monitor; no receipt is sent until all
+  /// three files have actually been persisted and hashed on this device.
+  Future<void> retryPendingPersistence() async {
+    _ensureActive();
+    if (!isDispatcher) return;
+    for (final entry in _assemblers.entries.toList(growable: false)) {
+      final type = entry.key;
+      final assembler = entry.value;
+      if (!assembler.isComplete || _received.containsKey(type) ||
+          !_persisting.add(type)) {
+        continue;
+      }
+      await _persistCompletedDocument(type, assembler);
+    }
+  }
+
   /// Retries the server receipt after a temporary network failure.
   Future<void> retryConfirmation() => _confirmReceipt();
 

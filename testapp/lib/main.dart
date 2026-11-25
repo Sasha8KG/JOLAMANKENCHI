@@ -4227,6 +4227,7 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
   Timer? _documentTransferMonitor;
   final Map<String, DriverDocumentTransferLiveKit> _documentTransferSessions = {};
   final Map<String, String> _documentTransferStates = {};
+  bool _documentTransferMonitorRunning = false;
 
   @override
   void initState() {
@@ -4270,11 +4271,16 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
   }
 
   Future<void> _monitorDocumentTransfers() async {
-    if (!mounted || _documentTransferSessions.isEmpty) return;
-    for (final entry in List<MapEntry<String, DriverDocumentTransferLiveKit>>.from(_documentTransferSessions.entries)) {
+    if (!mounted || _documentTransferSessions.isEmpty || _documentTransferMonitorRunning) return;
+    _documentTransferMonitorRunning = true;
+    try {
+      for (final entry in List<MapEntry<String, DriverDocumentTransferLiveKit>>.from(_documentTransferSessions.entries)) {
       final uid = entry.key, session = entry.value;
       if (!mounted || !identical(_documentTransferSessions[uid], session)) continue;
       if (!session.isComplete) {
+        // Retry a completed chunk assembly when an earlier local file write
+        // failed; otherwise no new network packet may arrive to trigger it.
+        await session.retryPendingPersistence();
         final status = 'Получено фотографий: ${session.receivedDocumentCount} из 3';
         if (_documentTransferStates[uid] != status) setState(() => _documentTransferStates[uid] = status);
         continue;
@@ -4298,6 +4304,9 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
       _documentTransferSessions.remove(uid);
       if (mounted) setState(() => _documentTransferStates[uid] = 'Все 3 документа получены и сохранены на телефоне диспетчера');
       await session.dispose();
+      }
+    } finally {
+      _documentTransferMonitorRunning = false;
     }
   }
 
