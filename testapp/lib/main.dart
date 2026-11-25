@@ -465,18 +465,63 @@ class _SessionGateState extends State<SessionGate> {
 
 class BrandedSplashGate extends StatefulWidget {
   const BrandedSplashGate({super.key});
-
   @override
   State<BrandedSplashGate> createState() => _BrandedSplashGateState();
 }
 
-class _BrandedSplashGateState extends State<BrandedSplashGate> {
+class _BrandedSplashGateState extends State<BrandedSplashGate>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _brandFade;
+  late final Animation<double> _carScale;
+  late final Animation<Offset> _carSlide;
+  late final Animation<double> _sloganFade;
   Timer? _navigationTimer;
 
   @override
   void initState() {
     super.initState();
-    _navigationTimer = Timer(const Duration(milliseconds: 2600), () {
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 3800),
+    );
+    // The emblem appears first, holds briefly, then fades away as the
+    // Kyrgyz slogan comes forward. This is a real cross-fade.
+    _brandFade = TweenSequence<double>([
+      TweenSequenceItem<double>(
+        tween: Tween<double>(begin: 0, end: 1)
+            .chain(CurveTween(curve: Curves.easeOut)),
+        weight: 35,
+      ),
+      TweenSequenceItem<double>(tween: ConstantTween<double>(1), weight: 20),
+      TweenSequenceItem<double>(
+        tween: Tween<double>(begin: 1, end: 0)
+            .chain(CurveTween(curve: Curves.easeInOut)),
+        weight: 25,
+      ),
+      TweenSequenceItem<double>(tween: ConstantTween<double>(0), weight: 20),
+    ]).animate(_controller);
+    _carScale = Tween<double>(begin: 0.72, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: const Interval(0.02, 0.48, curve: Curves.easeOutBack),
+      ),
+    );
+    _carSlide = Tween<Offset>(
+      begin: const Offset(-0.16, 0.06),
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: const Interval(0.02, 0.48, curve: Curves.easeOutCubic),
+      ),
+    );
+    _sloganFade = CurvedAnimation(
+      parent: _controller,
+      curve: const Interval(0.54, 0.91, curve: Curves.easeInOut),
+    );
+    _controller.forward();
+    _navigationTimer = Timer(const Duration(milliseconds: 4700), () {
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute<void>(builder: (_) => const SessionGate()),
@@ -487,24 +532,142 @@ class _BrandedSplashGateState extends State<BrandedSplashGate> {
   @override
   void dispose() {
     _navigationTimer?.cancel();
+    _controller.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    const ink = Color(0xFF071A32);
+    const gold = Color(0xFFFFD400);
     return Scaffold(
-      backgroundColor: const Color(0xFFFFD400),
-      body: SizedBox.expand(
-        child: Center(
-          child: Image.asset(
-            'assets/jak_splash.png',
-            width: MediaQuery.of(context).size.shortestSide.clamp(240.0, 520.0),
-            height: MediaQuery.of(context).size.shortestSide.clamp(240.0, 520.0),
-            fit: BoxFit.contain,
-            errorBuilder: (_, __, ___) => const TaxiText(
-              'ЖОЛ АМАН КЕНЧИ · Такси',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900),
+      backgroundColor: ink,
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFF0754A6), Color(0xFF087DE0), Color(0xFF061A35)],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            stops: [0.0, 0.48, 1.0],
+          ),
+        ),
+        child: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 28),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  FadeTransition(
+                    opacity: _brandFade,
+                    child: SlideTransition(
+                      position: _carSlide,
+                      child: ScaleTransition(
+                        scale: _carScale,
+                        child: Semantics(
+                        label: 'Жол Аман Кенчи Такси',
+                        child: Container(
+                          width: 244,
+                          padding: const EdgeInsets.fromLTRB(18, 22, 18, 20),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF080B10),
+                            borderRadius: BorderRadius.circular(38),
+                            border: Border.all(color: gold, width: 4),
+                            boxShadow: const [
+                              BoxShadow(
+                                color: Color(0xAA000000),
+                                blurRadius: 30,
+                                offset: Offset(0, 14),
+                              ),
+                              BoxShadow(
+                                color: Color(0x66FFD400),
+                                blurRadius: 28,
+                                spreadRadius: 2,
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const TaxiText('❧  ✥  ❧',
+                                style: TextStyle(color: gold, fontSize: 25, fontWeight: FontWeight.w900)),
+                              const SizedBox(height: 12),
+                              Container(
+                                width: 150,
+                                height: 112,
+                                decoration: BoxDecoration(
+                                  color: gold,
+                                  borderRadius: BorderRadius.circular(28),
+                                  border: Border.all(color: const Color(0xFFFFF1A8), width: 3),
+                                ),
+                                child: const Icon(Icons.local_taxi_rounded, size: 88, color: ink),
+                              ),
+                              const SizedBox(height: 17),
+                              const TaxiText(
+                                'ЖОЛ АМАН КЕНЧИ',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 25,
+                                  height: 1.0,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              const TaxiText(
+                                'Такси',
+                                style: TextStyle(color: gold, fontSize: 22, fontWeight: FontWeight.w900),
+                              ),
+                              const SizedBox(height: 13),
+                              Container(height: 3, decoration: const BoxDecoration(
+                                gradient: LinearGradient(colors: [Colors.transparent, gold, Colors.transparent]),
+                              )),
+                            ],
+                          ),
+                        ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 38),
+                  FadeTransition(
+                    opacity: _sloganFade,
+                    child: Column(
+                      children: [
+                        const TaxiText(
+                          'Ылдам, коопсуз, ишенимдүү',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 25,
+                            height: 1.15,
+                            fontWeight: FontWeight.w900,
+                            fontStyle: FontStyle.italic,
+                            shadows: [Shadow(color: Colors.black54, blurRadius: 12, offset: Offset(0, 3))],
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        Container(
+                          width: 190,
+                          height: 4,
+                          decoration: BoxDecoration(color: gold, borderRadius: BorderRadius.circular(8)),
+                        ),
+                        const SizedBox(height: 16),
+                        const TaxiText(
+                          'Жолуңуз ар дайым шыдыр болсун!',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 12),
+                        const TaxiText(
+                          'СҮЛҮКТҮ  •  ЛЕЙЛЕК  •  БАТКЕН',
+                          style: TextStyle(color: gold, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.2),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -512,7 +675,6 @@ class _BrandedSplashGateState extends State<BrandedSplashGate> {
     );
   }
 }
-
 class _TaxiCheckSquare extends StatelessWidget {
   const _TaxiCheckSquare({this.dark = false});
   final bool dark;
@@ -2702,7 +2864,183 @@ class DriverReviewStatusScreen extends StatefulWidget {
 }
 
 class _DriverReviewStatusScreenState extends State<DriverReviewStatusScreen> {
+  XFile? _license;
+  XFile? _driverPhoto;
+  XFile? _carPhoto;
   bool _busy = false;
+  final ImagePicker _picker = ImagePicker();
+  Timer? _documentRequestTimer;
+  bool _documentRequestCheckRunning = false;
+  String? _documentTransferMessage;
+  String? _lastHandledRequestId;
+  DateTime? _lastDocumentSendAt;
+  DriverDocumentTransferLiveKit? _activeDocumentTransfer;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_startDocumentRequestPolling());
+  }
+
+  Future<void> _startDocumentRequestPolling() async {
+    await _restoreLocalDocuments();
+    if (!mounted || (widget.profile['review_status'] ?? 'pending').toString() == 'rejected') return;
+    await _checkDocumentRequest();
+    _documentRequestTimer = Timer.periodic(const Duration(seconds: 6), (_) => unawaited(_checkDocumentRequest()));
+  }
+
+  Future<void> _checkDocumentRequest() async {
+    if (!mounted || _documentRequestCheckRunning || _busy) return;
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null || uid.isEmpty) return;
+    _documentRequestCheckRunning = true;
+    try {
+      final data = await WorkerApi.driverDocumentRequest();
+      final raw = data['request'];
+      if (raw is! Map) {
+        final previous = _activeDocumentTransfer;
+        _activeDocumentTransfer = null;
+        _lastHandledRequestId = null;
+        _lastDocumentSendAt = null;
+        if (previous != null) await previous.dispose();
+        return;
+      }
+      final request = Map<String, dynamic>.from(raw);
+      final requestId = (request['request_id'] ?? '').toString().trim();
+      final status = (request['status'] ?? '').toString();
+      if (requestId.isEmpty || !{'requested', 'transferring'}.contains(status)) return;
+      if (_lastHandledRequestId == requestId && _activeDocumentTransfer != null) {
+        final lastSent = _lastDocumentSendAt;
+        if (lastSent != null && DateTime.now().difference(lastSent) < const Duration(seconds: 20)) return;
+        // Re-send the same immutable local files periodically. Reliable
+        // delivery covers a single connection, while this retry also recovers
+        // packets lost during a temporary disconnect/reconnect.
+        await _activeDocumentTransfer!.sendDriverDocuments();
+        _lastDocumentSendAt = DateTime.now();
+        if (mounted) setState(() => _documentTransferMessage = 'Повторно отправляем документы для проверки получения…');
+        return;
+      }
+      final docs = await Future.wait([
+        DriverDocumentStore.find(uid: uid, documentType: 'license'),
+        DriverDocumentStore.find(uid: uid, documentType: 'driver_photo'),
+        DriverDocumentStore.find(uid: uid, documentType: 'car_photo'),
+      ]);
+      if (docs.any((file) => file == null)) {
+        if (mounted) setState(() => _documentTransferMessage = 'Диспетчер запросил документы, но на телефоне не хватает одной или нескольких фотографий. Выберите недостающие фото повторно.');
+        return;
+      }
+      final session = await DriverDocumentTransferLiveKit.connect(requestId: requestId, driverUid: uid, isDispatcher: false);
+      if (!mounted) { await session.dispose(); return; }
+      _activeDocumentTransfer = session;
+      _lastHandledRequestId = requestId;
+      setState(() => _documentTransferMessage = 'Диспетчер запросил документы. Отправляем три фотографии…');
+      await session.sendDriverDocuments();
+      _lastDocumentSendAt = DateTime.now();
+      if (mounted) setState(() => _documentTransferMessage = 'Фотографии отправлены по защищённому каналу. Ожидаем подтверждения диспетчера…');
+    } catch (error) {
+      final failed = _activeDocumentTransfer;
+      _activeDocumentTransfer = null;
+      if (failed != null) await failed.dispose();
+      if (mounted) setState(() => _documentTransferMessage = 'Не удалось передать документы: $error. Повторим автоматически.');
+    } finally {
+      _documentRequestCheckRunning = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    _documentRequestTimer?.cancel();
+    final session = _activeDocumentTransfer;
+    if (session != null) unawaited(session.dispose());
+    super.dispose();
+  }
+
+  Future<void> _restoreLocalDocuments() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null || uid.isEmpty) return;
+    try {
+      final license = await DriverDocumentStore.find(uid: uid, documentType: 'license');
+      final driverPhoto = await DriverDocumentStore.find(uid: uid, documentType: 'driver_photo');
+      final carPhoto = await DriverDocumentStore.find(uid: uid, documentType: 'car_photo');
+      if (!mounted) return;
+      setState(() {
+        if (license != null) _license = XFile(license.path);
+        if (driverPhoto != null) _driverPhoto = XFile(driverPhoto.path);
+        if (carPhoto != null) _carPhoto = XFile(carPhoto.path);
+      });
+    } catch (_) {
+      // Selecting the files again remains available if local restore fails.
+    }
+  }
+
+  void _message(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: TaxiText(message)),
+    );
+  }
+
+  Future<void> _pick(String kind) async {
+    if (_busy || !mounted) return;
+    if (!{'license', 'driver', 'car'}.contains(kind)) return;
+    try {
+      final file = await _picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 82,
+        maxWidth: 1600,
+      );
+      if (!mounted || file == null) return;
+      final size = await file.length().timeout(const Duration(seconds: 15));
+      if (!mounted) return;
+      if (size <= 0 || size > 8 * 1024 * 1024) {
+        _message('Фото пустое или больше 8 МБ. Выберите фотографию меньшего размера.');
+        return;
+      }
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null || uid.isEmpty) {
+        _message('Срок входа истёк. Войдите снова и выберите документы.');
+        return;
+      }
+      final documentType = kind == 'driver' ? 'driver_photo' :
+          kind == 'car' ? 'car_photo' : 'license';
+      final retained = await DriverDocumentStore.persistPickedImage(
+        uid: uid, documentType: documentType, source: file,
+      );
+      if (!mounted) return;
+      final localFile = XFile(retained.path);
+      setState(() {
+        if (kind == 'license') _license = localFile;
+        if (kind == 'driver') _driverPhoto = localFile;
+        if (kind == 'car') _carPhoto = localFile;
+      });
+    } catch (e) {
+      _message('Не удалось выбрать фотографию: $e');
+    }
+  }
+
+  Future<String> _upload(XFile file, String kind, String uid) async {
+    if (uid.trim().isEmpty ||
+        !{'license', 'driver_photo', 'car_photo'}.contains(kind)) {
+      throw const WorkerApiException('Не удалось определить документ водителя.');
+    }
+    final size = await file.length().timeout(const Duration(seconds: 15));
+    if (size <= 0 || size > 8 * 1024 * 1024) {
+      throw const WorkerApiException('Фото пустое или превышает 8 МБ. Выберите его заново.');
+    }
+    final bytes = await file.readAsBytes().timeout(const Duration(seconds: 30));
+    if (bytes.isEmpty || bytes.length != size || bytes.length > 8 * 1024 * 1024) {
+      throw const WorkerApiException('Не удалось прочитать фотографию полностью. Выберите её заново.');
+    }
+    final ref = taxiFirebaseStorage.ref().child('drivers/$uid/$kind.jpg');
+    final task = await ref.putData(
+      bytes,
+      SettableMetadata(
+        contentType: 'image/jpeg',
+        customMetadata: {'ownerUid': uid},
+      ),
+    ).timeout(const Duration(seconds: 90));
+    return task.ref.fullPath;
+  }
 
   Future<void> _logout() async {
     if (_busy) return;
@@ -2711,90 +3049,112 @@ class _DriverReviewStatusScreenState extends State<DriverReviewStatusScreen> {
       await FirebaseService.signOut().timeout(const Duration(seconds: 20));
       if (mounted) Navigator.popUntil(context, (route) => route.isFirst);
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: TaxiText('Не удалось выйти из аккаунта: $e')),
-        );
-      }
+      _message('Не удалось выйти из аккаунта: $e');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
+  Future<void> _resubmit() async {
+    if (_busy) return;
+    if (_license == null || _driverPhoto == null || _carPhoto == null) {
+      _message('Выберите все три фотографии.');
+      return;
+    }
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null || user.uid.isEmpty) {
+      _message('Срок входа истёк. Войдите в аккаунт водителя и повторите отправку.');
+      return;
+    }
+    final files = [_license!, _driverPhoto!, _carPhoto!];
+    var totalBytes = 0;
+    try {
+      for (var i = 0; i < files.length; i++) {
+        final size = await files[i].length().timeout(const Duration(seconds: 15));
+        if (!mounted) return;
+        if (size <= 0 || size > 8 * 1024 * 1024) {
+          _message('Фото номер ${i + 1} пустое или превышает 8 МБ. Замените его.');
+          return;
+        }
+        totalBytes += size;
+      }
+      if (totalBytes > 18 * 1024 * 1024) {
+        _message('Общий размер трёх фотографий превышает 18 МБ. Уменьшите их.');
+        return;
+      }
+      setState(() => _busy = true);
+      final uid = user.uid;
+      final licensePath = await _upload(_license!, 'license', uid);
+      if (!mounted) return;
+      final driverPath = await _upload(_driverPhoto!, 'driver_photo', uid);
+      if (!mounted) return;
+      final carPath = await _upload(_carPhoto!, 'car_photo', uid);
+      if (!mounted) return;
+      if (FirebaseAuth.instance.currentUser?.uid != uid) {
+        throw const WorkerApiException('Аккаунт изменился во время отправки. Войдите снова.');
+      }
+      await WorkerApi.saveDriverDocuments(
+        licenseUrl: licensePath,
+        driverPhotoUrl: driverPath,
+        carPhotoUrl: carPath,
+      );
+      if (!mounted) return;
+      setState(() {
+        _license = null;
+        _driverPhoto = null;
+        _carPhoto = null;
+      });
+      _message('Документы отправлены повторно. Ожидайте новой проверки диспетчера.');
+    } catch (e) {
+      _message('Не удалось отправить документы: $e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Widget _pickRow(String title, XFile? file, String kind) => ListTile(
+    leading: Icon(file == null ? Icons.add_a_photo : Icons.check_circle, color: file == null ? Colors.grey : Colors.green),
+    title: TaxiText(title), subtitle: TaxiText(file == null ? 'Не выбрано' : 'Файл выбран'),
+    trailing: TextButton(onPressed: _busy ? null : () => _pick(kind), child: TaxiText(file == null ? 'Выбрать' : 'Заменить')),
+  );
+
   @override
   Widget build(BuildContext context) {
-    final rejected = (widget.profile['review_status'] ?? '').toString() == 'rejected';
+    final status = (widget.profile['review_status'] ?? 'pending').toString();
+    final rejected = status == 'rejected';
     return Scaffold(
-      appBar: AppBar(
-        title: const TaxiLocalizedText(russian: 'Статус заявки', kyrgyz: 'Арыздын абалы'),
-        backgroundColor: Colors.amber,
-        actions: [
-          IconButton(
-            onPressed: _busy ? null : _logout,
-            icon: const Icon(Icons.logout),
-            tooltip: 'Выйти',
-          ),
+      appBar: AppBar(title: const TaxiLocalizedText(russian: 'Проверка анкеты', kyrgyz: 'Анкетаны текшерүү'), backgroundColor: Colors.amber,
+        actions: [IconButton(onPressed: _busy ? null : _logout, icon: const Icon(Icons.logout), tooltip: 'Выйти')]),
+      body: Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 520), child: ListView(padding: const EdgeInsets.all(20), children: [
+        const Icon(Icons.fact_check_outlined, size: 64, color: Colors.amber),
+        TaxiText(widget.profile['name']?.toString() ?? 'Водитель', textAlign: TextAlign.center, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 12),
+        Card(color: rejected ? Colors.red.shade50 : Colors.amber.shade50, child: Padding(padding: const EdgeInsets.all(16), child: Column(children: [
+          TaxiText(rejected ? 'Заявка отклонена' : 'Документы ожидают проверки', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          if (rejected) ...[const SizedBox(height: 8), TaxiText('Причина: ${widget.profile['rejection_reason'] ?? 'Не указана'}')],
+          if (!rejected) const TaxiLocalizedText(russian: 'Диспетчер проверит документы. До одобрения выход на линию недоступен.', kyrgyz: 'Диспетчер документтерди текшерет. Бекитилгенге чейин линияга чыгууга болбойт.'),
+        ]))),
+        if (!rejected && _documentTransferMessage != null) ...[
+          const SizedBox(height: 10),
+          Card(color: Colors.blue.shade50, child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Icon(Icons.sync, color: Colors.blue),
+              const SizedBox(width: 8),
+              Expanded(child: TaxiText(_documentTransferMessage!)),
+            ]),
+          )),
         ],
-      ),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 520),
-          child: ListView(
-            padding: const EdgeInsets.all(20),
-            children: [
-              const Icon(Icons.local_taxi, size: 64, color: Colors.amber),
-              TaxiText(
-                widget.profile['name']?.toString() ?? 'Водитель',
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-              Card(
-                color: rejected ? Colors.red.shade50 : Colors.amber.shade50,
-                child: Padding(
-                  padding: const EdgeInsets.all(18),
-                  child: Column(
-                    children: [
-                      Icon(
-                        rejected ? Icons.info_outline : Icons.hourglass_top,
-                        size: 42,
-                        color: rejected ? Colors.red : Colors.orange,
-                      ),
-                      const SizedBox(height: 10),
-                      TaxiText(
-                        rejected ? 'Заявка отклонена' : 'Заявка ожидает проверки',
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 8),
-                      if (rejected)
-                        TaxiText(
-                          'Причина: ${widget.profile['rejection_reason'] ?? 'Не указана'}',
-                          textAlign: TextAlign.center,
-                        )
-                      else
-                        const TaxiLocalizedText(
-                          russian: 'Диспетчер рассмотрит вашу анкету. Фотографии не требуются. До одобрения выход на линию недоступен.',
-                          kyrgyz: 'Диспетчер анкетаңызды карайт. Сүрөттөр талап кылынбайт. Бекитилгенге чейин линияга чыгууга болбойт.',
-                          textAlign: TextAlign.center,
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-              if (rejected)
-                const Padding(
-                  padding: EdgeInsets.only(top: 14),
-                  child: TaxiLocalizedText(
-                    russian: 'Свяжитесь с диспетчером, чтобы уточнить решение. Прикладывать фотографии для повторной отправки не нужно.',
-                    kyrgyz: 'Чечимди тактоо үчүн диспетчерге кайрылыңыз. Кайра жөнөтүү үчүн сүрөт тиркөөнүн кереги жок.',
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
+        if (rejected) ...[
+          const SizedBox(height: 14),
+          const TaxiLocalizedText(russian: 'Исправьте замечания и отправьте фотографии повторно:', kyrgyz: 'Эскертүүлөрдү оңдоп, сүрөттөрдү кайра жөнөтүңүз:', style: TextStyle(fontWeight: FontWeight.bold)),
+          _pickRow('Водительское удостоверение', _license, 'license'),
+          _pickRow('Фото водителя', _driverPhoto, 'driver'),
+          _pickRow('Фото автомобиля', _carPhoto, 'car'),
+          const SizedBox(height: 12),
+          ElevatedButton.icon(onPressed: _busy ? null : _resubmit, icon: const Icon(Icons.upload), label: TaxiText(_busy ? 'ОТПРАВКА...' : 'ОТПРАВИТЬ ПОВТОРНО')),
+        ],
+      ]))),
     );
   }
 }
