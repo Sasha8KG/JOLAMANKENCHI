@@ -36,6 +36,7 @@ class DriverDocumentTransferLiveKit {
   final Map<String, DriverDocumentTransferAssembler> _assemblers = {};
   final Map<String, StoredDriverDocument> _received = {};
   final Set<String> _persisting = <String>{};
+  final Set<String> _acknowledgedChunks = <String>{};
   bool _disposed = false;
   bool _confirming = false;
   bool _confirmed = false;
@@ -81,10 +82,8 @@ class DriverDocumentTransferLiveKit {
         isDispatcher: isDispatcher,
         room: room,
       );
-      if (isDispatcher) {
-        session._listener = room.createListener()
-          ..on<DataReceivedEvent>(session._handleDataReceived);
-      }
+      session._listener = room.createListener()
+        ..on<DataReceivedEvent>(session._handleDataReceived);
       await room.connect(url, token);
       return session;
     } catch (_) {
@@ -123,6 +122,7 @@ class DriverDocumentTransferLiveKit {
         throw FormatException('Не удалось полностью прочитать документ: $type.');
       }
 
+      var chunkIndex = 0;
       for (final packet in DriverDocumentTransferProtocol.encodeChunks(
         requestId: requestId,
         driverUid: driverUid,
@@ -130,6 +130,12 @@ class DriverDocumentTransferLiveKit {
         bytes: Uint8List.fromList(bytes),
       )) {
         _ensureActive();
+        final ackKey = '$type:$chunkIndex';
+        chunkIndex++;
+        // Only retransmit chunks that the dispatcher has not acknowledged.
+        // If an acknowledgement was lost, the duplicate packet is safe and
+        // the dispatcher will acknowledge it again.
+        if (_acknowledgedChunks.contains(ackKey)) continue;
         await participant.publishData(
           packet,
           reliable: true,
@@ -140,12 +146,27 @@ class DriverDocumentTransferLiveKit {
   }
 
   void _handleDataReceived(DataReceivedEvent event) {
-    if (_disposed || !isDispatcher || event.topic != topic) return;
+    if (_disposed || event.topic != topic) return;
+    final senderUid = event.participant?.identity;
+    if (senderUid == null) return;
+
+    if (!isDispatcher) {
+      // The room token is request-scoped. Acknowledgements must also match
+      // this exact request and driver before they can suppress retransmission.
+      if (senderUid == driverUid) return;
+      try {
+        final ack = DriverDocumentTransferProtocol.decodeAck(event.data);
+        if (ack.requestId != requestId || ack.driverUid != driverUid) return;
+        _acknowledgedChunks.add('${ack.documentType}:${ack.index}');
+      } catch (_) {
+        // Ignore unrelated or malformed data packets.
+      }
+      return;
+    }
+
     // The request-specific room is access-controlled by the Worker token.
     // Still verify the sender identity and every packet's embedded UID.
-    final senderUid = event.participant?.identity;
-    if (senderUid == null || senderUid != driverUid) return;
-
+    if (senderUid != driverUid) return;
     try {
       final chunk = DriverDocumentTransferProtocol.decodeChunk(event.data);
       if (chunk.requestId != requestId || chunk.driverUid != driverUid) return;
@@ -154,6 +175,9 @@ class DriverDocumentTransferLiveKit {
         DriverDocumentTransferAssembler.new,
       );
       assembler.add(chunk);
+      // ACK only after the packet has passed validation and entered the
+      // assembler. Repeated chunks receive another ACK without duplicating data.
+      unawaited(_publishChunkAck(chunk.documentType, chunk.index));
       if (assembler.isComplete && !_received.containsKey(chunk.documentType) &&
           _persisting.add(chunk.documentType)) {
         unawaited(_persistCompletedDocument(chunk.documentType, assembler));
@@ -161,6 +185,26 @@ class DriverDocumentTransferLiveKit {
     } catch (_) {
       // Ignore malformed or unrelated data packets; a later reliable retry
       // can still complete the document without crashing the radio screen.
+    }
+  }
+
+  Future<void> _publishChunkAck(String documentType, int index) async {
+    if (_disposed || !isDispatcher) return;
+    final participant = _room.localParticipant;
+    if (participant == null) return;
+    try {
+      await participant.publishData(
+        DriverDocumentTransferProtocol.encodeAck(
+          requestId: requestId,
+          driverUid: driverUid,
+          documentType: documentType,
+          index: index,
+        ),
+        reliable: true,
+        topic: topic,
+      );
+    } catch (_) {
+      // The driver will resend unacknowledged chunks on its next retry cycle.
     }
   }
 
