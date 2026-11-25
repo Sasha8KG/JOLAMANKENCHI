@@ -29,8 +29,12 @@ class DispatcherOverviewSnapshot {
     final today = _readRows(payload, 'today', maxTodayStatuses);
     final earnings =
         _readRows(payload, 'earnings', maxEarningsRows, 'driver_uid');
-    final closedShifts =
-        _readRows(payload, 'closed_shifts', maxClosedShifts);
+    // Older deployed Worker versions did not return closed_shifts.
+    // Treat an absent/null optional history section as empty, while still
+    // rejecting a malformed non-list value.
+    final closedShifts = payload['closed_shifts'] == null
+        ? <Map<String, dynamic>>[]
+        : _readRows(payload, 'closed_shifts', maxClosedShifts);
 
     for (final row in today) {
       final status = row['status'];

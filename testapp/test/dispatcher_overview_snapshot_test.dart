@@ -22,6 +22,18 @@ void main() {
       expect(snapshot.businessDate, '2026-11-24');
     });
 
+    test('accepts an older Worker response without optional closed shift history', () {
+      final payload = validPayload()..remove('closed_shifts');
+      final snapshot = DispatcherOverviewSnapshot.parse(payload);
+      expect(snapshot.closedShifts, isEmpty);
+    });
+
+    test('accepts null optional closed shift history as empty', () {
+      final payload = validPayload()..['closed_shifts'] = null;
+      final snapshot = DispatcherOverviewSnapshot.parse(payload);
+      expect(snapshot.closedShifts, isEmpty);
+    });
+
     test('rejects a missing required dashboard list', () {
       final payload = validPayload()..remove('drivers');
       expect(() => DispatcherOverviewSnapshot.parse(payload), throwsFormatException);
