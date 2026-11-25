@@ -599,35 +599,20 @@ export default {
         const auth = await requireDispatcher(request);
         const b = await readJsonObject(request);
         if (!b) return response({ status: "error", message: "Переданы неверные данные запроса. Отправьте корректный JSON-объект." }, 400);
-        const uid = String(b.uid || "");
+        const uid = String(b.uid || "").trim();
         const decision = String(b.decision || "");
         const reason = String(b.reason || "").trim().slice(0, 500);
-        if (!uid || !["approved", "rejected"].includes(decision))
+        if (!uid || uid.length > 128 || !["approved", "rejected"].includes(decision))
           return response({ status: "error", message: "Укажите водителя и решение" }, 400);
-        if (decision === "rejected" && reason.length < 5)
+        if (decision === "rejected" && (reason.length < 5 || /[\\u0000-\\u001f\\u007f]/.test(reason)))
           return response({ status: "error", message: "Напишите причину отказа (не менее 5 символов)" }, 400);
         const exists = await env.DB.prepare("SELECT uid FROM drivers WHERE uid=?").bind(uid).first();
         if (!exists) return response({ status: "error", message: "Водитель не найден" }, 404);
-        let docs = await env.DB.prepare("SELECT license_url,driver_photo_url,car_photo_url,review_status FROM driver_documents WHERE driver_uid=?").bind(uid).first();
-        const receiptCount = await env.DB.prepare("SELECT COUNT(*) AS count FROM driver_document_receipts r JOIN driver_document_transfer_requests q ON q.request_id=r.request_id WHERE r.driver_uid=? AND q.status='received'").bind(uid).first();
-        const hasNewLocalDocuments = Number(receiptCount?.count || 0) >= 3;
-        const hasLegacyStoragePaths = Boolean(docs && docs.license_url && docs.driver_photo_url && docs.car_photo_url);
-        const hasAllDocuments = hasNewLocalDocuments || hasLegacyStoragePaths;
-        // Approval requires all three files. Rejection must remain possible for
-        // incomplete applications so the dispatcher can explain what is missing.
-        if (decision === "approved" && !hasAllDocuments)
-          return response({ status: "error", message: "Для одобрения водителю нужны все три документа" }, 409);
-        if (!docs && decision === "rejected") {
-          await env.DB.prepare(`INSERT OR IGNORE INTO driver_documents
-            (driver_uid,license_url,driver_photo_url,car_photo_url,submitted_at,review_status,rejection_reason,reviewed_at,reviewed_by)
-            VALUES (?,'','','',unixepoch(),'pending',NULL,NULL,NULL)`).bind(uid).run();
-          docs = await env.DB.prepare("SELECT license_url,driver_photo_url,car_photo_url,review_status FROM driver_documents WHERE driver_uid=?").bind(uid).first();
-        }
-        if (!docs || docs.review_status !== "pending")
-          return response({ status: "error", message: "Заявка уже обработана. Водитель должен повторно отправить документы для новой проверки." }, 409);
-        // Apply the document decision and driver access change in one D1 batch.
-        // The second statement is tied to the exact review result, preventing a
-        // concurrent reviewer from changing access based on a stale decision.
+        // Фото и документы больше не являются условием допуска. Создаём
+        // служебную запись проверки даже для старых и новых профилей без фото.
+        await env.DB.prepare(`INSERT OR IGNORE INTO driver_documents
+          (driver_uid,license_url,driver_photo_url,car_photo_url,submitted_at,review_status,rejection_reason,reviewed_at,reviewed_by)
+          VALUES (?,'','','',unixepoch(),'pending',NULL,NULL,NULL)`).bind(uid).run();
         const reviewResults = await env.DB.batch([
           env.DB.prepare(`UPDATE driver_documents SET review_status=?, rejection_reason=?, reviewed_at=unixepoch(), reviewed_by=?
             WHERE driver_uid=? AND review_status='pending'`)
@@ -642,7 +627,7 @@ export default {
             Number(reviewResults?.[1]?.meta?.changes || 0) !== 1) {
           return response({ status: "error", message: "Заявка уже обработана или данные водителя изменились. Обновите список заявок." }, 409);
         }
-        return response({ status: "ok", review_status: decision });
+        return response({ status: "ok", review_status: decision, approved: decision === "approved" });
       }
 
       if (url.pathname === "/drivers/approve" && request.method === "POST") {
