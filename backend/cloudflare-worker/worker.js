@@ -463,8 +463,8 @@ export default {
         const driver = await driverRow(env, auth.user.localId);
         if (!driver) return response({ status: "error", message: "Сначала отправьте анкету водителя" }, 409);
         // The three files remain on the driver's and dispatcher's phones.
-        // This endpoint only reopens review; approval still requires a fresh
-        // server receipt for all three files from a new LiveKit transfer.
+        // This endpoint only reopens review. Any photos are optional; the
+        // dispatcher can approve the application without a file receipt.
         const results = await env.DB.batch([
           env.DB.prepare(`INSERT INTO driver_documents
             (driver_uid,license_url,driver_photo_url,car_photo_url,submitted_at,review_status,rejection_reason,reviewed_at,reviewed_by,local_transfer_request_id)
@@ -481,7 +481,7 @@ export default {
             Number(results?.[1]?.meta?.changes || 0) !== 1) {
           return response({ status: "error", message: "Не удалось открыть повторную проверку. Повторите попытку." }, 409);
         }
-        return response({ status: "ok", review_status: "pending", documents_required_for_approval: 3 });
+        return response({ status: "ok", review_status: "pending", documents_optional: true });
       }
 
       if (url.pathname === "/drivers/documents" && request.method === "POST") {
