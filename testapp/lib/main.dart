@@ -2875,30 +2875,6 @@ class _DriverReviewStatusScreenState extends State<DriverReviewStatusScreen> {
     }
   }
 
-  Future<String> _upload(XFile file, String kind, String uid) async {
-    if (uid.trim().isEmpty ||
-        !{'license', 'driver_photo', 'car_photo'}.contains(kind)) {
-      throw const WorkerApiException('Не удалось определить документ водителя.');
-    }
-    final size = await file.length().timeout(const Duration(seconds: 15));
-    if (size <= 0 || size > 8 * 1024 * 1024) {
-      throw const WorkerApiException('Фото пустое или превышает 8 МБ. Выберите его заново.');
-    }
-    final bytes = await file.readAsBytes().timeout(const Duration(seconds: 30));
-    if (bytes.isEmpty || bytes.length != size || bytes.length > 8 * 1024 * 1024) {
-      throw const WorkerApiException('Не удалось прочитать фотографию полностью. Выберите её заново.');
-    }
-    final ref = taxiFirebaseStorage.ref().child('drivers/$uid/$kind.jpg');
-    final task = await ref.putData(
-      bytes,
-      SettableMetadata(
-        contentType: 'image/jpeg',
-        customMetadata: {'ownerUid': uid},
-      ),
-    ).timeout(const Duration(seconds: 90));
-    return task.ref.fullPath;
-  }
-
   Future<void> _logout() async {
     if (_busy) return;
     setState(() => _busy = true);
@@ -2915,12 +2891,12 @@ class _DriverReviewStatusScreenState extends State<DriverReviewStatusScreen> {
   Future<void> _resubmit() async {
     if (_busy) return;
     if (_license == null || _driverPhoto == null || _carPhoto == null) {
-      _message('Выберите все три фотографии.');
+      _message('Для повторной проверки выберите все три фотографии.');
       return;
     }
     final user = FirebaseAuth.instance.currentUser;
     if (user == null || user.uid.isEmpty) {
-      _message('Срок входа истёк. Войдите в аккаунт водителя и повторите отправку.');
+      _message('Срок входа истёк. Войдите снова.');
       return;
     }
     final files = [_license!, _driverPhoto!, _carPhoto!];
@@ -2941,29 +2917,29 @@ class _DriverReviewStatusScreenState extends State<DriverReviewStatusScreen> {
       }
       setState(() => _busy = true);
       final uid = user.uid;
-      final licensePath = await _upload(_license!, 'license', uid);
-      if (!mounted) return;
-      final driverPath = await _upload(_driverPhoto!, 'driver_photo', uid);
-      if (!mounted) return;
-      final carPath = await _upload(_carPhoto!, 'car_photo', uid);
-      if (!mounted) return;
-      if (FirebaseAuth.instance.currentUser?.uid != uid) {
-        throw const WorkerApiException('Аккаунт изменился во время отправки. Войдите снова.');
+      for (var i = 0; i < files.length; i++) {
+        if (FirebaseAuth.instance.currentUser?.uid != uid) {
+          throw const WorkerApiException('Аккаунт изменился. Войдите снова.');
+        }
+        await DriverDocumentStore.persistPickedImage(
+          uid: uid,
+          documentType: const ['license', 'driver_photo', 'car_photo'][i],
+          source: files[i],
+        );
       }
-      await WorkerApi.saveDriverDocuments(
-        licenseUrl: licensePath,
-        driverPhotoUrl: driverPath,
-        carPhotoUrl: carPath,
-      );
+      await WorkerApi.resubmitDriverDocuments();
       if (!mounted) return;
+      widget.profile['review_status'] = 'pending';
+      widget.profile['rejection_reason'] = null;
       setState(() {
         _license = null;
         _driverPhoto = null;
         _carPhoto = null;
       });
-      _message('Документы отправлены повторно. Ожидайте новой проверки диспетчера.');
+      await _startDocumentRequestPolling();
+      _message('Фотографии сохранены на телефоне. Диспетчер сможет запросить их для повторной проверки.');
     } catch (e) {
-      _message('Не удалось отправить документы: $e');
+      _message('Не удалось подготовить повторную проверку: $e');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -3002,14 +2978,22 @@ class _DriverReviewStatusScreenState extends State<DriverReviewStatusScreen> {
             ]),
           )),
         ],
+        const SizedBox(height: 14),
+        TaxiLocalizedText(
+          russian: rejected
+              ? 'Выберите три фотографии для повторной проверки. Они сохранятся на телефоне и будут переданы диспетчеру по его запросу.'
+              : 'Фотографии можно добавить сейчас или позже. Регистрация и ожидание одобрения не требуют вложения фотографий. Для одобрения диспетчер запросит три документа с телефона.',
+          kyrgyz: rejected
+              ? 'Кайра текшерүү үчүн үч сүрөттү тандаңыз. Алар телефондо сакталып, диспетчердин суроосу боюнча жөнөтүлөт.'
+              : 'Сүрөттөрдү азыр же кийин кошсоңуз болот. Катталуу үчүн сүрөттөр милдеттүү эмес. Бекитүү үчүн диспетчер телефондон үч документти сурайт.',
+          style: const TextStyle(fontWeight: FontWeight.w500),
+        ),
+        _pickRow('Водительское удостоверение', _license, 'license'),
+        _pickRow('Фото водителя', _driverPhoto, 'driver'),
+        _pickRow('Фото автомобиля', _carPhoto, 'car'),
         if (rejected) ...[
-          const SizedBox(height: 14),
-          const TaxiLocalizedText(russian: 'Исправьте замечания и отправьте фотографии повторно:', kyrgyz: 'Эскертүүлөрдү оңдоп, сүрөттөрдү кайра жөнөтүңүз:', style: TextStyle(fontWeight: FontWeight.bold)),
-          _pickRow('Водительское удостоверение', _license, 'license'),
-          _pickRow('Фото водителя', _driverPhoto, 'driver'),
-          _pickRow('Фото автомобиля', _carPhoto, 'car'),
           const SizedBox(height: 12),
-          ElevatedButton.icon(onPressed: _busy ? null : _resubmit, icon: const Icon(Icons.upload), label: TaxiText(_busy ? 'ОТПРАВКА...' : 'ОТПРАВИТЬ ПОВТОРНО')),
+          ElevatedButton.icon(onPressed: _busy ? null : _resubmit, icon: const Icon(Icons.check), label: TaxiText(_busy ? 'СОХРАНЕНИЕ...' : 'СОХРАНИТЬ И ОТПРАВИТЬ НА ПРОВЕРКУ')),
         ],
       ]))),
     );
