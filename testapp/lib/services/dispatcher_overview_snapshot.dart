@@ -57,17 +57,20 @@ class DispatcherOverviewSnapshot {
     // dispatcher cabinet usable in that case by using the device's local
     // calendar date (Kyrgyzstan devices use UTC+6). A supplied but malformed
     // date is still rejected so incorrect server data is never accepted.
+    // Older deployed Worker versions may omit business_date. Keep the
+    // dispatcher cabinet usable in that case by using the device's local
+    // calendar date. A supplied but malformed date is still rejected.
     final rawDate = payload['business_date'];
     final String businessDate;
     if (rawDate == null || (rawDate is String && rawDate.trim().isEmpty)) {
       final now = DateTime.now();
       businessDate =
-          '\${now.year.toString().padLeft(4, '0')}-\${now.month.toString().padLeft(2, '0')}-\${now.day.toString().padLeft(2, '0')}';
+          '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
     } else {
       final parsedDate =
           rawDate is String ? DateTime.tryParse(rawDate) : null;
       if (rawDate is! String ||
-          !RegExp(r'^\\d{4}-\\d{2}-\\d{2}$').hasMatch(rawDate) ||
+          !RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(rawDate) ||
           parsedDate == null ||
           parsedDate.year.toString().padLeft(4, '0') != rawDate.substring(0, 4) ||
           parsedDate.month.toString().padLeft(2, '0') != rawDate.substring(5, 7) ||

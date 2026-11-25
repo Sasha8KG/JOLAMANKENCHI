@@ -34,10 +34,97 @@ void main() {
       expect(snapshot.closedShifts, isEmpty);
     });
 
-    test('accepts an older Worker response without business_date', () {
+    test('uses the local calendar date when an older Worker omits business_date', () {
       final payload = validPayload()..remove('business_date');
       final snapshot = DispatcherOverviewSnapshot.parse(payload);
-      expect(snapshot.businessDate, matches(RegExp(r'^\\d{4}-\\d{2}-\\d{2}
+      expect(snapshot.businessDate, matches(RegExp(r'^\d{4}-\d{2}-\d{2}
+      final payload = validPayload()..remove('drivers');
+      expect(() => DispatcherOverviewSnapshot.parse(payload), throwsFormatException);
+    });
+
+    test('rejects a non-list dashboard section', () {
+      final payload = validPayload()..['orders'] = 'not-a-list';
+      expect(() => DispatcherOverviewSnapshot.parse(payload), throwsFormatException);
+    });
+
+    test('rejects a malformed row instead of silently dropping it', () {
+      final payload = validPayload()..['drivers'] = [{'uid': 'driver_1'}, 'bad-row'];
+      expect(() => DispatcherOverviewSnapshot.parse(payload), throwsFormatException);
+    });
+
+    test('rejects duplicate driver UIDs', () {
+      final payload = validPayload()..['drivers'] = [
+        {'uid': 'driver_1'}, {'uid': 'driver_1'}
+      ];
+      expect(() => DispatcherOverviewSnapshot.parse(payload), throwsFormatException);
+    });
+
+    test('rejects duplicate order IDs', () {
+      final payload = validPayload()..['orders'] = [
+        {'id': 'order_1'}, {'id': 'order_1'}
+      ];
+      expect(() => DispatcherOverviewSnapshot.parse(payload), throwsFormatException);
+    });
+
+    test('rejects unsafe driver and order identifiers', () {
+      for (final id in ['', 'bad/id', 'x' * 129]) {
+        final payload = validPayload()..['orders'] = [{'id': id}];
+        expect(() => DispatcherOverviewSnapshot.parse(payload), throwsFormatException);
+      }
+    });
+
+    test('rejects more than the server page size of 100 orders', () {
+      final payload = validPayload()
+        ..['orders'] = List.generate(101, (index) => {'id': 'order_$index'});
+      expect(() => DispatcherOverviewSnapshot.parse(payload), throwsFormatException);
+    });
+
+    test('rejects negative, fractional and non-finite status counts', () {
+      for (final count in [-1, 1.5, double.nan, double.infinity]) {
+        final payload = validPayload()..['today'] = [{'status': 'new', 'count': count}];
+        expect(() => DispatcherOverviewSnapshot.parse(payload), throwsFormatException);
+      }
+    });
+
+    test('rejects invalid business dates', () {
+      for (final date in ['2026-13-40', '24-11-2026', '2026-11-24T09:00:00Z']) {
+        final payload = validPayload()..['business_date'] = date;
+        expect(() => DispatcherOverviewSnapshot.parse(payload), throwsFormatException);
+      }
+    });
+
+    test('returns immutable row maps and lists', () {
+      final snapshot = DispatcherOverviewSnapshot.parse(validPayload());
+      expect(() => snapshot.drivers.add({'uid': 'driver_2'}), throwsUnsupportedError);
+      expect(() => snapshot.drivers.single['online'] = 0, throwsUnsupportedError);
+    });
+
+    test('accepts an empty but complete dashboard response', () {
+      final payload = validPayload()
+        ..['drivers'] = <dynamic>[]
+        ..['orders'] = <dynamic>[]
+        ..['today'] = <dynamic>[]
+        ..['earnings'] = <dynamic>[]
+        ..['closed_shifts'] = <dynamic>[];
+      final snapshot = DispatcherOverviewSnapshot.parse(payload);
+      expect(snapshot.drivers, isEmpty);
+      expect(snapshot.orders, isEmpty);
+    });
+  });
+}
+)));
+      final parsed = DateTime.parse(snapshot.businessDate);
+      final now = DateTime.now();
+      expect(parsed.year, now.year);
+      expect(parsed.month, now.month);
+      expect(parsed.day, now.day);
+    });
+
+    test('uses the local calendar date when business_date is null or empty', () {
+      for (final value in [null, '']) {
+        final payload = validPayload()..['business_date'] = value;
+        final snapshot = DispatcherOverviewSnapshot.parse(payload);
+        expect(snapshot.businessDate, matches(RegExp(r'^\d{4}-\d{2}-\d{2}
       final payload = validPayload()..remove('drivers');
       expect(() => DispatcherOverviewSnapshot.parse(payload), throwsFormatException);
     });
@@ -113,88 +200,9 @@ void main() {
   });
 }
 )));
-    });
-
-    test('accepts null business_date from an older Worker response', () {
-      final payload = validPayload()..['business_date'] = null;
-      final snapshot = DispatcherOverviewSnapshot.parse(payload);
-      expect(snapshot.businessDate, matches(RegExp(r'^\\d{4}-\\d{2}-\\d{2}
-      final payload = validPayload()..remove('drivers');
-      expect(() => DispatcherOverviewSnapshot.parse(payload), throwsFormatException);
-    });
-
-    test('rejects a non-list dashboard section', () {
-      final payload = validPayload()..['orders'] = 'not-a-list';
-      expect(() => DispatcherOverviewSnapshot.parse(payload), throwsFormatException);
-    });
-
-    test('rejects a malformed row instead of silently dropping it', () {
-      final payload = validPayload()..['drivers'] = [{'uid': 'driver_1'}, 'bad-row'];
-      expect(() => DispatcherOverviewSnapshot.parse(payload), throwsFormatException);
-    });
-
-    test('rejects duplicate driver UIDs', () {
-      final payload = validPayload()..['drivers'] = [
-        {'uid': 'driver_1'}, {'uid': 'driver_1'}
-      ];
-      expect(() => DispatcherOverviewSnapshot.parse(payload), throwsFormatException);
-    });
-
-    test('rejects duplicate order IDs', () {
-      final payload = validPayload()..['orders'] = [
-        {'id': 'order_1'}, {'id': 'order_1'}
-      ];
-      expect(() => DispatcherOverviewSnapshot.parse(payload), throwsFormatException);
-    });
-
-    test('rejects unsafe driver and order identifiers', () {
-      for (final id in ['', 'bad/id', 'x' * 129]) {
-        final payload = validPayload()..['orders'] = [{'id': id}];
-        expect(() => DispatcherOverviewSnapshot.parse(payload), throwsFormatException);
       }
     });
 
-    test('rejects more than the server page size of 100 orders', () {
-      final payload = validPayload()
-        ..['orders'] = List.generate(101, (index) => {'id': 'order_$index'});
-      expect(() => DispatcherOverviewSnapshot.parse(payload), throwsFormatException);
-    });
-
-    test('rejects negative, fractional and non-finite status counts', () {
-      for (final count in [-1, 1.5, double.nan, double.infinity]) {
-        final payload = validPayload()..['today'] = [{'status': 'new', 'count': count}];
-        expect(() => DispatcherOverviewSnapshot.parse(payload), throwsFormatException);
-      }
-    });
-
-    test('rejects invalid business dates', () {
-      for (final date in ['', '2026-13-40', '24-11-2026', '2026-11-24T09:00:00Z']) {
-        final payload = validPayload()..['business_date'] = date;
-        expect(() => DispatcherOverviewSnapshot.parse(payload), throwsFormatException);
-      }
-    });
-
-    test('returns immutable row maps and lists', () {
-      final snapshot = DispatcherOverviewSnapshot.parse(validPayload());
-      expect(() => snapshot.drivers.add({'uid': 'driver_2'}), throwsUnsupportedError);
-      expect(() => snapshot.drivers.single['online'] = 0, throwsUnsupportedError);
-    });
-
-    test('accepts an empty but complete dashboard response', () {
-      final payload = validPayload()
-        ..['drivers'] = <dynamic>[]
-        ..['orders'] = <dynamic>[]
-        ..['today'] = <dynamic>[]
-        ..['earnings'] = <dynamic>[]
-        ..['closed_shifts'] = <dynamic>[];
-      final snapshot = DispatcherOverviewSnapshot.parse(payload);
-      expect(snapshot.drivers, isEmpty);
-      expect(snapshot.orders, isEmpty);
-    });
-  });
-}
-)));
-    });
     test('rejects a missing required dashboard list', () {
       final payload = validPayload()..remove('drivers');
       expect(() => DispatcherOverviewSnapshot.parse(payload), throwsFormatException);
