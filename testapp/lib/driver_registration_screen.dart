@@ -172,6 +172,9 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
       _stage = 'Проверяем размер фотографий…';
     });
 
+    // Once the route is popped successfully, do not call setState from
+    // finally: the route is already leaving the widget tree.
+    var registrationRoutePopped = false;
     try {
       if (!await _validatePhotoSizes()) return;
       if (!mounted) return;
@@ -248,6 +251,7 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
 
       await FirebaseService.signOut().timeout(const Duration(seconds: 20));
       if (!mounted) return;
+      registrationRoutePopped = true;
       Navigator.of(context).pop(true);
     } on TimeoutException {
       _message('Операция заняла слишком много времени. Проверьте интернет и повторите отправку.');
@@ -266,10 +270,12 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
     } catch (_) {
       _message('Не удалось завершить регистрацию. Проверьте интернет и повторите попытку.');
     } finally {
-      if (mounted) setState(() {
-        _busy = false;
-        _stage = null;
-      });
+      if (mounted && !registrationRoutePopped) {
+        setState(() {
+          _busy = false;
+          _stage = null;
+        });
+      }
     }
   }
 
