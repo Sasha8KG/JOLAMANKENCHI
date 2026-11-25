@@ -608,7 +608,7 @@ export default {
           return response({ status: "error", message: "Напишите причину отказа (не менее 5 символов)" }, 400);
         const exists = await env.DB.prepare("SELECT uid FROM drivers WHERE uid=?").bind(uid).first();
         if (!exists) return response({ status: "error", message: "Водитель не найден" }, 404);
-        let docs = await env.DB.prepare("SELECT license_url,driver_photo_url,car_photo_url,review_status FROM driver_documents WHERE driver_uid=?").bind(uid).first();
+        let docs = await env.DB.prepare("SELECT license_url,driver_photo_url,car_photo_url,review_status,rejection_reason,reviewed_by FROM driver_documents WHERE driver_uid=?").bind(uid).first();
         const receiptCount = await env.DB.prepare("SELECT COUNT(*) AS count FROM driver_document_receipts r JOIN driver_document_transfer_requests q ON q.request_id=r.request_id WHERE r.driver_uid=? AND q.status='received'").bind(uid).first();
         const hasNewLocalDocuments = Number(receiptCount?.count || 0) >= 3;
         const hasLegacyStoragePaths = Boolean(docs && docs.license_url && docs.driver_photo_url && docs.car_photo_url);
@@ -621,10 +621,18 @@ export default {
           await env.DB.prepare(`INSERT OR IGNORE INTO driver_documents
             (driver_uid,license_url,driver_photo_url,car_photo_url,submitted_at,review_status,rejection_reason,reviewed_at,reviewed_by)
             VALUES (?,'','','',unixepoch(),'pending',NULL,NULL,NULL)`).bind(uid).run();
-          docs = await env.DB.prepare("SELECT license_url,driver_photo_url,car_photo_url,review_status FROM driver_documents WHERE driver_uid=?").bind(uid).first();
+          docs = await env.DB.prepare("SELECT license_url,driver_photo_url,car_photo_url,review_status,rejection_reason,reviewed_by FROM driver_documents WHERE driver_uid=?").bind(uid).first();
+        }
+        // A dispatcher may retry after a slow network or after the app failed to
+        // refresh its list. Treat the exact same decision as successful instead
+        // of showing a misleading "already processed" error.
+        if (docs && docs.review_status === decision &&
+            docs.reviewed_by === auth.user.localId &&
+            (decision !== "rejected" || docs.rejection_reason === reason)) {
+          return response({ status: "ok", review_status: decision, already_reviewed: true });
         }
         if (!docs || docs.review_status !== "pending")
-          return response({ status: "error", message: "Заявка уже обработана. Водитель должен повторно отправить документы для новой проверки." }, 409);
+          return response({ status: "error", message: "Заявка уже обработана. Обновите список; для новой проверки водитель должен повторно отправить документы." }, 409);
         // Apply the document decision and driver access change in one D1 batch.
         // The second statement is tied to the exact review result, preventing a
         // concurrent reviewer from changing access based on a stale decision.

@@ -4443,11 +4443,21 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
       ),
     ) : '';
     if (decision == 'rejected' && reason == null) return;
+    if (!mounted) return;
     setState(() => _working = true);
     try {
       await WorkerApi.reviewDriver(uid: uid, decision: decision, reason: reason ?? '');
-      await _load();
-      if (mounted) _notice(decision == 'approved' ? 'Документы одобрены. Водитель допущен.' : 'Заявка отклонена. Водитель увидит причину.');
+      if (!mounted) return;
+      _notice(decision == 'approved'
+          ? 'Документы одобрены. Водитель допущен.'
+          : 'Заявка отклонена. Водитель увидит причину.');
+      // The decision is already saved at this point. A failed refresh must not
+      // be reported as if the review action itself had failed.
+      try {
+        await _load();
+      } catch (_) {
+        if (mounted) _notice('Решение сохранено на сервере, но список не обновился. Нажмите «Обновить».');
+      }
     } catch (e) {
       if (mounted) _notice(e.toString());
     } finally {
