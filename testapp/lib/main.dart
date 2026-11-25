@@ -470,18 +470,36 @@ class BrandedSplashGate extends StatefulWidget {
   State<BrandedSplashGate> createState() => _BrandedSplashGateState();
 }
 
-class _BrandedSplashGateState extends State<BrandedSplashGate> {
+class _BrandedSplashGateState extends State<BrandedSplashGate>
+    with SingleTickerProviderStateMixin {
   Timer? _navigationTimer;
   late final Future<ByteData> _logoData;
+  late final AnimationController _entrance;
+  late final Animation<double> _fade;
+  late final Animation<double> _scale;
 
   @override
   void initState() {
     super.initState();
     _logoData = rootBundle.load('assets/jak_splash.webp');
-    _navigationTimer = Timer(const Duration(milliseconds: 4000), () {
+    _entrance = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1100),
+    );
+    _fade = CurvedAnimation(parent: _entrance, curve: Curves.easeOut);
+    _scale = Tween<double>(begin: 0.94, end: 1.0).animate(
+      CurvedAnimation(parent: _entrance, curve: Curves.easeOutBack),
+    );
+    _entrance.forward();
+    _navigationTimer = Timer(const Duration(milliseconds: 4200), () {
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute<void>(builder: (_) => const SessionGate()),
+        PageRouteBuilder<void>(
+          transitionDuration: const Duration(milliseconds: 450),
+          pageBuilder: (_, animation, secondaryAnimation) => const SessionGate(),
+          transitionsBuilder: (_, animation, secondaryAnimation, child) =>
+              FadeTransition(opacity: animation, child: child),
+        ),
       );
     });
   }
@@ -489,12 +507,13 @@ class _BrandedSplashGateState extends State<BrandedSplashGate> {
   @override
   void dispose() {
     _navigationTimer?.cancel();
+    _entrance.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final side = MediaQuery.of(context).size.shortestSide * 0.92;
+    final side = MediaQuery.of(context).size.shortestSide * 0.96;
     return Scaffold(
       backgroundColor: const Color(0xFFFFD400),
       body: SafeArea(
@@ -512,16 +531,22 @@ class _BrandedSplashGateState extends State<BrandedSplashGate> {
                   style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: Colors.black),
                 );
               }
-              return Semantics(
-                label: 'ЖОЛ АМАН КЕНЧИ Такси',
-                image: true,
-                child: Image.memory(
-                  snapshot.data!.buffer.asUint8List(),
-                  width: side,
-                  height: side,
-                  fit: BoxFit.contain,
-                  gaplessPlayback: true,
-                  filterQuality: FilterQuality.high,
+              return FadeTransition(
+                opacity: _fade,
+                child: ScaleTransition(
+                  scale: _scale,
+                  child: Semantics(
+                    label: 'ЖОЛ АМАН КЕНЧИ Такси',
+                    image: true,
+                    child: Image.memory(
+                      snapshot.data!.buffer.asUint8List(),
+                      width: side,
+                      height: side,
+                      fit: BoxFit.contain,
+                      gaplessPlayback: true,
+                      filterQuality: FilterQuality.high,
+                    ),
+                  ),
                 ),
               );
             },
@@ -531,7 +556,6 @@ class _BrandedSplashGateState extends State<BrandedSplashGate> {
     );
   }
 }
-
 class _TaxiCheckSquare extends StatelessWidget {
   const _TaxiCheckSquare({this.dark = false});
   final bool dark;
