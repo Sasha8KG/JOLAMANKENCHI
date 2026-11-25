@@ -30,4 +30,4 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/jak_splash.jpg.b64
+    - assets/jak_splash.webp
