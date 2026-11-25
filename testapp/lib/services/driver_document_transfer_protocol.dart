@@ -144,163 +144,50 @@ class DriverDocumentTransferAssembler {
   String? _requestId, _driverUid, _documentType, _digest;
   int? _count, _total;
   final Map<int, Uint8List> _parts = {};
+
   int get receivedChunks => _parts.length;
   int get expectedChunks => _count ?? 0;
   bool get isComplete => _count != null && _parts.length == _count;
 
   /// Returns false for an identical retry; conflicting retries are rejected.
   bool add(DocumentTransferChunk chunk) {
-    // Validate public chunk objects too; callers must not be able to bypass
-    // decodeChunk() and inject oversized or malformed data into the assembler.
-    if (!RegExp(r'^[0-9a-f-]{36}
-      _requestId = chunk.requestId; _driverUid = chunk.driverUid;
-      _documentType = chunk.documentType; _digest = chunk.digest;
-      _count = chunk.count; _total = chunk.total;
-    } else if (_requestId != chunk.requestId || _driverUid != chunk.driverUid ||
-        _documentType != chunk.documentType || _digest != chunk.digest ||
-        _count != chunk.count || _total != chunk.total) {
-      throw const FormatException('Части относятся к разным передачам документов.');
-    }
-    final previous = _parts[chunk.index];
-    if (previous != null) {
-      if (previous.length != chunk.payload.length) {
-        throw const FormatException('Повторная часть документа отличается.');
-      }
-      for (var i = 0; i < previous.length; i++) {
-        if (previous[i] != chunk.payload[i]) {
-          throw const FormatException('Повторная часть документа повреждена.');
-        }
-      }
-      return false;
-    }
-    _parts[chunk.index] = Uint8List.fromList(chunk.payload);
-    return true;
-  }
-
-  Uint8List assemble() {
-    if (!isComplete || _count == null || _total == null || _digest == null) {
-      throw const FormatException('Передача документа ещё не завершена.');
-    }
-    final builder = BytesBuilder(copy: false);
-    for (var i = 0; i < _count!; i++) {
-      final part = _parts[i];
-      if (part == null) throw const FormatException('В передаче отсутствует часть документа.');
-      builder.add(part);
-    }
-    final bytes = builder.takeBytes();
-    if (bytes.length != _total || DriverDocumentTransferProtocol.sha256Of(bytes) != _digest) {
-      throw const FormatException('Контрольная сумма документа не совпала.');
-    }
-    return bytes;
-  }
-}
-, caseSensitive: false).hasMatch(chunk.requestId) ||
-        !RegExp(r'^[A-Za-z0-9_.:-]{1,128}
-      _requestId = chunk.requestId; _driverUid = chunk.driverUid;
-      _documentType = chunk.documentType; _digest = chunk.digest;
-      _count = chunk.count; _total = chunk.total;
-    } else if (_requestId != chunk.requestId || _driverUid != chunk.driverUid ||
-        _documentType != chunk.documentType || _digest != chunk.digest ||
-        _count != chunk.count || _total != chunk.total) {
-      throw const FormatException('Части относятся к разным передачам документов.');
-    }
-    final previous = _parts[chunk.index];
-    if (previous != null) {
-      if (previous.length != chunk.payload.length) {
-        throw const FormatException('Повторная часть документа отличается.');
-      }
-      for (var i = 0; i < previous.length; i++) {
-        if (previous[i] != chunk.payload[i]) {
-          throw const FormatException('Повторная часть документа повреждена.');
-        }
-      }
-      return false;
-    }
-    _parts[chunk.index] = Uint8List.fromList(chunk.payload);
-    return true;
-  }
-
-  Uint8List assemble() {
-    if (!isComplete || _count == null || _total == null || _digest == null) {
-      throw const FormatException('Передача документа ещё не завершена.');
-    }
-    final builder = BytesBuilder(copy: false);
-    for (var i = 0; i < _count!; i++) {
-      final part = _parts[i];
-      if (part == null) throw const FormatException('В передаче отсутствует часть документа.');
-      builder.add(part);
-    }
-    final bytes = builder.takeBytes();
-    if (bytes.length != _total || DriverDocumentTransferProtocol.sha256Of(bytes) != _digest) {
-      throw const FormatException('Контрольная сумма документа не совпала.');
-    }
-    return bytes;
-  }
-}
-).hasMatch(chunk.driverUid) ||
+    // Validate even directly constructed objects, not only decoded packets.
+    final requestOk = RegExp(r'^[0-9a-f-]{36}$', caseSensitive: false)
+        .hasMatch(chunk.requestId);
+    final uidOk = RegExp(r'^[A-Za-z0-9_.:-]{1,128}$').hasMatch(chunk.driverUid);
+    final digestOk = RegExp(r'^[a-f0-9]{64}$').hasMatch(chunk.digest);
+    if (!requestOk || !uidOk || !digestOk ||
         !DriverDocumentTransferProtocol.documentTypes.contains(chunk.documentType) ||
-        !RegExp(r'^[a-f0-9]{64}
-      _requestId = chunk.requestId; _driverUid = chunk.driverUid;
-      _documentType = chunk.documentType; _digest = chunk.digest;
-      _count = chunk.count; _total = chunk.total;
-    } else if (_requestId != chunk.requestId || _driverUid != chunk.driverUid ||
-        _documentType != chunk.documentType || _digest != chunk.digest ||
-        _count != chunk.count || _total != chunk.total) {
-      throw const FormatException('Части относятся к разным передачам документов.');
-    }
-    final previous = _parts[chunk.index];
-    if (previous != null) {
-      if (previous.length != chunk.payload.length) {
-        throw const FormatException('Повторная часть документа отличается.');
-      }
-      for (var i = 0; i < previous.length; i++) {
-        if (previous[i] != chunk.payload[i]) {
-          throw const FormatException('Повторная часть документа повреждена.');
-        }
-      }
-      return false;
-    }
-    _parts[chunk.index] = Uint8List.fromList(chunk.payload);
-    return true;
-  }
-
-  Uint8List assemble() {
-    if (!isComplete || _count == null || _total == null || _digest == null) {
-      throw const FormatException('Передача документа ещё не завершена.');
-    }
-    final builder = BytesBuilder(copy: false);
-    for (var i = 0; i < _count!; i++) {
-      final part = _parts[i];
-      if (part == null) throw const FormatException('В передаче отсутствует часть документа.');
-      builder.add(part);
-    }
-    final bytes = builder.takeBytes();
-    if (bytes.length != _total || DriverDocumentTransferProtocol.sha256Of(bytes) != _digest) {
-      throw const FormatException('Контрольная сумма документа не совпала.');
-    }
-    return bytes;
-  }
-}
-).hasMatch(chunk.digest) ||
+        chunk.total < 1 ||
+        chunk.total > DriverDocumentTransferProtocol.maxDocumentBytes ||
         chunk.count != DriverDocumentTransferProtocol.chunkCountFor(chunk.total) ||
         chunk.index < 0 || chunk.index >= chunk.count) {
       throw const FormatException('Заголовок части документа не прошёл проверку.');
     }
+
     final expectedLength = chunk.index == chunk.count - 1
         ? chunk.total - chunk.index * DriverDocumentTransferProtocol.chunkBytes
         : DriverDocumentTransferProtocol.chunkBytes;
     if (chunk.payload.length != expectedLength) {
       throw const FormatException('Размер части документа не совпадает с заголовком.');
     }
+
     if (_requestId == null) {
-      _requestId = chunk.requestId; _driverUid = chunk.driverUid;
-      _documentType = chunk.documentType; _digest = chunk.digest;
-      _count = chunk.count; _total = chunk.total;
-    } else if (_requestId != chunk.requestId || _driverUid != chunk.driverUid ||
-        _documentType != chunk.documentType || _digest != chunk.digest ||
-        _count != chunk.count || _total != chunk.total) {
+      _requestId = chunk.requestId;
+      _driverUid = chunk.driverUid;
+      _documentType = chunk.documentType;
+      _digest = chunk.digest;
+      _count = chunk.count;
+      _total = chunk.total;
+    } else if (_requestId != chunk.requestId ||
+        _driverUid != chunk.driverUid ||
+        _documentType != chunk.documentType ||
+        _digest != chunk.digest ||
+        _count != chunk.count ||
+        _total != chunk.total) {
       throw const FormatException('Части относятся к разным передачам документов.');
     }
+
     final previous = _parts[chunk.index];
     if (previous != null) {
       if (previous.length != chunk.payload.length) {
@@ -313,6 +200,7 @@ class DriverDocumentTransferAssembler {
       }
       return false;
     }
+
     _parts[chunk.index] = Uint8List.fromList(chunk.payload);
     return true;
   }
@@ -324,11 +212,14 @@ class DriverDocumentTransferAssembler {
     final builder = BytesBuilder(copy: false);
     for (var i = 0; i < _count!; i++) {
       final part = _parts[i];
-      if (part == null) throw const FormatException('В передаче отсутствует часть документа.');
+      if (part == null) {
+        throw const FormatException('В передаче отсутствует часть документа.');
+      }
       builder.add(part);
     }
     final bytes = builder.takeBytes();
-    if (bytes.length != _total || DriverDocumentTransferProtocol.sha256Of(bytes) != _digest) {
+    if (bytes.length != _total ||
+        DriverDocumentTransferProtocol.sha256Of(bytes) != _digest) {
       throw const FormatException('Контрольная сумма документа не совпала.');
     }
     return bytes;
