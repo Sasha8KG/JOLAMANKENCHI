@@ -1076,49 +1076,56 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                   children: [
                     const TaxiLanguageSwitcher(),
                     const SizedBox(height: 8),
-                    const KyrgyzOrnamentHeader(),
-                    const SizedBox(height: 18),
                     Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
+                      height: 218,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF171F1D),
-                        borderRadius: BorderRadius.circular(28),
+                        color: const Color(0xFF17364C),
+                        borderRadius: BorderRadius.circular(20),
                         border: Border.all(color: gold, width: 2),
-                        boxShadow: const [BoxShadow(color: Colors.black38, blurRadius: 18, offset: Offset(0, 8))],
+                        boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 14, offset: Offset(0, 6))],
                       ),
-                      child: Column(
-                        children: [
-                          Container(
-                            width: 116, height: 116,
-                            decoration: BoxDecoration(
-                              color: burgundy,
-                              borderRadius: BorderRadius.circular(30),
-                              border: Border.all(color: gold, width: 3),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(18),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            SvgPicture.asset(
+                              'assets/jak_splash.svg',
+                              fit: BoxFit.cover,
+                              alignment: Alignment.topCenter,
                             ),
-                            child: const Stack(
-                              alignment: Alignment.center,
-                              children: [
-                                Icon(Icons.landscape_rounded, size: 94, color: Color(0xFFFFE8A0)),
-                                Positioned(bottom: 12, child: Icon(Icons.local_taxi_rounded, size: 48, color: gold)),
-                              ],
+                            Align(
+                              alignment: Alignment.bottomCenter,
+                              child: Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.fromLTRB(8, 7, 8, 17),
+                                decoration: const BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                    colors: [Color(0x00101D2A), Color(0xE6101D2A)],
+                                  ),
+                                ),
+                                child: const TaxiText(
+                                  '«Жолуңар байсалдуу, маанайыңар жакшы болсун!»',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w800,
+                                    shadows: [Shadow(color: Colors.black87, blurRadius: 4)]),
+                                ),
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 16),
-                          const TaxiText('«ЖОЛ АМАН КЕНЧИ»', textAlign: TextAlign.center,
-                            style: TextStyle(color: gold, fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: 1.0)),
-                          const TaxiText('ТАКСИ', style: TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.w800, letterSpacing: 5)),
-                          const SizedBox(height: 8),
-                          const TaxiText('СУЛЮКТА  •  ЛЕЙЛЕК  •  БАТКЕН', textAlign: TextAlign.center,
-                            style: TextStyle(color: Color(0xFFFFE8A0), fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 1.3)),
-                          const SizedBox(height: 15),
-                          Container(height: 2, decoration: const BoxDecoration(
-                            gradient: LinearGradient(colors: [Colors.transparent, gold, Colors.transparent]))),
-                          const SizedBox(height: 13),
-                          const TaxiLocalizedText(russian: 'Жолунуз ачык болсун!', kyrgyz: 'Жолуңуз ар дайым шыдыр болсун!', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w600)),
-                          const SizedBox(height: 4),
-                          const TaxiLocalizedText(russian: 'Быстро • Надёжно • По-нашему', kyrgyz: 'Тез • Ишенимдүү • Өзүбүздүн такси', style: TextStyle(color: Color(0xFFFFE8A0), fontSize: 13)),
-                        ],
+                            Positioned(
+                              left: 0, right: 0, bottom: 0, height: 10,
+                              child: Row(
+                                children: List.generate(18, (index) => Expanded(
+                                  child: Container(color: index.isEven
+                                    ? const Color(0xFFFFD400) : const Color(0xFF171717)),
+                                )),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                     const SizedBox(height: 20),
