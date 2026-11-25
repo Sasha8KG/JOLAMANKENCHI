@@ -2873,6 +2873,7 @@ class _DriverReviewStatusScreenState extends State<DriverReviewStatusScreen> {
   bool _documentRequestCheckRunning = false;
   String? _documentTransferMessage;
   String? _lastHandledRequestId;
+  DateTime? _lastDocumentSendAt;
   DriverDocumentTransferLiveKit? _activeDocumentTransfer;
 
   @override
@@ -2900,6 +2901,7 @@ class _DriverReviewStatusScreenState extends State<DriverReviewStatusScreen> {
         final previous = _activeDocumentTransfer;
         _activeDocumentTransfer = null;
         _lastHandledRequestId = null;
+        _lastDocumentSendAt = null;
         if (previous != null) await previous.dispose();
         return;
       }
@@ -2907,7 +2909,17 @@ class _DriverReviewStatusScreenState extends State<DriverReviewStatusScreen> {
       final requestId = (request['request_id'] ?? '').toString().trim();
       final status = (request['status'] ?? '').toString();
       if (requestId.isEmpty || !{'requested', 'transferring'}.contains(status)) return;
-      if (_lastHandledRequestId == requestId && _activeDocumentTransfer != null) return;
+      if (_lastHandledRequestId == requestId && _activeDocumentTransfer != null) {
+        final lastSent = _lastDocumentSendAt;
+        if (lastSent != null && DateTime.now().difference(lastSent) < const Duration(seconds: 20)) return;
+        // Re-send the same immutable local files periodically. Reliable
+        // delivery covers a single connection, while this retry also recovers
+        // packets lost during a temporary disconnect/reconnect.
+        await _activeDocumentTransfer!.sendDriverDocuments();
+        _lastDocumentSendAt = DateTime.now();
+        if (mounted) setState(() => _documentTransferMessage = 'Повторно отправляем документы для проверки получения…');
+        return;
+      }
       final docs = await Future.wait([
         DriverDocumentStore.find(uid: uid, documentType: 'license'),
         DriverDocumentStore.find(uid: uid, documentType: 'driver_photo'),
@@ -2923,6 +2935,7 @@ class _DriverReviewStatusScreenState extends State<DriverReviewStatusScreen> {
       _lastHandledRequestId = requestId;
       setState(() => _documentTransferMessage = 'Диспетчер запросил документы. Отправляем три фотографии…');
       await session.sendDriverDocuments();
+      _lastDocumentSendAt = DateTime.now();
       if (mounted) setState(() => _documentTransferMessage = 'Фотографии отправлены по защищённому каналу. Ожидаем подтверждения диспетчера…');
     } catch (error) {
       final failed = _activeDocumentTransfer;
