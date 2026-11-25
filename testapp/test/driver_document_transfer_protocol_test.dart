@@ -33,12 +33,65 @@ void main(){
         DriverDocumentTransferProtocol.maxDocumentBytes+1),throwsFormatException);
       expect(()=>DriverDocumentTransferProtocol.decodeChunk([123,34]),throwsFormatException);
     });
+
+    test('reassembles chunks received out of order and tolerates identical retry',(){
+      final bytes=Uint8List.fromList(List<int>.generate(25001,(i)=>i%239));
+      final chunks=DriverDocumentTransferProtocol.encodeChunks(requestId:id,driverUid:uid,
+        documentType:'license',bytes:bytes).map(DriverDocumentTransferProtocol.decodeChunk).toList();
+      final receiver=DriverDocumentTransferAssembler();
+      expect(receiver.add(chunks[2]),isTrue);
+      expect(receiver.add(chunks[0]),isTrue);
+      expect(receiver.add(chunks[0]),isFalse);
+      expect(receiver.isComplete,isFalse);
+      expect(receiver.add(chunks[1]),isTrue);
+      expect(receiver.isComplete,isTrue);
+      expect(receiver.assemble(),orderedEquals(bytes));
+    });
+    test('does not assemble before all parts arrive',(){
+      final bytes=Uint8List.fromList(List<int>.generate(15000,(i)=>i%239));
+      final chunks=DriverDocumentTransferProtocol.encodeChunks(requestId:id,driverUid:uid,
+        documentType:'driver_photo',bytes:bytes).map(DriverDocumentTransferProtocol.decodeChunk).toList();
+      final receiver=DriverDocumentTransferAssembler()..add(chunks.first);
+      expect(receiver.assemble,throwsFormatException);
+    });
+    test('assembler rejects malformed public chunk objects before storing bytes',(){
+      final bytes=Uint8List.fromList(List<int>.generate(10240,(i)=>i%239));
+      final valid=DriverDocumentTransferProtocol.decodeChunk(
+        DriverDocumentTransferProtocol.encodeChunks(requestId:id,driverUid:uid,
+          documentType:'license',bytes:bytes).single);
+      final short=DocumentTransferChunk(requestId:valid.requestId,driverUid:valid.driverUid,
+        documentType:valid.documentType,index:valid.index,count:valid.count,total:valid.total,
+        digest:valid.digest,payload:Uint8List.fromList([1,2,3]));
+      expect(()=>DriverDocumentTransferAssembler().add(short),throwsFormatException);
+      final invalidCount=DocumentTransferChunk(requestId:valid.requestId,driverUid:valid.driverUid,
+        documentType:valid.documentType,index:valid.index,count:valid.count+1,total:valid.total,
+        digest:valid.digest,payload:valid.payload);
+      expect(()=>DriverDocumentTransferAssembler().add(invalidCount),throwsFormatException);
+    });
+    test('assembler detects corrupted complete payload by SHA-256',(){
+      final bytes=Uint8List.fromList(List<int>.generate(10240,(i)=>i%239));
+      final valid=DriverDocumentTransferProtocol.decodeChunk(
+        DriverDocumentTransferProtocol.encodeChunks(requestId:id,driverUid:uid,
+          documentType:'license',bytes:bytes).single);
+      final altered=DocumentTransferChunk(requestId:valid.requestId,driverUid:valid.driverUid,
+        documentType:valid.documentType,index:valid.index,count:valid.count,total:valid.total,
+        digest:List<String>.filled(64,'0').join(),payload:valid.payload);
+      final receiver=DriverDocumentTransferAssembler()..add(altered);
+      expect(receiver.assemble,throwsFormatException);
+    });
     test('acknowledgement retains request, document and chunk sequence',(){
       final packet=DriverDocumentTransferProtocol.encodeAck(requestId:id,driverUid:uid,
         documentType:'driver_photo',index:17);
       final ack=DriverDocumentTransferProtocol.decodeAck(packet);
       expect(ack.requestId,id);expect(ack.driverUid,uid);
       expect(ack.documentType,'driver_photo');expect(ack.index,17);
+    });
+    test('accepts the last valid chunk index and rejects an index beyond the 8 MiB limit',(){
+      expect(DriverDocumentTransferProtocol.decodeAck(
+        DriverDocumentTransferProtocol.encodeAck(requestId:id,driverUid:uid,
+          documentType:'license',index:819)).index,819);
+      expect(()=>DriverDocumentTransferProtocol.encodeAck(requestId:id,driverUid:uid,
+        documentType:'license',index:820),throwsFormatException);
     });
   });
   group('DriverDocumentStore',(){
@@ -53,6 +106,18 @@ void main(){
       expect(saved.size,bytes.length);
       expect(saved.sha256Hex,DriverDocumentTransferProtocol.sha256Of(bytes));
       expect(saved.toReceipt()['type'],'license');
+    });
+    test('replaces an existing document without leaving temporary files',()async{
+      final first=Uint8List.fromList([1,2,3,4]);
+      final second=Uint8List.fromList([9,8,7,6,5]);
+      final original=await DriverDocumentStore.persistBytes(root:root,uid:'driver_UID_123',
+        documentType:'license',bytes:first);
+      final replacement=await DriverDocumentStore.persistBytes(root:root,uid:'driver_UID_123',
+        documentType:'license',bytes:second);
+      expect(replacement.path,original.path);
+      expect(await File(replacement.path).readAsBytes(),orderedEquals(second));
+      final files=await Directory(root.path).list(recursive:true).toList();
+      expect(files.whereType<File>().where((file)=>file.path.endsWith('.tmp')||file.path.endsWith('.bak')),isEmpty);
     });
     test('rejects unsafe uid, unknown type, empty and oversized file',(){
       expect(()=>DriverDocumentStore.persistBytes(root:root,uid:'../bad',
