@@ -643,7 +643,7 @@ check('Driver profile is saved before optional local photos', registration.inclu
 check('Registration signs out after optional local photo persistence', registration.indexOf('DriverDocumentStore.persistPickedImage(uid: uid') < registration.indexOf('await FirebaseService.signOut()'));
 check('Rejected driver resubmission saves photos locally and uses the local review endpoint', app.includes('await WorkerApi.resubmitDriverDocuments()') && app.includes('DriverDocumentStore.persistPickedImage(') && !app.includes('await WorkerApi.saveDriverDocuments('));
 check('Worker reopens rejected document review without Firebase Storage paths', worker.includes('url.pathname === "/drivers/documents/resubmit"') && worker.includes("local_transfer_request_id=NULL"));
-check('Driver approval requires a complete current local transfer', worker.includes('const hasAllDocuments = hasNewLocalDocuments;') && !worker.includes('hasLegacyStoragePaths'));
+check('Dispatcher approval is not blocked by missing or unreceived photos', worker.includes('Photos and documents are optional at registration') && !worker.includes('decision === \\"approved\\" && !hasAllDocuments'));
 check('Storage document names are restricted to the three approved file names', ["'license.jpg'","'driver_photo.jpg'","'car_photo.jpg'"].every(name => storageRules.includes(name)));
 check('Storage reads are limited to the document owner or dispatcher', storageRules.includes('request.auth.uid == driverUid || isDispatcher()'));
 check('Storage writes are limited to the authenticated document owner', storageRules.includes('request.auth.uid == driverUid') && storageRules.includes('allow create, update:'));
@@ -670,7 +670,7 @@ check('Document submission immediately disables driver approval and online statu
 check('Driver review endpoint requires dispatcher authentication', reviewRoute.includes('await requireDispatcher(request)'));
 check('Driver review accepts only approved or rejected decisions', reviewRoute.includes('!["approved", "rejected"].includes(decision)'));
 check('Driver rejection requires a meaningful reason', reviewRoute.includes("decision === \"rejected\" && reason.length < 5"));
-check('Driver approval requires all three submitted documents', reviewRoute.includes('decision === "approved" && !hasAllDocuments'));
+check('Driver approval can proceed when no document row exists', reviewRoute.includes('if (!docs)') && reviewRoute.includes('INSERT OR IGNORE INTO driver_documents'));
 check('Dispatcher can reject an incomplete driver application with a reason', reviewRoute.includes('decision === "rejected"') && reviewRoute.includes("VALUES (?,'','','',unixepoch(),'pending',NULL,NULL,NULL)") && reviewRoute.includes('reason.length < 5'));
 check('Driver review only acts on a pending document submission', reviewRoute.includes('docs.review_status !== "pending"'));
 check('Driver review records reviewer identity and timestamp', reviewRoute.includes('reviewed_at=unixepoch(), reviewed_by=?'));
@@ -729,7 +729,8 @@ check('GPS tests cover sub-second future timestamps and exact custom age boundar
 
 check('Branded animated splash is the first app screen', app.includes('home: const BrandedSplashGate()'));
 check('Branded splash loads the user-provided taxi emblem asset', app.includes("rootBundle.load('assets/jak_splash.webp')") && pubspec.includes('assets/jak_splash.webp') && read('testapp/assets/jak_splash.webp').length > 1000);
-check('Branded splash stays visible for a bounded interval before the existing session gate', app.includes('Timer(const Duration(milliseconds: 4000)') && app.includes('const SessionGate()'));
+check('Branded splash stays visible for a bounded interval before the existing session gate', app.includes('Timer(const Duration(milliseconds: 4200)') && app.includes('const SessionGate()'));
+check('Branded splash animates its logo entrance and fades into the app', app.includes('SingleTickerProviderStateMixin') && app.includes('FadeTransition(') && app.includes('ScaleTransition(') && app.includes('transitionDuration: const Duration(milliseconds: 450)'));
 check('Branded splash cancels its navigation timer on dispose', app.includes('_navigationTimer?.cancel();'));
 check('Branded splash guards navigation after widget disposal', app.includes('if (!mounted) return;'));
 check('Branded splash exposes an accessible semantic brand label', app.includes("label: 'ЖОЛ АМАН КЕНЧИ Такси'"));
