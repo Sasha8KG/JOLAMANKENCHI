@@ -1099,7 +1099,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                               alignment: Alignment.bottomCenter,
                               child: Container(
                                 width: double.infinity,
-                                padding: const EdgeInsets.fromLTRB(8, 7, 8, 7),
+                                padding: const EdgeInsets.fromLTRB(8, 7, 8, 17),
                                 decoration: const BoxDecoration(
                                   gradient: LinearGradient(
                                     begin: Alignment.topCenter,
@@ -1113,6 +1113,15 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                                   style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w800,
                                     shadows: [Shadow(color: Colors.black87, blurRadius: 4)]),
                                 ),
+                              ),
+                            ),
+                            Positioned(
+                              left: 0, right: 0, bottom: 0, height: 10,
+                              child: Row(
+                                children: List.generate(18, (index) => Expanded(
+                                  child: Container(color: index.isEven
+                                    ? const Color(0xFFFFD400) : const Color(0xFF171717)),
+                                )),
                               ),
                             ),
                           ],
