@@ -474,11 +474,11 @@ export default {
         if (!valid) return response({ status: "error", message: "Укажите три документа в правильном порядке из личной папки Firebase Storage" }, 400);
         // Save the new submission and revoke line access in the same D1 batch.
         const documentResults = await env.DB.batch([
-          env.DB.prepare(`INSERT INTO driver_documents (driver_uid,license_url,driver_photo_url,car_photo_url,submitted_at,review_status,rejection_reason,reviewed_at,reviewed_by)
-            VALUES (?,?,?,?,unixepoch(),'pending',NULL,NULL,NULL) ON CONFLICT(driver_uid) DO UPDATE SET
+          env.DB.prepare(`INSERT INTO driver_documents (driver_uid,license_url,driver_photo_url,car_photo_url,submitted_at,review_status,rejection_reason,reviewed_at,reviewed_by,local_transfer_request_id)
+            VALUES (?,?,?,?,unixepoch(),'pending',NULL,NULL,NULL,NULL) ON CONFLICT(driver_uid) DO UPDATE SET
             license_url=excluded.license_url, driver_photo_url=excluded.driver_photo_url,
             car_photo_url=excluded.car_photo_url, submitted_at=unixepoch(), review_status='pending',
-            rejection_reason=NULL, reviewed_at=NULL, reviewed_by=NULL`)
+            rejection_reason=NULL, reviewed_at=NULL, reviewed_by=NULL, local_transfer_request_id=NULL`)
             .bind(auth.user.localId, ...paths),
           env.DB.prepare("UPDATE drivers SET approved=0, online=0, updated_at=unixepoch() WHERE uid=?")
             .bind(auth.user.localId)
