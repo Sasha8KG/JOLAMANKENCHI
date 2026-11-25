@@ -53,18 +53,30 @@ class DispatcherOverviewSnapshot {
       }
     }
 
+    // Older deployed Worker versions may omit business_date. Keep the
+    // dispatcher cabinet usable in that case by using the device's local
+    // calendar date (Kyrgyzstan devices use UTC+6). A supplied but malformed
+    // date is still rejected so incorrect server data is never accepted.
     final rawDate = payload['business_date'];
-    final parsedDate =
-        rawDate is String ? DateTime.tryParse(rawDate) : null;
-    if (rawDate is! String ||
-        !RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(rawDate) ||
-        parsedDate == null ||
-        parsedDate.year.toString().padLeft(4, '0') != rawDate.substring(0, 4) ||
-        parsedDate.month.toString().padLeft(2, '0') != rawDate.substring(5, 7) ||
-        parsedDate.day.toString().padLeft(2, '0') != rawDate.substring(8, 10)) {
-      throw const FormatException(
-        'Сервер вернул неверную дату рабочего дня.',
-      );
+    final String businessDate;
+    if (rawDate == null || (rawDate is String && rawDate.trim().isEmpty)) {
+      final now = DateTime.now();
+      businessDate =
+          '\${now.year.toString().padLeft(4, '0')}-\${now.month.toString().padLeft(2, '0')}-\${now.day.toString().padLeft(2, '0')}';
+    } else {
+      final parsedDate =
+          rawDate is String ? DateTime.tryParse(rawDate) : null;
+      if (rawDate is! String ||
+          !RegExp(r'^\\d{4}-\\d{2}-\\d{2}$').hasMatch(rawDate) ||
+          parsedDate == null ||
+          parsedDate.year.toString().padLeft(4, '0') != rawDate.substring(0, 4) ||
+          parsedDate.month.toString().padLeft(2, '0') != rawDate.substring(5, 7) ||
+          parsedDate.day.toString().padLeft(2, '0') != rawDate.substring(8, 10)) {
+        throw const FormatException(
+          'Сервер вернул неверную дату рабочего дня.',
+        );
+      }
+      businessDate = rawDate;
     }
 
     return DispatcherOverviewSnapshot._(
@@ -73,7 +85,7 @@ class DispatcherOverviewSnapshot {
       today: List.unmodifiable(today),
       earnings: List.unmodifiable(earnings),
       closedShifts: List.unmodifiable(closedShifts),
-      businessDate: rawDate,
+      businessDate: businessDate,
     );
   }
 
