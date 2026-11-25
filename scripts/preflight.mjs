@@ -670,7 +670,7 @@ check('Document submission requires Firebase authentication', documentsRoute.inc
 check('Document submission requires an existing driver profile', documentsRoute.includes('if (!driver)'));
 check('Document submission constructs paths under the authenticated UID', documentsRoute.includes('`drivers/${auth.user.localId}/license.jpg`') && documentsRoute.includes('`drivers/${auth.user.localId}/driver_photo.jpg`') && documentsRoute.includes('`drivers/${auth.user.localId}/car_photo.jpg`'));
 check('Document submission rejects paths in the wrong order or from another UID', documentsRoute.includes('paths.every((value, index) => value === expectedPaths[index])'));
-check('Document submission stores a pending review state', documentsRoute.includes("VALUES (?,?,?,?,unixepoch(),'pending',NULL,NULL,NULL)"));
+check('Document submission stores a pending review state and clears any previous local-transfer marker', documentsRoute.includes("VALUES (?,?,?,?,unixepoch(),'pending',NULL,NULL,NULL,NULL)") && documentsRoute.includes('local_transfer_request_id=NULL'));
 check('Resubmitted documents reset the review state to pending', documentsRoute.includes("review_status='pending'"));
 check('Document submission clears previous rejection details', documentsRoute.includes('rejection_reason=NULL, reviewed_at=NULL, reviewed_by=NULL'));
 check('Document submission immediately disables driver approval and online status', documentsRoute.includes('UPDATE drivers SET approved=0, online=0'));
@@ -735,21 +735,13 @@ check('GPS tests cover sub-second future timestamps and exact custom age boundar
 
 
 check('Branded animated splash is the first app screen', app.includes('home: const BrandedSplashGate()'));
-check('Branded splash has a bounded multi-phase entrance animation', app.includes('duration: const Duration(milliseconds: 3800)'));
-check('Branded splash fades in the brand and taxi separately from the slogan', app.includes('opacity: _brandFade,') && app.includes('opacity: _sloganFade,'));
-check('Branded splash cross-fades the emblem out before the slogan finishes appearing', app.includes('begin: 1, end: 0') && app.includes('weight: 25') && app.includes('curve: Curves.easeInOut'));
-check('Branded splash slides the taxi emblem smoothly into place', app.includes('late final Animation<Offset> _carSlide;') && app.includes('position: _carSlide,') && app.includes('Offset(-0.16, 0.06)'));
-check('App title uses the approved Cyrillic spelling and capitalization', app.includes("title: '«Жол Аман Кенчи» Такси'"));
-check('Branded splash scales the yellow taxi emblem into view', app.includes('scale: _carScale,') && app.includes('Icons.local_taxi_rounded, size: 88, color: ink'));
-check('Branded splash transitions to the existing session gate after the animation', app.includes('Timer(const Duration(milliseconds: 4700)') && app.includes('const SessionGate()'));
+check('Branded splash loads the user-provided taxi emblem asset', app.includes("rootBundle.load('assets/jak_splash.webp')") && pubspec.includes('assets/jak_splash.webp'));
+check('Branded splash stays visible for a bounded interval before the existing session gate', app.includes('Timer(const Duration(milliseconds: 4000)') && app.includes('const SessionGate()'));
 check('Branded splash cancels its navigation timer on dispose', app.includes('_navigationTimer?.cancel();'));
 check('Branded splash guards navigation after widget disposal', app.includes('if (!mounted) return;'));
-check('Branded splash shows the approved taxi fleet brand', app.includes('ЖОЛ АМАН КЕНЧИ') && app.includes('ТАКСИ'));
-check('Branded splash includes the Kyrgyz slogan and welcome phrase', app.includes('Ылдам, коопсуз, ишенимдүү') && app.includes('Жолуңуз ар дайым шыдыр болсун!'));
-check('Branded splash keeps Kyrgyz ornament and service area details', app.includes('❧  ✥  ❧') && app.includes('СҮЛҮКТҮ  •  ЛЕЙЛЕК  •  БАТКЕН'));
-check('Branded splash exposes an accessible semantic brand label', app.includes("label: 'Жол Аман Кенчи Такси'"));
-check('Branded splash uses a blue premium background with gold taxi accents', app.includes('Color(0xFF0754A6), Color(0xFF087DE0), Color(0xFF061A35)') && app.includes('border: Border.all(color: gold, width: 4)'));
-check('Branded splash keeps the yellow taxi inside a high-contrast badge', app.includes('width: 150,') && app.includes('height: 112,') && app.includes('Icons.local_taxi_rounded, size: 88, color: ink'));
+check('Branded splash exposes an accessible semantic brand label', app.includes("label: 'ЖОЛ АМАН КЕНЧИ Такси'"));
+check('Branded splash uses the yellow brand background without a blue frame', app.includes('backgroundColor: const Color(0xFFFFD400)') && app.includes('fit: BoxFit.contain') && !app.includes('Border.all(color: gold, width: 4)'));
+check('Branded splash has a readable fallback if the emblem asset cannot load', app.includes('snapshot.hasError || !snapshot.hasData') && app.includes('ЖОЛ АМАН КЕНЧИ · Такси'));
 check('Driver and dispatcher sections use the requested green header palette', app.includes('backgroundColor: const Color(0xFF087A42)') && app.includes('foregroundColor: Colors.white'));
 check('Passenger order action uses a gold button with dark text', app.includes('backgroundColor: const Color(0xFFFFD400)') && app.includes('foregroundColor: const Color(0xFF171717)'));
 check('Global app bars use the gold and black brand palette', app.includes('backgroundColor: Color(0xFFFFD400)') && app.includes('foregroundColor: Color(0xFF171717)'));
@@ -780,7 +772,7 @@ check('Passenger pickup instructions are highlighted with a location icon', app.
 check('Passenger destination field has a flag icon and branded focus border', app.includes('Icons.flag_rounded') && app.includes('focusedBorder: OutlineInputBorder'));
 check('Passenger order action is a large taxi button with branded colors', app.includes('ElevatedButton.icon(') && app.includes('minimumSize: const Size.fromHeight(60)') && app.includes('ВЫЗВАТЬ МАШИНУ'));
 check('Passenger count controls are grouped in a readable surface', app.includes('Icons.people_alt_rounded') && app.includes('Пассажиры: '));
-check('Widget test covers splash brand, slogan and service area', read('testapp/test/widget_test.dart').includes('Branded splash screen') && read('testapp/test/widget_test.dart').includes('shows the approved brand and Kyrgyz slogan'));
+check('Widget test covers the supplied splash emblem and yellow borderless background', read('testapp/test/widget_test.dart').includes('shows the supplied taxi emblem on a yellow background'));
 
 
 check('Language switch offers Russian and Kyrgyz', localization.includes("DropdownMenuItem(value: 'ru', child: Text('Русский'))") && localization.includes("DropdownMenuItem(value: 'ky', child: Text('Кыргызча'))"));
