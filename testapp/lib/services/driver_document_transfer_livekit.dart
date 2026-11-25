@@ -55,7 +55,7 @@ class DriverDocumentTransferLiveKit {
         .hasMatch(normalizedRequest) ||
         normalizedUid.isEmpty ||
         normalizedUid.length > 128 ||
-        RegExp(r'[\\x00-\\x1F\\x7F]').hasMatch(normalizedUid)) {
+        RegExp(r'[\x00-\x1F\x7F]').hasMatch(normalizedUid)) {
       throw const FormatException('Некорректные данные передачи документов.');
     }
 
