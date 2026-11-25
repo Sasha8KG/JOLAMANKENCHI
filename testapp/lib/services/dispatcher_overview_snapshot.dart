@@ -53,13 +53,9 @@ class DispatcherOverviewSnapshot {
       }
     }
 
-    // Older deployed Worker versions may omit business_date. Keep the
-    // dispatcher cabinet usable in that case by using the device's local
-    // calendar date (Kyrgyzstan devices use UTC+6). A supplied but malformed
-    // date is still rejected so incorrect server data is never accepted.
-    // Older deployed Worker versions may omit business_date. Keep the
-    // dispatcher cabinet usable in that case by using the device's local
-    // calendar date. A supplied but malformed date is still rejected.
+    // Older deployed Worker versions may omit business_date.
+    // Use the device's local calendar date only for an absent value.
+    // A supplied but malformed date remains an error.
     final rawDate = payload['business_date'];
     final String businessDate;
     if (rawDate == null || (rawDate is String && rawDate.trim().isEmpty)) {
