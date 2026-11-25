@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:jolamankenchi_taxi/services/firebase_service.dart';
+import 'package:sulyukta_taxi/services/firebase_service.dart';
 
 void main() {
   group('Кыргызский номер телефона', () {

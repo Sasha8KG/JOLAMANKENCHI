@@ -16,6 +16,11 @@ class FirebaseService {
       value.codeUnits.any((unit) => unit < 32 || unit == 127);
 
   static bool _hasValidPhoneCharacters(String phone) {
+    // Reject control characters before trim(); otherwise a trailing newline
+    // would be silently removed and an invalid phone number accepted.
+    for (final unit in phone.codeUnits) {
+      if (unit < 32 || unit == 127) return false;
+    }
     final value = phone.trim();
     if (value.isEmpty) return false;
     var digitCount = 0;
