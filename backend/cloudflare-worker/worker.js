@@ -1098,6 +1098,48 @@ export default {
         return response({ apiStatus: "ok", status: order.status, order, driver });
       }
 
+      // Drivers may close their own assigned trip after completing the ride.
+      // The dispatcher UID is stored as the fleet ledger owner; the driver UID
+      // remains the accountable earner in trip_finances.
+      if (url.pathname === "/orders/complete-driver" && request.method === "POST") {
+        const auth = await requireApprovedDriver(request, env);
+        const b = await readJsonObject(request);
+        if (!b) return response({ status: "error", message: "Переданы неверные данные запроса. Отправьте корректный JSON-объект." }, 400);
+        const orderId = String(b.order_id || "");
+        const fareSom = Number(b.fare_som);
+        if (!orderId || !Number.isSafeInteger(fareSom) || fareSom < 1 || fareSom > 1000000) {
+          return response({ status: "error", message: "Укажите заказ и корректную сумму от 1 до 1 000 000 сом" }, 400);
+        }
+        const order = await env.DB.prepare(`SELECT id,status FROM orders
+          WHERE id=? AND assigned_driver_uid=? LIMIT 1`).bind(orderId, auth.user.localId).first();
+        if (!order) return response({ status: "error", message: "Заказ не найден или назначен другому водителю" }, 404);
+        if (order.status === "completed") {
+          const existing = await env.DB.prepare("SELECT fare_som FROM trip_finances WHERE order_id=? AND driver_uid=?")
+            .bind(orderId, auth.user.localId).first();
+          if (existing) return response({ status: "ok", completed: true, already_completed: true, order_id: orderId, fare_som: Number(existing.fare_som) });
+        }
+        if (!["driver_assigned", "arrived"].includes(order.status)) {
+          return response({ status: "error", message: "Этот заказ нельзя завершить: его статус уже изменился" }, 409);
+        }
+        const results = await env.DB.batch([
+          env.DB.prepare(`INSERT INTO trip_finances (order_id,driver_uid,fare_som,dispatcher_uid,completed_at)
+            SELECT id, assigned_driver_uid, ?, ?, unixepoch() FROM orders
+            WHERE id=? AND assigned_driver_uid=? AND status IN ('driver_assigned','arrived')
+            ON CONFLICT(order_id) DO NOTHING`)
+            .bind(fareSom, DISPATCHER_UID, orderId, auth.user.localId),
+          env.DB.prepare(`UPDATE orders SET status='completed'
+            WHERE id=? AND assigned_driver_uid=? AND status IN ('driver_assigned','arrived')
+              AND EXISTS (SELECT 1 FROM trip_finances f WHERE f.order_id=orders.id AND f.driver_uid=?)`)
+            .bind(orderId, auth.user.localId, auth.user.localId)
+        ]);
+        const inserted = Number(results?.[0]?.meta?.changes || 0);
+        const updated = Number(results?.[1]?.meta?.changes || 0);
+        if (inserted !== 1 || updated !== 1) {
+          return response({ status: "error", message: "Не удалось записать поездку. Обновите список заказов и проверьте её статус." }, 409);
+        }
+        return response({ status: "ok", completed: true, order_id: orderId, fare_som: fareSom });
+      }
+
       if (url.pathname === "/orders/complete" && request.method === "POST") {
         const auth = await requireDispatcher(request);
         const b = await readJsonObject(request);
