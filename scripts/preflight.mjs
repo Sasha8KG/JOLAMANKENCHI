@@ -416,7 +416,7 @@ check('Driver GPS stream failure marks the driver offline', app.includes('Stop a
 check('Driver heartbeat failure marks the driver offline', app.includes('Do not keep the driver advertised as online when fresh GPS cannot be confirmed.') && app.includes('WorkerApi.setDriverOnline(online: false)'));
 const driverScreenStart = app.indexOf('class _DriverMapScreenState');
 const driverDisposeStart = app.indexOf('void dispose()', driverScreenStart);
-const driverDisposeEnd = app.indexOf('\n  void _acceptOrder', driverDisposeStart);
+const driverDisposeEnd = app.indexOf('\n  void _showLocationMessage', driverDisposeStart);
 const driverDisposeBlock = driverDisposeStart >= 0 && driverDisposeEnd > driverDisposeStart
   ? app.slice(driverDisposeStart, driverDisposeEnd) : '';
 check('Leaving the live driver screen marks the driver offline', driverDisposeBlock.includes('WorkerApi.setDriverOnline(online: false)'));
