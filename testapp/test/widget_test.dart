@@ -28,37 +28,47 @@ void main() {
   });
 
   group('Russian and Kyrgyz language switch', () {
-    testWidgets('switches the role menu labels between Russian and Kyrgyz', (tester) async {
+    testWidgets('opens the language picker over the supplied role menu artwork', (tester) async {
       TaxiLanguage.current.value = 'ru';
       await tester.pumpWidget(const MaterialApp(home: RoleSelectionScreen()));
+      expect(find.byType(Image), findsOneWidget);
       expect(find.text('Русский'), findsOneWidget);
-      expect(find.text('Я ПАССАЖИР'), findsOneWidget);
-      expect(find.text('Заказать поездку'), findsOneWidget);
       await tester.tap(find.text('Русский'));
       await tester.pumpAndSettle();
+      expect(find.text('Кыргызча'), findsOneWidget);
       await tester.tap(find.text('Кыргызча').last);
       await tester.pumpAndSettle();
-      expect(find.text('МЕН ЖҮРГҮНЧҮМҮН'), findsOneWidget);
-      expect(find.text('Унаа чакыруу'), findsOneWidget);
-      expect(find.text('Кыргызстан • Баткен облусу'), findsOneWidget);
+      expect(find.text('Кыргызча'), findsOneWidget);
+      expect(find.byType(Image), findsOneWidget);
       TaxiLanguage.current.value = 'ru';
+    });
+
+    testWidgets('role menu artwork keeps passenger, driver and dispatcher tap targets', (tester) async {
+      TaxiLanguage.current.value = 'ru';
+      await tester.pumpWidget(const MaterialApp(home: RoleSelectionScreen()));
+      expect(find.byType(Image), findsOneWidget);
+      final semantics = tester.widgetList<Semantics>(find.byType(Semantics));
+      expect(semantics.any((item) => item.properties.label == 'Я пассажир / Мен жүргүнчүмүн'), isTrue);
+      expect(semantics.any((item) => item.properties.label == 'Я водитель / Мен айдоочумун'), isTrue);
+      expect(semantics.any((item) => item.properties.label == 'Диспетчер'), isTrue);
     });
   });
 
   group('Branded splash screen', () {
-    testWidgets('shows the animated taxi splash on a blue sky background', (tester) async {
+    testWidgets('shows complete contained taxi artwork and bottom loading animation', (tester) async {
       await tester.pumpWidget(const MaterialApp(home: BrandedSplashGate()));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
       final scaffold = tester.widget<Scaffold>(find.byType(Scaffold).first);
-      expect(scaffold.backgroundColor, const Color(0xFF0875C9));
+      expect(scaffold.backgroundColor, const Color(0xFF102D4D));
       expect(find.byType(Image), findsOneWidget);
-      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
       final image = tester.widget<Image>(find.byType(Image));
-      expect(image.fit, BoxFit.cover);
+      expect(image.fit, BoxFit.contain);
       expect(find.byWidgetPredicate((widget) =>
           widget is Semantics && widget.properties.label == 'ЖОЛ АМАН КЕНЧИ Такси'),
           findsOneWidget);
+      expect(find.byType(RotationTransition), findsOneWidget);
       await tester.pump(const Duration(milliseconds: 100));
     });
   });
