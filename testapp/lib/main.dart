@@ -2167,9 +2167,24 @@ class _ClientMapScreenState extends State<ClientMapScreen> with WidgetsBindingOb
                     if (order?.assignedDriver != null && gpsIsFresh)
                       Marker(
                         point: order!.assignedDriver!.currentLocation,
-                        width: 44,
-                        height: 44,
-                        child: const Icon(Icons.local_taxi, color: Colors.blue, size: 38),
+                        width: 32,
+                        height: 32,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFD400),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: const Color(0xFF171717), width: 1.5),
+                            boxShadow: const [
+                              BoxShadow(color: Colors.black38, blurRadius: 5, offset: Offset(0, 2)),
+                            ],
+                          ),
+                          alignment: Alignment.center,
+                          child: const Icon(
+                            Icons.local_taxi_rounded,
+                            color: Color(0xFF171717),
+                            size: 21,
+                          ),
+                        ),
                       ),
                   ],
                 ),
