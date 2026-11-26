@@ -862,7 +862,13 @@ check('Driver refusal cannot reopen an order after a concurrent status change', 
 check('Worker JSON reader converts malformed and empty request bodies into client validation failures', /async function readJsonObject\(request\)[\s\S]*?try \{[\s\S]*?await request\.json\(\)[\s\S]*?catch \(_\)[\s\S]*?return null;/.test(worker));
 check('Worker JSON reader rejects arrays and primitive JSON values', /return value && typeof value === "object" && !Array\.isArray\(value\) \? value : null;/.test(worker));
 check('Worker JSON reader is the only direct request JSON parser', (worker.match(/request\.json\(\)/g) || []).length === 1);
-check('All 20 POST JSON handlers use the safe JSON reader', (worker.match(/await readJsonObject\(request\)/g) || []).length === 20);
+check('All 21 POST JSON handlers use the safe JSON reader', (worker.match(/await readJsonObject\\(request\\)/g) || []).length === 21);
+const driverCompleteRoute = worker.slice(worker.indexOf('url.pathname === "/orders/complete-driver"'));
+check('Driver can complete only their own assigned trip and save it once to the finance ledger',
+  driverCompleteRoute.includes('requireApprovedDriver(request, env)') &&
+  driverCompleteRoute.includes("assigned_driver_uid=?") &&
+  driverCompleteRoute.includes("ON CONFLICT(order_id) DO NOTHING") &&
+  driverCompleteRoute.includes("status='completed'"));
 check('Driver registration and document upload reject malformed JSON before field access', /\/drivers\/register[\s\S]*?readJsonObject\(request\)[\s\S]*?if \(!b\)/.test(worker) && /\/drivers\/documents[\s\S]*?readJsonObject\(request\)[\s\S]*?if \(!b\)/.test(worker));
 check('Driver review and approval reject malformed JSON before field access', /\/drivers\/review[\s\S]*?readJsonObject\(request\)[\s\S]*?if \(!b\)/.test(worker) && /\/drivers\/approve[\s\S]*?readJsonObject\(request\)[\s\S]*?if \(!b\)/.test(worker));
 check('Tariff, commission and shift handlers reject malformed JSON before numeric conversion', /\/tariffs[\s\S]*?readJsonObject\(request\)[\s\S]*?if \(!b\)/.test(worker) && /\/drivers\/commission[\s\S]*?readJsonObject\(request\)[\s\S]*?if \(!b\)/.test(worker) && /\/dispatcher\/shifts\/close[\s\S]*?readJsonObject\(request\)[\s\S]*?if \(!b\)/.test(worker));
