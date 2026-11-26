@@ -767,7 +767,7 @@ check('Passenger pickup instructions are highlighted with a location icon', app.
 check('Passenger destination field has a flag icon and branded focus border', app.includes('Icons.flag_rounded') && app.includes('focusedBorder: OutlineInputBorder'));
 check('Passenger order action is a large taxi button with branded colors', app.includes('ElevatedButton.icon(') && app.includes('minimumSize: const Size.fromHeight(60)') && app.includes('ВЫЗВАТЬ МАШИНУ'));
 check('Passenger count controls are grouped in a readable surface', app.includes('Icons.people_alt_rounded') && app.includes('Пассажиры: '));
-check('Widget test covers the animated taxi splash on a blue sky background', read('testapp/test/widget_test.dart').includes('shows the animated taxi splash on a blue sky background'));
+check('Widget test covers the complete contained taxi splash and bottom loading animation', read('testapp/test/widget_test.dart').includes('shows complete contained taxi artwork and bottom loading animation'));
 
 
 check('Language switch offers Russian and Kyrgyz', localization.includes("DropdownMenuItem(value: 'ru', child: Text('Русский'))") && localization.includes("DropdownMenuItem(value: 'ky', child: Text('Кыргызча'))"));
