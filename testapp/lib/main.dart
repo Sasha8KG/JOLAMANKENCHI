@@ -3098,11 +3098,11 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
     if (_driverWantsOnline) {
       _startLocationTracking();
     }
-    // Restore the driver's own server-side earnings summary on cabinet entry.
-    unawaited(_loadDriverEarnings());
     // Also restore an already assigned trip when the driver is temporarily offline.
     // The server returns assigned trips separately and keeps the open queue empty.
     unawaited(_pollServerOrders());
+    // Restore the driver's own server-side earnings summary on cabinet entry.
+    unawaited(_loadDriverEarnings());
     _ordersPollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       _pollServerOrders();
     });
