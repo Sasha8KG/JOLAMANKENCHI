@@ -294,11 +294,13 @@ export default {
       // Driver commission and immutable daily shift snapshots; existing trip_finances stays untouched.
       await env.DB.prepare(`CREATE TABLE IF NOT EXISTS driver_commission_settings (
         driver_uid TEXT PRIMARY KEY NOT NULL,
-        commission_percent INTEGER NOT NULL DEFAULT 50 CHECK (commission_percent BETWEEN 0 AND 100),
+        commission_percent INTEGER NOT NULL CHECK (commission_percent BETWEEN 0 AND 100),
         updated_by TEXT,
         updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
         FOREIGN KEY(driver_uid) REFERENCES drivers(uid)
       )`).run();
+      // Remove only legacy auto-generated defaults. A dispatcher-set value always has updated_by.
+      await env.DB.prepare("DELETE FROM driver_commission_settings WHERE updated_by IS NULL").run();
       await env.DB.prepare(`CREATE TABLE IF NOT EXISTS driver_shifts (
         id TEXT PRIMARY KEY NOT NULL,
         driver_uid TEXT NOT NULL,
@@ -323,9 +325,6 @@ export default {
         FOREIGN KEY(shift_id) REFERENCES driver_shifts(id),
         FOREIGN KEY(order_id) REFERENCES trip_finances(order_id)
       )`).run();
-      // Existing drivers receive the legacy model's 50% default once; saved values are never overwritten.
-      await env.DB.prepare(`INSERT OR IGNORE INTO driver_commission_settings (driver_uid, commission_percent)
-        SELECT uid, 50 FROM drivers`).run();
       await env.DB.prepare(`CREATE TABLE IF NOT EXISTS radio_messages (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         sender_uid TEXT NOT NULL,
