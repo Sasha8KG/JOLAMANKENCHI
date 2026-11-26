@@ -3264,9 +3264,9 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
       final result=await WorkerApi.closeOwnDriverShift();
       final shift=Map<String,dynamic>.from(result['shift'] as Map? ?? {});
       await _loadDriverEarnings();
-      if(mounted)_notice('Смена закрыта. Вам: ${shift['driver_share_som']??0} сом; таксопарку: ${shift['park_share_som']??0} сом.');
+      if(mounted)_showLocationMessage('Смена закрыта. Вам: ${shift['driver_share_som']??0} сом; таксопарку: ${shift['park_share_som']??0} сом.');
     }catch(error){
-      if(mounted)_notice(error.toString());
+      if(mounted)_showLocationMessage(error.toString());
       await _loadDriverEarnings();
     }finally{if(mounted)setState(()=>_driverShiftClosing=false);}
   }
