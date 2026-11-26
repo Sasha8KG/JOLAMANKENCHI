@@ -1,7 +1,7 @@
 const FIREBASE_API_KEY = "AIzaSyBh5WG_rXaxBjDHOVPXPmmw8gqBCRubIAM";
 const PROJECT_ID = "jol-aman-kenchi";
 // Increment this marker for each published Worker revision.
-const WORKER_REVISION = "2026-11-25.1";
+const WORKER_REVISION = "2026-11-26.1";
 const DISPATCHER_UID = "AMGNzQEr7GfnisJcr7u4BqcdIvh1";
 
 function response(data, status = 200) {
@@ -830,6 +830,37 @@ export default {
             ? { before_at: Number(last.sort_at), before_id: String(last.order_id) }
             : null
         });
+      }
+
+      // Driver's own daily earnings: open trips plus already closed shift snapshots.
+      if (url.pathname === "/driver/earnings" && request.method === "GET") {
+        const auth = await requireApprovedDriver(request, env);
+        const businessDate = kgTodayDate();
+        const bounds = kgDateBounds(businessDate);
+        const commission = await env.DB.prepare(
+          "SELECT commission_percent FROM driver_commission_settings WHERE driver_uid=?"
+        ).bind(auth.user.localId).first();
+        const open = await env.DB.prepare(`SELECT COUNT(*) AS trip_count, COALESCE(SUM(f.fare_som),0) AS gross_earnings_som
+          FROM trip_finances f
+          WHERE f.driver_uid=? AND f.completed_at>=? AND f.completed_at<?
+            AND NOT EXISTS (SELECT 1 FROM shift_finance_items si WHERE si.order_id=f.order_id)`)
+          .bind(auth.user.localId, bounds.start, bounds.end).first();
+        const closed = await env.DB.prepare(`SELECT COALESCE(SUM(trip_count),0) AS trip_count,
+          COALESCE(SUM(gross_earnings_som),0) AS gross_earnings_som,
+          COALESCE(SUM(driver_share_som),0) AS driver_share_som,
+          COALESCE(SUM(park_share_som),0) AS park_share_som
+          FROM driver_shifts WHERE driver_uid=? AND shift_date=?`)
+          .bind(auth.user.localId, businessDate).first();
+        const percent = Number(commission?.commission_percent ?? 50);
+        const openGross = Number(open?.gross_earnings_som ?? 0);
+        const openDriverShare = Math.round(openGross * percent / 100);
+        return response({ status: "ok", business_date: businessDate, earnings: {
+          completed_trips: Number(open?.trip_count ?? 0) + Number(closed?.trip_count ?? 0),
+          gross_earnings_som: openGross + Number(closed?.gross_earnings_som ?? 0),
+          commission_percent: percent,
+          driver_share_som: openDriverShare + Number(closed?.driver_share_som ?? 0),
+          park_share_som: openGross - openDriverShare + Number(closed?.park_share_som ?? 0)
+        } });
       }
 
       // Secure dispatcher dashboard: only the fixed dispatcher Firebase UID can read fleet data.

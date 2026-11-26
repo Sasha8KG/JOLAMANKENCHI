@@ -3070,6 +3070,8 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
   Timer? _locationRetryTimer;
   List<Map<String, dynamic>> _serverOpenOrders = [];
   List<Map<String, dynamic>> _serverAssignedOrders = [];
+  Map<String, dynamic> _driverEarnings = <String, dynamic>{};
+  bool _driverEarningsLoading = false;
   bool _assignedOrdersLoaded = false;
   final Set<String> _respondingOrderIds = <String>{};
   final Set<String> _orderActionIds = <String>{};
@@ -3096,6 +3098,8 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
     if (_driverWantsOnline) {
       _startLocationTracking();
     }
+    // Restore the driver's own server-side earnings summary on cabinet entry.
+    unawaited(_loadDriverEarnings());
     // Also restore an already assigned trip when the driver is temporarily offline.
     // The server returns assigned trips separately and keeps the open queue empty.
     unawaited(_pollServerOrders());
@@ -3109,6 +3113,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
     if (state != AppLifecycleState.resumed || !mounted) return;
     // Timers and GPS streams can be paused by Android while the app is backgrounded.
     unawaited(_pollServerOrders());
+    unawaited(_loadDriverEarnings());
     final driver = TaxiParkState.currentLoggedInDriver;
     if (!_driverWantsOnline || driver == null) return;
     if (_positionSubscription == null) {
@@ -3121,6 +3126,21 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
   String _serverOrderId(Map<String, dynamic> order) {
     final id = (order['id'] ?? order['firebase_order_id'] ?? '').toString().trim();
     return RegExp(r'^[A-Za-z0-9_-]{1,128}$').hasMatch(id) ? id : '';
+  }
+
+  Future<void> _loadDriverEarnings() async {
+    if (!mounted || _driverEarningsLoading) return;
+    _driverEarningsLoading = true;
+    try {
+      final data = await WorkerApi.getDriverEarnings();
+      final raw = data['earnings'];
+      if (!mounted || raw is! Map) return;
+      setState(() => _driverEarnings = Map<String, dynamic>.from(raw));
+    } catch (_) {
+      // A temporary finance request failure must not interrupt order handling.
+    } finally {
+      _driverEarningsLoading = false;
+    }
   }
 
   Future<void> _pollServerOrders() async {
@@ -3283,6 +3303,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
     setState(() => _orderActionIds.add(id));
     try {
       await WorkerApi.completeDriverOrder(orderId: id, fareSom: fare);
+      await _loadDriverEarnings();
       if (mounted) _showLocationMessage('Заказ завершён. В финансовый отчёт записано $fare сом.');
     } on WorkerApiException catch (e) {
       if (mounted) _showLocationMessage(e.message);
@@ -4044,6 +4065,24 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                Card(
+                  color: const Color(0xFFFFF7D6),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      const TaxiLocalizedText(russian: 'ВАШ ЗАРАБОТОК СЕГОДНЯ', kyrgyz: 'БҮГҮНКҮ КИРЕШЕҢИЗ',
+                        style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF765500))),
+                      const SizedBox(height: 5),
+                      TaxiText('Выполнено заказов: ${_driverEarnings['completed_trips'] ?? 0}'),
+                      TaxiText('Общая сумма поездок: ${_driverEarnings['gross_earnings_som'] ?? 0} сом'),
+                      TaxiText('Ваша доля (${_driverEarnings['commission_percent'] ?? 50}%): ${_driverEarnings['driver_share_som'] ?? 0} сом',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      if (_driverEarnings.isEmpty)
+                        const TaxiText('Данные обновятся после подключения к серверу.', style: TextStyle(fontSize: 11, color: Colors.black54)),
+                    ]),
+                  ),
+                ),
+                const SizedBox(height: 8),
                 const TaxiLocalizedText(russian: 'Заказы и их статусы обновляются с сервера', kyrgyz: 'Буйрутмалар жана алардын абалы серверден жаңыланат',
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF087A42))),
                 const SizedBox(height: 10),

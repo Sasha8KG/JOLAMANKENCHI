@@ -354,6 +354,8 @@ class WorkerApi {
   }
 
 
+  static Future<Map<String, dynamic>> getDriverEarnings() => _request('/driver/earnings');
+
   static Future<Map<String, dynamic>> getTariffs() => _request('/tariffs');
 
   static Future<Map<String, dynamic>> saveTariffs({
