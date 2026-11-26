@@ -542,7 +542,6 @@ class _BrandedSplashGateState extends State<BrandedSplashGate>
   late final AnimationController _ambient;
   late final Animation<double> _fade;
   late final Animation<double> _scale;
-  late final Animation<double> _float;
 
   @override
   void initState() {
@@ -552,17 +551,14 @@ class _BrandedSplashGateState extends State<BrandedSplashGate>
       duration: const Duration(milliseconds: 1100),
     );
     _fade = CurvedAnimation(parent: _entrance, curve: Curves.easeOut);
-    _scale = Tween<double>(begin: 0.94, end: 1.0).animate(
-      CurvedAnimation(parent: _entrance, curve: Curves.easeOutBack),
+    _scale = Tween<double>(begin: 0.97, end: 1.0).animate(
+      CurvedAnimation(parent: _entrance, curve: Curves.easeOutCubic),
     );
     _entrance.forward();
     _ambient = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2400),
-    )..repeat(reverse: true);
-    _float = Tween<double>(begin: 3, end: -3).animate(
-      CurvedAnimation(parent: _ambient, curve: Curves.easeInOut),
-    );
+      duration: const Duration(milliseconds: 1400),
+    )..repeat();
     _navigationTimer = Timer(const Duration(milliseconds: 4200), () {
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
@@ -586,51 +582,82 @@ class _BrandedSplashGateState extends State<BrandedSplashGate>
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
     return Scaffold(
-      backgroundColor: const Color(0xFF0875C9),
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          const DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Color(0xFF0875C9), Color(0xFFB9DDF5), Color(0xFF102D4D)],
-                stops: [0.0, 0.62, 1.0],
-              ),
-            ),
-          ),
-          FadeTransition(
-            opacity: _fade,
-            child: AnimatedBuilder(
-              animation: _float,
-              builder: (context, child) => Transform.translate(
-                offset: Offset(0, _float.value),
-                child: child,
-              ),
-              child: ScaleTransition(
-                scale: _scale,
-                child: Semantics(
-                  label: 'ЖОЛ АМАН КЕНЧИ Такси',
-                  image: true,
-                  child: Image.asset(
-                    'assets/jak_splash_optimized.webp',
-                    width: size.width,
-                    height: size.height,
-                    fit: BoxFit.cover,
-                    alignment: Alignment.center,
-                    cacheWidth: (size.width * MediaQuery.of(context).devicePixelRatio)
-                        .round()
-                        .clamp(1, 1440)
-                        .toInt(),
+      backgroundColor: const Color(0xFF102D4D),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final dpr = MediaQuery.of(context).devicePixelRatio;
+          final maxWidth = constraints.maxWidth;
+          final maxHeight = constraints.maxHeight;
+          final imageWidth = (maxHeight * 1199 / 1312).clamp(1.0, maxWidth);
+          final width = imageWidth.toDouble();
+          final height = width * 1312 / 1199;
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              const DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Color(0xFF0875C9), Color(0xFFB9DDF5), Color(0xFF102D4D)],
+                    stops: [0.0, 0.48, 1.0],
                   ),
                 ),
               ),
-            ),
-          ),
-        ],
+              Center(
+                child: SizedBox(
+                  width: width,
+                  height: height,
+                  child: FadeTransition(
+                    opacity: _fade,
+                    child: ScaleTransition(
+                      scale: _scale,
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          Semantics(
+                            label: 'ЖОЛ АМАН КЕНЧИ Такси',
+                            image: true,
+                            child: Image.asset(
+                              'assets/jak_splash_optimized.webp',
+                              fit: BoxFit.contain,
+                              cacheWidth: (width * dpr).round().clamp(1, 1440).toInt(),
+                            ),
+                          ),
+                          Positioned(
+                            left: 0,
+                            right: 0,
+                            top: height * 0.785,
+                            child: Center(
+                              child: Container(
+                                width: width * 0.085,
+                                height: width * 0.085,
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFF102D4D),
+                                  shape: BoxShape.circle,
+                                ),
+                                padding: EdgeInsets.all(4),
+                                child: RotationTransition(
+                                  turns: _ambient,
+                                  child: const CircularProgressIndicator(
+                                    strokeWidth: 3.5,
+                                    valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFFC928)),
+                                    backgroundColor: Color(0xFF8995A4),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -1148,94 +1175,147 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
     });
   }
 
+  void _showMainMenuLanguagePicker(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFFFFF8E7),
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.language_rounded),
+              title: const Text('Русский'),
+              trailing: TaxiLanguage.current.value == 'ru'
+                  ? const Icon(Icons.check_circle, color: Color(0xFF087A42))
+                  : null,
+              onTap: () {
+                TaxiLanguage.current.value = 'ru';
+                Navigator.pop(sheetContext);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.language_rounded),
+              title: const Text('Кыргызча'),
+              trailing: TaxiLanguage.current.value == 'ky'
+                  ? const Icon(Icons.check_circle, color: Color(0xFF087A42))
+                  : null,
+              onTap: () {
+                TaxiLanguage.current.value = 'ky';
+                Navigator.pop(sheetContext);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    const ink = Color(0xFF171F1D);
-    const gold = Color(0xFFFFC928);
     return Scaffold(
-      backgroundColor: const Color(0xFFF5EBD8),
+      backgroundColor: const Color(0xFFB9DDF5),
       body: SafeArea(
         child: Container(
+          width: double.infinity,
           decoration: const BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [Color(0xFF063C70), Color(0xFF087DE0), Color(0xFFF5F8FC)],
-              stops: [0.0, 0.48, 1.0],
+              colors: [Color(0xFF087DE0), Color(0xFFF5F8FC)],
             ),
           ),
           child: Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 480),
               child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(18, 14, 18, 20),
-                child: Column(
-                  children: [
-                    const TaxiLanguageSwitcher(),
-                    const SizedBox(height: 8),
-                    LayoutBuilder(
-                      builder: (context, constraints) {
-                        final dpr = MediaQuery.of(context).devicePixelRatio;
-                        final decodeWidth = (constraints.maxWidth * dpr)
-                            .round()
-                            .clamp(1, 1152)
-                            .toInt();
-                        return ClipRRect(
-                          borderRadius: BorderRadius.circular(18),
-                          child: SizedBox(
-                            width: double.infinity,
-                            height: constraints.maxWidth * 1.05,
-                            child: ClipRect(
-                              child: Transform.translate(
-                                // The source artwork is a full-height menu poster:
-                                // crop its embedded language control, but keep the
-                                // complete title, taxi, mountains and slogan visible.
-                                offset: Offset(0, -constraints.maxWidth * 0.08),
-                                child: Image.asset(
-                                  'assets/jak_main_menu_optimized.webp',
-                                  width: constraints.maxWidth,
-                                  fit: BoxFit.fitWidth,
-                                  alignment: Alignment.topCenter,
-                                  cacheWidth: decodeWidth,
-                                  cacheHeight: (decodeWidth * 2320 / 1152)
-                                      .round(),
+                padding: EdgeInsets.zero,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final width = constraints.maxWidth;
+                    final height = width * 2048 / 1016;
+                    final dpr = MediaQuery.of(context).devicePixelRatio;
+                    return SizedBox(
+                      width: width,
+                      height: height,
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          Semantics(
+                            label: 'Главное меню ЖОЛ АМАН КЕНЧИ Такси',
+                            image: true,
+                            child: Image.asset(
+                              'assets/jak_main_menu_optimized.webp',
+                              fit: BoxFit.fill,
+                              cacheWidth: (width * dpr).round().clamp(1, 1152).toInt(),
+                            ),
+                          ),
+                          Positioned(
+                            left: width * 0.535,
+                            top: height * 0.012,
+                            width: width * 0.30,
+                            height: height * 0.047,
+                            child: Semantics(
+                              button: true,
+                              label: 'Выбрать язык / Тилди тандоо',
+                              child: GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: () => _showMainMenuLanguagePicker(context),
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            left: width * 0.035,
+                            top: height * 0.565,
+                            width: width * 0.93,
+                            height: height * 0.071,
+                            child: Semantics(
+                              button: true,
+                              label: 'Я пассажир / Мен жүргүнчүмүн',
+                              child: GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (_) => const ClientAuthScreen()),
                                 ),
                               ),
                             ),
                           ),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    _roleButton(
-                      icon: Icons.person_pin_circle_rounded,
-                      label: TaxiLanguage.isKyrgyz ? 'МЕН ЖҮРГҮНЧҮМҮН' : 'Я ПАССАЖИР',
-                      subtitle: TaxiLanguage.isKyrgyz ? 'Унаа чакыруу' : 'Заказать поездку',
-                      color: gold,
-                      foreground: ink,
-                      onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ClientAuthScreen())),
-                    ),
-                    const SizedBox(height: 12),
-                    _roleButton(
-                      icon: Icons.local_taxi_rounded,
-                      label: TaxiLanguage.isKyrgyz ? 'МЕН АЙДООЧУМУН' : 'Я ВОДИТЕЛЬ',
-                      subtitle: TaxiLanguage.isKyrgyz ? 'Буйрутмалар жана айдоочу бөлмөсү' : 'Заказы и рабочий кабинет',
-                      color: const Color(0xFF087A42),
-                      foreground: Colors.white,
-                      onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DriverEntryScreen())),
-                    ),
-                    const SizedBox(height: 12),
-                    _roleButton(
-                      icon: Icons.admin_panel_settings_rounded,
-                      label: 'ДИСПЕТЧЕР',
-                      subtitle: TaxiLanguage.isKyrgyz ? 'Такси паркын башкаруу' : 'Управление таксопарком',
-                      color: const Color(0xFF075C35),
-                      foreground: Colors.white,
-                      onPressed: () => _showDispatcherAuth(context),
-                    ),
-                    const SizedBox(height: 16),
-                    const TaxiLocalizedText(russian: 'Кыргызстан • Баткенская область', kyrgyz: 'Кыргызстан • Баткен облусу', style: TextStyle(color: Color(0xFF4D302B), fontSize: 12, fontWeight: FontWeight.w700)),
-                  ],
+                          Positioned(
+                            left: width * 0.035,
+                            top: height * 0.646,
+                            width: width * 0.93,
+                            height: height * 0.071,
+                            child: Semantics(
+                              button: true,
+                              label: 'Я водитель / Мен айдоочумун',
+                              child: GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (_) => const DriverEntryScreen()),
+                                ),
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            left: width * 0.035,
+                            top: height * 0.727,
+                            width: width * 0.93,
+                            height: height * 0.071,
+                            child: Semantics(
+                              button: true,
+                              label: 'Диспетчер',
+                              child: GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: () => _showDispatcherAuth(context),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
                 ),
               ),
             ),
@@ -1245,37 +1325,6 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
     );
   }
 
-  Widget _roleButton({
-    required IconData icon,
-    required String label,
-    required String subtitle,
-    required Color color,
-    required Color foreground,
-    required VoidCallback onPressed,
-  }) {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton(
-        onPressed: onPressed,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: color,
-          foregroundColor: foreground,
-          elevation: 5,
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18), side: const BorderSide(color: Color(0xFFFFC928), width: 1.2)),
-        ),
-        child: Row(children: [
-          Icon(icon, size: 31),
-          const SizedBox(width: 15),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            TaxiText(label, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, letterSpacing: 0.8)),
-            TaxiText(subtitle, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
-          ])),
-          const Icon(Icons.arrow_forward_ios_rounded, size: 17),
-        ]),
-      ),
-    );
-  }
 }
 
 class ClientAuthScreen extends StatefulWidget {
