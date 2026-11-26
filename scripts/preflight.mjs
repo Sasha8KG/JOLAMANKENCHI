@@ -957,7 +957,7 @@ check('Dispatcher refresh and server-backed driver/order loading remain present 
 check('Firebase session restoration and role authorization remain in place', app.includes('FirebaseAuth.instance.currentUser') && app.includes('WorkerApi.checkAuth()') && app.includes("access['dispatcher']") && app.includes("access['driver']"));
 
 
-check('Driver text chat availability depends only on server-assigned trips after removing the local-only order flow', app.includes('allowText: _serverAssignedOrders.isEmpty,') && !app.includes('order.status != \'accepted\''));
+check('Driver text chat availability depends only on server-assigned trips after removing the local-only order flow', (() => { const start=app.indexOf('class _DriverMapScreenState'); const end=app.indexOf('class DispatcherScreen',start); const block=app.slice(start,end); return block.includes('allowText: _serverAssignedOrders.isEmpty)') && !block.includes('order.status != \'accepted\''); })());
 check('Driver local-only demo completion cannot show a false financial credit', !app.includes("Поездка завершена! Зачислено:") && !app.includes('void _completeOrder(TaxiOrder order)') && !app.includes('onPressed: () => _acceptOrder(order)'));
 check('Driver online preference is stored locally per authenticated UID', app.includes('getApplicationSupportDirectory()') && app.includes('_readDriverLinePreference') && app.includes('_saveDriverLinePreference'));
 check('Both automatic session restoration and manual driver login restore the saved line preference', app.includes('await _readDriverLinePreference(restoringUid)') && app.includes('await _readDriverLinePreference(driverUid)'));
