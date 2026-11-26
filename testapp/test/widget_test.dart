@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:sulyukta_taxi/main.dart' show BrandedSplashGate, ClientAuthScreen, RoleSelectionScreen, TaxiLanguage;
 import 'package:latlong2/latlong.dart';
 import 'package:sulyukta_taxi/services/firebase_service.dart';
@@ -53,10 +52,12 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
       final scaffold = tester.widget<Scaffold>(find.byType(Scaffold).first);
       expect(scaffold.backgroundColor, const Color(0xFF0875C9));
-      expect(find.byType(SvgPicture), findsOneWidget);
+      expect(find.byType(Image), findsOneWidget);
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
-      final image = tester.widget<SvgPicture>(find.byType(SvgPicture));
+      final image = tester.widget<Image>(find.byType(Image));
       expect(image.fit, BoxFit.contain);
+      expect(image.image, isA<AssetImage>());
+      expect((image.image as AssetImage).assetName, 'assets/jak_splash_optimized.webp');
       expect(find.byWidgetPredicate((widget) =>
           widget is Semantics && widget.properties.label == 'ЖОЛ АМАН КЕНЧИ Такси'),
           findsOneWidget);
