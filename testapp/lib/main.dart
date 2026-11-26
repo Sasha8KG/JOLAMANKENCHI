@@ -474,8 +474,10 @@ class _BrandedSplashGateState extends State<BrandedSplashGate>
     with SingleTickerProviderStateMixin {
   Timer? _navigationTimer;
   late final AnimationController _entrance;
+  late final AnimationController _ambient;
   late final Animation<double> _fade;
   late final Animation<double> _scale;
+  late final Animation<double> _float;
 
   @override
   void initState() {
@@ -489,6 +491,13 @@ class _BrandedSplashGateState extends State<BrandedSplashGate>
       CurvedAnimation(parent: _entrance, curve: Curves.easeOutBack),
     );
     _entrance.forward();
+    _ambient = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2400),
+    )..repeat(reverse: true);
+    _float = Tween<double>(begin: 3, end: -3).animate(
+      CurvedAnimation(parent: _ambient, curve: Curves.easeInOut),
+    );
     _navigationTimer = Timer(const Duration(milliseconds: 4200), () {
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
@@ -505,6 +514,7 @@ class _BrandedSplashGateState extends State<BrandedSplashGate>
   @override
   void dispose() {
     _navigationTimer?.cancel();
+    _ambient.dispose();
     _entrance.dispose();
     super.dispose();
   }
@@ -513,26 +523,69 @@ class _BrandedSplashGateState extends State<BrandedSplashGate>
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
     return Scaffold(
-      backgroundColor: const Color(0xFFFFD400),
-      body: SafeArea(
-        child: Center(
-          child: FadeTransition(
-            opacity: _fade,
-            child: ScaleTransition(
-              scale: _scale,
-              child: Semantics(
-                label: 'ЖОЛ АМАН КЕНЧИ Такси',
-                image: true,
-                child: SvgPicture.asset(
-                  'assets/jak_splash.svg',
-                  width: size.width * 0.98,
-                  height: size.height * 0.96,
-                  fit: BoxFit.contain,
+      backgroundColor: const Color(0xFF0875C9),
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          const DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color(0xFF0875C9), Color(0xFFB9DDF5), Color(0xFF102D4D)],
+                stops: [0.0, 0.62, 1.0],
+              ),
+            ),
+          ),
+          SafeArea(
+            child: FadeTransition(
+              opacity: _fade,
+              child: AnimatedBuilder(
+                animation: _float,
+                builder: (context, child) => Transform.translate(
+                  offset: Offset(0, _float.value),
+                  child: child,
+                ),
+                child: ScaleTransition(
+                  scale: _scale,
+                  child: Semantics(
+                    label: 'ЖОЛ АМАН КЕНЧИ Такси',
+                    image: true,
+                    child: SvgPicture.asset(
+                      'assets/jak_splash.svg',
+                      width: size.width,
+                      height: size.height * 0.98,
+                      fit: BoxFit.contain,
+                    ),
+                  ),
                 ),
               ),
             ),
           ),
-        ),
+          Positioned(
+            left: 0, right: 0, bottom: 34,
+            child: IgnorePointer(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SizedBox(
+                    width: 42, height: 42,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 5,
+                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFFD400)),
+                      backgroundColor: Color(0x668AA6BD),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text('Загрузка...', style: const TextStyle(
+                    color: Colors.white, fontSize: 17, fontWeight: FontWeight.w700,
+                    shadows: [Shadow(color: Colors.black54, blurRadius: 5)],
+                  )),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1075,59 +1128,40 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                   children: [
                     const TaxiLanguageSwitcher(),
                     const SizedBox(height: 8),
-                    Container(
-                      width: double.infinity,
-                      height: 218,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF17364C),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: gold, width: 2),
-                        boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 14, offset: Offset(0, 6))],
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(18),
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            SvgPicture.asset(
-                              'assets/jak_splash.svg',
-                              fit: BoxFit.cover,
-                              alignment: Alignment.topCenter,
-                            ),
-                            Align(
-                              alignment: Alignment.bottomCenter,
-                              child: Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.fromLTRB(8, 7, 8, 17),
-                                decoration: const BoxDecoration(
-                                  gradient: LinearGradient(
-                                    begin: Alignment.topCenter,
-                                    end: Alignment.bottomCenter,
-                                    colors: [Color(0x00101D2A), Color(0xE6101D2A)],
-                                  ),
-                                ),
-                                child: const TaxiText(
-                                  '«Жолуңар байсалдуу, маанайыңар жакшы болсун!»',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w800,
-                                    shadows: [Shadow(color: Colors.black87, blurRadius: 4)]),
-                                ),
-                              ),
-                            ),
-                            Positioned(
-                              left: 0, right: 0, bottom: 0, height: 10,
-                              child: Row(
-                                children: List.generate(18, (index) => Expanded(
-                                  child: Container(color: index.isEven
-                                    ? const Color(0xFFFFD400) : const Color(0xFF171717)),
-                                )),
-                              ),
-                            ),
-                          ],
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(18),
+                      child: AspectRatio(
+                        aspectRatio: 0.78,
+                        child: SvgPicture.asset(
+                          'assets/jak_menu_banner.svg',
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                          alignment: Alignment.topCenter,
                         ),
                       ),
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 7),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF092E55),
+                        borderRadius: BorderRadius.circular(15),
+                        border: Border.all(color: gold, width: 1.3),
+                      ),
+                      child: const Column(
+                        children: [
+                          TaxiText('Жолунуз ачык болсун!',
+                            style: TextStyle(color: Colors.white, fontSize: 18,
+                              fontWeight: FontWeight.w800, fontStyle: FontStyle.italic)),
+                          SizedBox(height: 3),
+                          TaxiText('Быстро • Надёжно • По-нашему',
+                            style: TextStyle(color: Color(0xFFFFD400), fontSize: 13,
+                              fontWeight: FontWeight.w800)),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
                     _roleButton(
                       icon: Icons.person_pin_circle_rounded,
                       label: TaxiLanguage.isKyrgyz ? 'МЕН ЖҮРГҮНЧҮМҮН' : 'Я ПАССАЖИР',
