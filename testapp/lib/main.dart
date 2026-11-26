@@ -3312,39 +3312,6 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
     }
   }
 
-  Future<void> _markAssignedOrderArrived(Map<String, dynamic> order) async {
-  Future<void> _cancelArrivedNoShowOrder(Map<String, dynamic> order) async {
-    final id = _serverOrderId(order);
-    if (id.isEmpty || _orderActionIds.contains(id)) return;
-    final reason = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const TaxiLocalizedText(russian: 'Пассажир не вышел', kyrgyz: 'Жүргүнчү чыккан жок'),
-        content: const TaxiLocalizedText(russian: 'Подтвердите ситуацию после прибытия к месту подачи. Выберите причину отмены:', kyrgyz: 'Унаа келчү жерге жеткенден кийин жагдайды ырастаңыз. Жокко чыгаруу себебин тандаңыз:'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const TaxiLocalizedText(russian: 'НАЗАД', kyrgyz: 'АРТКА')),
-          TextButton(onPressed: () => Navigator.pop(ctx, 'customer_not_found'), child: const TaxiLocalizedText(russian: 'ПАССАЖИР НЕ ВЫШЕЛ', kyrgyz: 'ЖҮРГҮНЧҮ ЧЫККАН ЖОК')),
-          TextButton(onPressed: () => Navigator.pop(ctx, 'customer_unreachable'), child: const TaxiLocalizedText(russian: 'НЕ ОТВЕЧАЕТ', kyrgyz: 'ЖООП БЕРБЕЙТ')),
-          TextButton(onPressed: () => Navigator.pop(ctx, 'customer_left_with_other_car'), child: const TaxiLocalizedText(russian: 'УЕХАЛ НА ДРУГОЙ МАШИНЕ', kyrgyz: 'БАШКА УНАА МЕНЕН КЕТТИ')),
-        ],
-      ),
-    );
-    if (reason == null || !mounted || _orderActionIds.contains(id)) return;
-    setState(() => _orderActionIds.add(id));
-    try {
-      final result = await WorkerApi.cancelOrder(orderId: id, role: 'driver', reason: reason);
-      if (mounted) _showLocationMessage((result['message'] ??
-          'Заказ отменён как неявка пассажира. Начислений нет.').toString());
-    } on WorkerApiException catch (e) {
-      if (mounted) _showLocationMessage(e.message);
-    } catch (_) {
-      if (mounted) _showLocationMessage('Не удалось отменить заказ из-за ошибки сети. Обновите список заказов.');
-    } finally {
-      if (mounted) setState(() => _orderActionIds.remove(id));
-      if (mounted) await _pollServerOrders();
-    }
-  }
-
   Future<void> _cancelAssignedOrder(Map<String, dynamic> order) async {
     final id = _serverOrderId(order);
     if (id.isEmpty || _orderActionIds.contains(id)) return;
