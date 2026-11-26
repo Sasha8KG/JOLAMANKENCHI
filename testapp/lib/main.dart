@@ -9,6 +9,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:livekit_client/livekit_client.dart' hide ConnectionState;
 import 'services/firebase_service.dart';
 import 'driver_registration_screen.dart';
@@ -32,6 +33,42 @@ const String taxiFirebaseStorageBucket =
     'gs://jol-aman-kenchi.firebasestorage.app';
 FirebaseStorage get taxiFirebaseStorage =>
     FirebaseStorage.instanceFor(bucket: taxiFirebaseStorageBucket);
+
+// Remember the driver's explicit line preference on this phone. On the next
+// login we restore it only after approval and a fresh GPS fix are confirmed.
+String _driverLinePreferenceName(String uid) =>
+    uid.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
+
+Future<File> _driverLinePreferenceFile(String uid) async {
+  final directory = await getApplicationSupportDirectory();
+  return File(
+    '${directory.path}${Platform.pathSeparator}driver_line_${_driverLinePreferenceName(uid)}.txt',
+  );
+}
+
+Future<bool> _readDriverLinePreference(String uid) async {
+  if (uid.trim().isEmpty) return false;
+  try {
+    final file = await _driverLinePreferenceFile(uid);
+    return await file.exists() && (await file.readAsString()).trim() == '1';
+  } catch (_) {
+    return false;
+  }
+}
+
+Future<void> _saveDriverLinePreference(String uid, bool online) async {
+  if (uid.trim().isEmpty) return;
+  try {
+    final file = await _driverLinePreferenceFile(uid);
+    if (online) {
+      await file.writeAsString('1', flush: true);
+    } else if (await file.exists()) {
+      await file.delete();
+    }
+  } catch (_) {
+    // A local preference failure must not block server-authorized line control.
+  }
+}
 
 // Сохраняем проверенную карту OpenStreetMap DE: ей не нужен API-ключ.
 List<Widget> buildTaxiDarkMapLayers() => [
@@ -370,7 +407,8 @@ class _SessionGateState extends State<SessionGate> {
             pinCode: '',
             currentLocation: TaxiParkState.sulyuktaCenter,
             isApproved: true,
-            isOnline: _isEnabled(data['online']),
+            isOnline: _isEnabled(data['online']) ||
+                await _readDriverLinePreference(restoringUid),
           );
           if (mounted) {
             setState(() => _destination = const DriverMapScreen());
@@ -2621,8 +2659,12 @@ class _DriverEntryScreenState extends State<DriverEntryScreen> {
         return;
       }
 
+      final driverUid =
+          (data['uid'] ?? FirebaseService.auth.currentUser!.uid).toString();
+      final restoreOnline = _isEnabled(data['online']) ||
+          await _readDriverLinePreference(driverUid);
       final driver = DriverModel(
-        id: (data['uid'] ?? FirebaseService.auth.currentUser!.uid).toString(),
+        id: driverUid,
         name: (data['name'] ?? 'Водитель').toString(),
         phone: (data['phone'] ?? phone).toString(),
         carBrand: (data['car_model'] ?? '').toString(),
@@ -2631,7 +2673,7 @@ class _DriverEntryScreenState extends State<DriverEntryScreen> {
         pinCode: '',
         currentLocation: TaxiParkState.sulyuktaCenter,
         isApproved: true,
-        isOnline: data['online'] == true,
+        isOnline: restoreOnline,
       );
       TaxiParkState.currentLoggedInDriver = driver;
       if (!mounted) return;
@@ -3052,7 +3094,6 @@ class DriverMapScreen extends StatefulWidget {
 }
 
 class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingObserver {
-  final TextEditingController _finalPriceController = TextEditingController();
   final MapController _driverMapController = MapController();
   bool _driverMapReady = false;
   StreamSubscription<Position>? _positionSubscription;
@@ -3741,6 +3782,10 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
     setState(() => _availabilityChanging = true);
     try {
       if (_driverWantsOnline) {
+        await _saveDriverLinePreference(
+          TaxiParkState.currentLoggedInDriver?.id ?? '',
+          false,
+        );
         setState(() {
           _driverWantsOnline = false;
           _driverGpsReady = false;
@@ -3773,6 +3818,10 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
           _driverWantsOnline = true;
           _driverGpsReady = false;
         });
+        await _saveDriverLinePreference(
+          TaxiParkState.currentLoggedInDriver?.id ?? '',
+          true,
+        );
         await _startLocationTracking();
         if (mounted) unawaited(_pollServerOrders());
       }
@@ -3797,52 +3846,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
     _ordersPollTimer?.cancel();
     // Mark the driver offline when leaving the live driver screen.
     unawaited(WorkerApi.setDriverOnline(online: false).then<void>((_) {}).catchError((_) {}));
-    _finalPriceController.dispose();
     super.dispose();
-  }
-
-  void _acceptOrder(TaxiOrder order) {
-    setState(() {
-      order.assignedDriver = TaxiParkState.currentLoggedInDriver;
-      order.status = 'accepted';
-    });
-  }
-
-  void _completeOrder(TaxiOrder order) {
-    final driver = TaxiParkState.currentLoggedInDriver;
-    if (driver == null) return;
-
-    int earned = order.isIntercity
-        ? (int.tryParse(_finalPriceController.text.trim()) ?? 500)
-        : order.fixedPrice;
-
-    setState(() {
-      order.status = 'completed';
-      order.finalAmount = earned;
-      driver.dailyEarnings += earned;
-
-      // Обновляем диспетчерский отчет
-      final dispatcher = TaxiParkState.dispatchers.first;
-      dispatcher.shiftRevenue += earned;
-      dispatcher.closedOrders += 1;
-
-      if (!dispatcher.driverReports.containsKey(driver.id)) {
-        dispatcher.driverReports[driver.id] = DriverShiftRecord(
-          driverId: driver.id,
-          driverName: driver.name,
-          carInfo: driver.fullCarInfo,
-        );
-      }
-      dispatcher.driverReports[driver.id]!.tripsCount += 1;
-      dispatcher.driverReports[driver.id]!.totalEarned += earned;
-
-      TaxiParkState.activeOrder = null;
-    });
-
-    _finalPriceController.clear();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: TaxiText('Поездка завершена! Зачислено: $earned сом')),
-    );
   }
 
   Future<void> _logoutDriver() async {
@@ -3907,7 +3911,6 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
   @override
   Widget build(BuildContext context) {
     final driver = TaxiParkState.currentLoggedInDriver;
-    final order = TaxiParkState.activeOrder;
 
     return Scaffold(
       appBar: AppBar(
@@ -4074,42 +4077,6 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
                   }),
                 ] else if (_serverAssignedOrders.isEmpty)
                   const TaxiLocalizedText(russian: 'Новых заказов пока нет. Ожидаем...', kyrgyz: 'Азырынча жаңы буйрутма жок. Күтүп жатабыз...', style: TextStyle(color: Colors.grey)),
-                if (order != null && order.status == 'searching') ...[
-                  TaxiText(
-                      'Новый заказ (${order.isIntercity ? "Межгород" : "По городу"}): ${order.destination}',
-                      style: const TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 10),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
-                        foregroundColor: Colors.white),
-                    onPressed: () => _acceptOrder(order),
-                    child: const TaxiLocalizedText(russian: 'ПРИНЯТЬ ЗАКАЗ', kyrgyz: 'БУЙРУТМАНЫ КАБЫЛ АЛУУ'),
-                  ),
-                ],
-                if (order != null && order.status == 'accepted') ...[
-                  TaxiText('Выполняется заказ: ${order.destination}',
-                      style: const TextStyle(fontWeight: FontWeight.bold)),
-                  if (order.isIntercity) ...[
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: _finalPriceController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'Введите итоговую сумму межгорода (сом)',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 10),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red,
-                        foregroundColor: Colors.white),
-                    onPressed: () => _completeOrder(order),
-                    child: const TaxiLocalizedText(russian: 'ЗАКАЗ ИСПОЛНЕН', kyrgyz: 'БУЙРУТМА АТКАРЫЛДЫ'),
-                  ),
-                ],
                 const SizedBox(height: 10),
                 WalkieTalkieWidget(senderName: driver?.name ?? 'Водитель', allowText: _serverAssignedOrders.isEmpty && (order == null || order.status != 'accepted')),
                   ],
@@ -5023,15 +4990,24 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
                             icon: const Icon(Icons.block, color: Colors.red),
                           )
                         : reviewStatus == 'approved'
-                            ? ElevatedButton.icon(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.green,
-                                  foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            ? SizedBox(
+                                width: 160,
+                                child: ElevatedButton.icon(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.green,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                                  ),
+                                  onPressed: _working ? null : () => _approve(d, true),
+                                  icon: const Icon(Icons.check_circle, size: 18),
+                                  label: const Text(
+                                    'ВОССТАНОВИТЬ ДОПУСК',
+                                    maxLines: 2,
+                                    softWrap: true,
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(fontSize: 11, height: 1.1),
+                                  ),
                                 ),
-                                onPressed: _working ? null : () => _approve(d, true),
-                                icon: const Icon(Icons.check_circle),
-                                label: const Text('ВОССТАНОВИТЬ ДОПУСК'),
                               )
                             : Icon(
                                 reviewStatus == 'pending' ? Icons.hourglass_empty : Icons.warning_amber_rounded,

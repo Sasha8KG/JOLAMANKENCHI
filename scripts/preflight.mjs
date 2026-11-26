@@ -956,6 +956,14 @@ check('Driver route map, location stream and order polling code remain present a
 check('Dispatcher refresh and server-backed driver/order loading remain present after layout changes', app.includes('_dispatcherRefreshTimer = Timer.periodic') && app.includes('WorkerApi.dispatcherOverview()') && app.includes('WorkerApi.assignOrder'));
 check('Firebase session restoration and role authorization remain in place', app.includes('FirebaseAuth.instance.currentUser') && app.includes('WorkerApi.checkAuth()') && app.includes("access['dispatcher']") && app.includes("access['driver']"));
 
+
+check('Driver local-only demo completion cannot show a false financial credit', !app.includes("Поездка завершена! Зачислено:") && !app.includes('void _completeOrder(TaxiOrder order)') && !app.includes('onPressed: () => _acceptOrder(order)'));
+check('Driver online preference is stored locally per authenticated UID', app.includes('getApplicationSupportDirectory()') && app.includes('_readDriverLinePreference') && app.includes('_saveDriverLinePreference'));
+check('Both automatic session restoration and manual driver login restore the saved line preference', app.includes('await _readDriverLinePreference(restoringUid)') && app.includes('await _readDriverLinePreference(driverUid)'));
+check('Explicit offline action clears the saved line preference', (() => { const start=app.indexOf('Future<void> _toggleDriverAvailability()'); const end=app.indexOf('\n  void _showLocationMessage',start); const block=app.slice(start,end); return block.includes('_saveDriverLinePreference(') && block.includes('false,'); })());
+check('Explicit online action saves the line preference before GPS startup', (() => { const start=app.indexOf('Future<void> _toggleDriverAvailability()'); const end=app.indexOf('\n  void _showLocationMessage',start); const block=app.slice(start,end); const save=block.indexOf('_saveDriverLinePreference('); const gps=block.indexOf('_startLocationTracking()'); return save>=0 && gps>save && block.includes('true,'); })());
+check('Dispatcher restore-access text is width-bounded and limited to two readable lines', app.includes('width: 160,\n                                child: ElevatedButton.icon') && app.includes("maxLines: 2,\n                                    softWrap: true,"));
+
 for (const item of checks) {
   process.stdout.write(`${item.ok ? 'PASS' : 'FAIL'}  ${item.label}\n`);
 }
