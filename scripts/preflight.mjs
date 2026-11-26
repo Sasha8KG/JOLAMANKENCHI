@@ -728,14 +728,14 @@ check('GPS tests cover sub-second future timestamps and exact custom age boundar
 
 
 check('Branded animated splash is the first app screen', app.includes('home: const BrandedSplashGate()'));
-check('Branded splash loads the scalable high-resolution SVG artwork', app.includes("'assets/jak_splash.svg'") && pubspec.includes('assets/jak_splash.svg') && pubspec.includes('flutter_svg:') && read('testapp/assets/jak_splash.svg').includes('ЖОЛ АМАН КЕНЧИ'));
+check('Branded splash loads the optimized high-resolution WebP artwork', app.includes("'assets/jak_splash_optimized.webp'") && pubspec.includes('assets/jak_splash_optimized.webp') && fs.existsSync(path.join(root, 'testapp/assets/jak_splash_optimized.webp')) && fs.statSync(path.join(root, 'testapp/assets/jak_splash_optimized.webp')).size > 10000);
 check('Branded splash stays visible for a bounded interval before the existing session gate', app.includes('Timer(const Duration(milliseconds: 4200)') && app.includes('const SessionGate()'));
 check('Branded splash animates its logo entrance and fades into the app', app.includes('TickerProviderStateMixin') && !app.includes('SingleTickerProviderStateMixin') && app.includes('FadeTransition(') && app.includes('ScaleTransition(') && app.includes('AnimatedBuilder(') && app.includes('_ambient') && app.includes('transitionDuration: const Duration(milliseconds: 450)'));
 check('Branded splash cancels its navigation timer on dispose', app.includes('_navigationTimer?.cancel();'));
 check('Branded splash guards navigation after widget disposal', app.includes('if (!mounted) return;'));
 check('Branded splash exposes an accessible semantic brand label', app.includes("label: 'ЖОЛ АМАН КЕНЧИ Такси'"));
 check('Branded splash uses the yellow brand background without a blue frame', app.includes('backgroundColor: const Color(0xFFFFD400)') && app.includes('fit: BoxFit.contain') && !app.includes('Border.all(color: gold, width: 4)'));
-check('Branded splash renders its vector asset without raster upscaling', app.includes('SvgPicture.asset(') && app.includes('BoxFit.contain'));
+check('Branded splash decodes raster artwork near device pixel width', app.includes('Image.asset(') && app.includes('cacheWidth:') && app.includes('.clamp(1, 1440)'));
 check('Driver and dispatcher sections use the requested green header palette', app.includes('backgroundColor: const Color(0xFF087A42)') && app.includes('foregroundColor: Colors.white'));
 check('Passenger order action uses a gold button with dark text', app.includes('backgroundColor: const Color(0xFFFFD400)') && app.includes('foregroundColor: const Color(0xFF171717)'));
 check('Global app bars use the gold and black brand palette', app.includes('backgroundColor: Color(0xFFFFD400)') && app.includes('foregroundColor: Color(0xFF171717)'));
@@ -776,8 +776,8 @@ check('Role menu passenger title is localized', app.includes("МЕН ЖҮРГҮ�
 check('Role menu driver title is localized', app.includes("МЕН АЙДООЧУМУН") && app.includes("Я ВОДИТЕЛЬ"));
 check('Role menu passenger action is localized', app.includes("Унаа чакыруу") && app.includes("Заказать поездку"));
 check('Role menu driver action is localized', app.includes("Буйрутмалар жана айдоочу бөлмөсү"));
-check('Role menu shows the requested Kyrgyz and Russian slogans', app.includes("Жолунуз ачык болсун!") && app.includes("Быстро • Надёжно • По-нашему"));
-check('Role menu uses the new mountain and taxi banner asset', app.includes("assets/jak_menu_banner.svg") && read('testapp/assets/jak_menu_banner.svg').includes("СУЛЮКТА • ЛЕЙЛЕК • БАТКЕН"));
+check('Role menu uses the prepared banner image containing the supplied slogans', app.includes("'assets/jak_main_menu_optimized.webp'") && pubspec.includes('assets/jak_main_menu_optimized.webp') && fs.existsSync(path.join(root, 'testapp/assets/jak_main_menu_optimized.webp')) && fs.statSync(path.join(root, 'testapp/assets/jak_main_menu_optimized.webp')).size > 10000);
+check('Role menu decodes the optimized banner at a bounded device resolution', app.includes('cacheHeight: (decodeWidth * 2320 / 1152)') && app.includes('.clamp(1, 1152)'));
 check('Splash screen has a subtle repeating motion and loading indicator', app.includes("_ambient") && app.includes("CircularProgressIndicator"));
 check('Role menu service area is localized', app.includes("Кыргызстан • Баткен облусу"));
 check('Widget test covers switching between Russian and Kyrgyz', read('testapp/test/widget_test.dart').includes('Russian and Kyrgyz language switch'));
