@@ -2995,6 +2995,10 @@ class _DriverReviewStatusScreenState extends State<DriverReviewStatusScreen> {
   Widget build(BuildContext context) {
     final status = (widget.profile['review_status'] ?? 'pending').toString();
     final rejected = status == 'rejected';
+    final documentsApproved = status == 'approved';
+    final accessMessage = documentsApproved
+        ? 'Документы уже одобрены. Диспетчер должен восстановить допуск к работе. Повторно отправлять фотографии не нужно.'
+        : 'Диспетчер проверит документы. До одобрения выход на линию недоступен.';
     return Scaffold(
       appBar: AppBar(title: const TaxiLocalizedText(russian: 'Проверка анкеты', kyrgyz: 'Анкетаны текшерүү'), backgroundColor: Colors.amber,
         actions: [IconButton(onPressed: _busy ? null : _logout, icon: const Icon(Icons.logout), tooltip: 'Выйти')]),
@@ -3003,9 +3007,9 @@ class _DriverReviewStatusScreenState extends State<DriverReviewStatusScreen> {
         TaxiText(widget.profile['name']?.toString() ?? 'Водитель', textAlign: TextAlign.center, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
         const SizedBox(height: 12),
         Card(color: rejected ? Colors.red.shade50 : Colors.amber.shade50, child: Padding(padding: const EdgeInsets.all(16), child: Column(children: [
-          TaxiText(rejected ? 'Заявка отклонена' : 'Документы ожидают проверки', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          TaxiText(rejected ? 'Заявка отклонена' : documentsApproved ? 'Документы одобрены · допуск отключён' : 'Документы ожидают проверки', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
           if (rejected) ...[const SizedBox(height: 8), TaxiText('Причина: ${widget.profile['rejection_reason'] ?? 'Не указана'}')],
-          if (!rejected) const TaxiLocalizedText(russian: 'Диспетчер проверит документы. До одобрения выход на линию недоступен.', kyrgyz: 'Диспетчер документтерди текшерет. Бекитилгенге чейин линияга чыгууга болбойт.'),
+          if (!rejected) TaxiText(accessMessage),
         ]))),
         if (!rejected && _documentTransferMessage != null) ...[
           const SizedBox(height: 10),
@@ -3228,6 +3232,65 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
       await _pollServerOrders();
     } finally {
       if (mounted) setState(() => _respondingOrderIds.remove(id));
+    }
+  }
+
+  Future<void> _completeAssignedOrder(Map<String, dynamic> order) async {
+    final id = _serverOrderId(order);
+    if (id.isEmpty || _orderActionIds.contains(id)) return;
+    final isIntercity = (order['tariff_type'] ?? '').toString().toLowerCase().contains('меж');
+    var suggestedFare = 0;
+    try {
+      final tariffs = await WorkerApi.getTariffs();
+      final raw = tariffs['tariffs'];
+      if (raw is Map) {
+        suggestedFare = ((raw[isIntercity ? 'intercity_fare_som' : 'city_fare_som'] as num?)?.toInt() ?? 0);
+      }
+    } catch (_) {
+      // The driver can still enter the agreed fare manually.
+    }
+    final fareController = TextEditingController(text: suggestedFare > 0 ? suggestedFare.toString() : '');
+    final fare = await showDialog<int>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const TaxiLocalizedText(russian: 'Завершить выполненный заказ', kyrgyz: 'Аткарылган буйрутманы аяктоо'),
+        content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          TaxiText('Заказ №$id'),
+          const SizedBox(height: 10),
+          TextField(
+            controller: fareController,
+            autofocus: true,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: 'Итоговая стоимость (сом)', border: OutlineInputBorder()),
+          ),
+          const SizedBox(height: 8),
+          const TaxiText('После подтверждения поездка будет записана в финансовый отчёт диспетчера и заработок водителя.', style: TextStyle(fontSize: 12, color: Colors.black54)),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const TaxiLocalizedText(russian: 'Назад', kyrgyz: 'Артка')),
+          ElevatedButton(
+            onPressed: () {
+              final value = int.tryParse(fareController.text.trim());
+              if (value != null && value > 0 && value <= 1000000) Navigator.pop(ctx, value);
+            },
+            child: const TaxiLocalizedText(russian: 'ЗАВЕРШИТЬ ЗАКАЗ', kyrgyz: 'БУЙРУТМАНЫ АЯКТОО'),
+          ),
+        ],
+      ),
+    );
+    Future<void>.delayed(const Duration(milliseconds: 350), () => fareController.dispose());
+    if (fare == null || !mounted) return;
+    setState(() => _orderActionIds.add(id));
+    try {
+      await WorkerApi.completeDriverOrder(orderId: id, fareSom: fare);
+      if (mounted) _showLocationMessage('Заказ завершён. В финансовый отчёт записано $fare сом.');
+    } on WorkerApiException catch (e) {
+      if (mounted) _showLocationMessage(e.message);
+    } catch (_) {
+      if (mounted) _showLocationMessage('Не удалось завершить заказ из-за сети. Обновите список и проверьте статус поездки.');
+    } finally {
+      if (mounted) setState(() => _orderActionIds.remove(id));
+      if (mounted) await _pollServerOrders();
     }
   }
 
@@ -4001,6 +4064,11 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
                                   icon: const Icon(Icons.person_off, color: Colors.red),
                                   label: const TaxiLocalizedText(russian: 'ПАССАЖИР НЕ ВЫШЕЛ', kyrgyz: 'ЖҮРГҮНЧҮ ЧЫККАН ЖОК', style: TextStyle(color: Colors.red)),
                                 ),
+                                TextButton.icon(
+                                  onPressed: _orderActionIds.contains(_serverOrderId(item)) ? null : () => _completeAssignedOrder(item),
+                                  icon: const Icon(Icons.check_circle, color: Colors.green),
+                                  label: const TaxiLocalizedText(russian: 'ЗАВЕРШИТЬ ЗАКАЗ', kyrgyz: 'БУЙРУТМАНЫ АЯКТОО', style: TextStyle(color: Colors.green)),
+                                ),
                               ],
                             )
                           : Column(
@@ -4010,6 +4078,11 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
                                   onPressed: _orderActionIds.contains((item['id'] ?? item['firebase_order_id'] ?? '').toString()) ? null : () => _markAssignedOrderArrived(item),
                                   icon: const Icon(Icons.check_circle, color: Colors.green),
                                   label: const TaxiLocalizedText(russian: 'Я ПРИБЫЛ', kyrgyz: 'МЕН КЕЛДИМ', style: TextStyle(color: Colors.green)),
+                                ),
+                                TextButton.icon(
+                                  onPressed: _orderActionIds.contains(_serverOrderId(item)) ? null : () => _completeAssignedOrder(item),
+                                  icon: const Icon(Icons.done_all, color: Colors.green),
+                                  label: const TaxiLocalizedText(russian: 'ЗАВЕРШИТЬ ЗАКАЗ', kyrgyz: 'БУЙРУТМАНЫ АЯКТОО', style: TextStyle(color: Colors.green)),
                                 ),
                                 TextButton.icon(
                                   onPressed: _orderActionIds.contains((item['id'] ?? item['firebase_order_id'] ?? '').toString()) ? null : () => _cancelAssignedOrder(item),
