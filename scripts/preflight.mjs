@@ -731,7 +731,7 @@ check('GPS tests cover sub-second future timestamps and exact custom age boundar
 check('Branded animated splash is the first app screen', app.includes('home: const BrandedSplashGate()'));
 check('Branded splash loads the optimized high-resolution WebP artwork', app.includes("'assets/jak_splash_optimized.webp'") && pubspec.includes('assets/jak_splash_optimized.webp') && fs.existsSync(path.join(root, 'testapp/assets/jak_splash_optimized.webp')) && fs.statSync(path.join(root, 'testapp/assets/jak_splash_optimized.webp')).size > 10000);
 check('Branded splash stays visible for a bounded interval before the existing session gate', app.includes('Timer(const Duration(milliseconds: 4200)') && app.includes('const SessionGate()'));
-check('Branded splash animates its logo entrance and fades into the app', app.includes('TickerProviderStateMixin') && !app.includes('SingleTickerProviderStateMixin') && app.includes('FadeTransition(') && app.includes('ScaleTransition(') && app.includes('AnimatedBuilder(') && app.includes('_ambient') && app.includes('transitionDuration: const Duration(milliseconds: 450)'));
+check('Branded splash animates its logo entrance and fades into the app', app.includes('TickerProviderStateMixin') && !app.includes('SingleTickerProviderStateMixin') && app.includes('FadeTransition(') && app.includes('ScaleTransition(') && app.includes('RotationTransition(') && app.includes('_ambient') && app.includes('transitionDuration: const Duration(milliseconds: 450)'));
 check('Branded splash cancels its navigation timer on dispose', app.includes('_navigationTimer?.cancel();'));
 check('Branded splash guards navigation after widget disposal', app.includes('if (!mounted) return;'));
 check('Branded splash exposes an accessible semantic brand label', app.includes("label: 'ЖОЛ АМАН КЕНЧИ Такси'"));
@@ -773,14 +773,14 @@ check('Widget test covers the animated taxi splash on a blue sky background', re
 check('Language switch offers Russian and Kyrgyz', localization.includes("DropdownMenuItem(value: 'ru', child: Text('Русский'))") && localization.includes("DropdownMenuItem(value: 'ky', child: Text('Кыргызча'))"));
 check('Language switch updates a shared app language notifier', localization.includes("static final ValueNotifier<String> current") && localization.includes("TaxiLanguage.current.value = value"));
 check('Role menu listens for language changes and rebuilds', app.includes("TaxiLanguage.current.addListener(_handleLanguageChanged)") && app.includes("removeListener(_handleLanguageChanged)"));
-check('Role menu passenger title is localized', app.includes("МЕН ЖҮРГҮНЧҮМҮН") && app.includes("Я ПАССАЖИР"));
-check('Role menu driver title is localized', app.includes("МЕН АЙДООЧУМУН") && app.includes("Я ВОДИТЕЛЬ"));
-check('Role menu passenger action is localized', app.includes("Унаа чакыруу") && app.includes("Заказать поездку"));
-check('Role menu driver action is localized', app.includes("Буйрутмалар жана айдоочу бөлмөсү"));
+check('Role menu passenger action target remains accessible over the supplied artwork', app.includes("label: 'Я пассажир / Мен жүргүнчүмүн'") && app.includes('ClientAuthScreen()'));
+check('Role menu driver action target remains accessible over the supplied artwork', app.includes("label: 'Я водитель / Мен айдоочумун'") && app.includes('DriverEntryScreen()'));
+check('Role menu language control overlays the supplied artwork and opens language choices', app.includes('_showMainMenuLanguagePicker(context)') && app.includes('Кыргызча') && app.includes('Русский'));
+check('Role menu driver hit target stays aligned with the artwork button', app.includes('height * 0.646') && app.includes('DriverEntryScreen()'));
 check('Role menu uses the prepared banner image containing the supplied slogans', app.includes("'assets/jak_main_menu_optimized.webp'") && pubspec.includes('assets/jak_main_menu_optimized.webp') && fs.existsSync(path.join(root, 'testapp/assets/jak_main_menu_optimized.webp')) && fs.statSync(path.join(root, 'testapp/assets/jak_main_menu_optimized.webp')).size > 10000);
-check('Role menu decodes the optimized banner at a bounded device resolution', app.includes('cacheHeight: (decodeWidth * 2320 / 1152)') && app.includes('.clamp(1, 1152)'));
+check('Role menu decodes the supplied optimized artwork at bounded device resolution', app.includes('cacheWidth:') && app.includes('.clamp(1, 1152)'));
 check('Splash screen has a subtle repeating motion and loading indicator', app.includes("_ambient") && app.includes("CircularProgressIndicator"));
-check('Role menu service area is localized', app.includes("Кыргызстан • Баткен облусу"));
+check('Role menu dispatcher hit target stays aligned with the artwork button', app.includes('height * 0.727') && app.includes('_showDispatcherAuth(context)'));
 check('Widget test covers switching between Russian and Kyrgyz', read('testapp/test/widget_test.dart').includes('Russian and Kyrgyz language switch'));
 
 
