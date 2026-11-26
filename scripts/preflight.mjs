@@ -862,7 +862,7 @@ check('Driver refusal cannot reopen an order after a concurrent status change', 
 check('Worker JSON reader converts malformed and empty request bodies into client validation failures', /async function readJsonObject\(request\)[\s\S]*?try \{[\s\S]*?await request\.json\(\)[\s\S]*?catch \(_\)[\s\S]*?return null;/.test(worker));
 check('Worker JSON reader rejects arrays and primitive JSON values', /return value && typeof value === "object" && !Array\.isArray\(value\) \? value : null;/.test(worker));
 check('Worker JSON reader is the only direct request JSON parser', (worker.match(/request\.json\(\)/g) || []).length === 1);
-check('All 21 POST JSON handlers use the safe JSON reader', (worker.match(/await readJsonObject\\(request\\)/g) || []).length === 21);
+check('All 21 POST JSON handlers use the safe JSON reader', (worker.match(/await readJsonObject\(request\)/g) || []).length === 21);
 const driverCompleteRoute = worker.slice(worker.indexOf('url.pathname === "/orders/complete-driver"'));
 check('Driver can complete only their own assigned trip and save it once to the finance ledger',
   driverCompleteRoute.includes('requireApprovedDriver(request, env)') &&
