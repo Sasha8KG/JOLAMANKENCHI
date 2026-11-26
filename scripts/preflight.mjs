@@ -587,11 +587,12 @@ check('No-show cancellations have a durable one-row-per-order audit table', work
 check('Cancellation audit table restricts reasons to the three supported values', worker.includes("CHECK(reason IN ('customer_not_found','customer_unreachable','customer_left_with_other_car'))"));
 check('Order status update and cancellation audit insert use one D1 batch', noShowRoute.includes('const noShowResults = await env.DB.batch(['));
 check('No-show cancellation checks both atomic batch results', noShowRoute.includes('noShowResults?.[0]?.meta?.changes') && noShowRoute.includes('noShowResults?.[1]?.meta?.changes'));
-check('Dedicated dispatcher cancellation history joins durable reason and timestamp', cancellationHistoryRoute.includes('LEFT JOIN order_cancellations c ON c.order_id=o.id') && cancellationHistoryRoute.includes('c.reason') && cancellationHistoryRoute.includes('c.cancelled_at'));
-check('Dispatcher has a separate no-show cancellation history section', app.includes('Отмены после прибытия · неявка пассажира'));
-check('Dispatcher translates all three cancellation reason codes', ['Пассажир не вышел','Пассажир не отвечает','Пассажир уехал на другой машине'].every(label => app.includes(label)));
-check('Dispatcher cancellation history displays driver and timestamp', app.includes("o['driver_name']") && app.includes("o['cancelled_at']") && app.includes('Отменён: '));
-check('No-show cancellation history explicitly records zero earnings', app.includes('начисление: 0 сом'));
+check('Dispatcher cancellation audit API remains available after hiding the dashboard section', cancellationHistoryRoute.includes('LEFT JOIN order_cancellations c ON c.order_id=o.id') && cancellationHistoryRoute.includes('c.reason') && cancellationHistoryRoute.includes('c.cancelled_at'));
+check('Removed dispatcher sections do not delete server-side no-show audit records', !app.includes('Водитель прибыл · ожидают закрытия') && !app.includes('Отмены после прибытия · неявка пассажира') && worker.includes('INSERT INTO order_cancellations'));
+
+
+
+
 check('Driver assigned-order card exposes completion without arrival-only cancellation', app.includes('_completeAssignedOrder(item)') && !app.includes('_cancelArrivedNoShowOrder'));
 
 check('Cancellation audit history has a dedicated dispatcher-only endpoint', cancellationHistoryRoute.includes('await requireDispatcher(request)'));
@@ -889,7 +890,7 @@ check('Dispatcher snapshot regression tests cover malformed and duplicate data',
 
 
 check('Dispatcher section headings wrap and localize inside the available phone width', app.includes('Expanded(\n          child: TaxiLocalizedText(\n            russian: value,') && app.includes('softWrap: true,') && app.includes('kyrgyz: TaxiLanguage.translate(value)'));
-check('Dispatcher cancellation history actions wrap instead of overflowing in a narrow row', app.includes('Wrap(spacing: 8, runSpacing: 8,') && app.includes("label: const TaxiLocalizedText(russian: 'Загрузить ещё'"));
+
 check('Dispatcher app-bar title truncates safely on narrow devices', app.includes("'Диспетчер · ЖОЛ АМАН КЕНЧИ',\n          maxLines: 1,\n          softWrap: false,\n          overflow: TextOverflow.ellipsis,"));
 check('Dispatcher trip completion action label can occupy two lines', app.includes("'ЗАВЕРШИТЬ И ЗАПИСАТЬ ОПЛАТУ',\n                          maxLines: 2,"));
 check('Closed-shift earnings trailing text has a bounded responsive width', app.includes('trailing: SizedBox(\n                    width: 116,') && app.includes('maxLines: 2,\n                      softWrap: true,'));
@@ -965,6 +966,14 @@ check('Both automatic session restoration and manual driver login restore the sa
 check('Explicit offline action clears the saved line preference', (() => { const start=app.indexOf('Future<void> _toggleDriverAvailability()'); const end=app.indexOf('\n  void _showLocationMessage',start); const block=app.slice(start,end); return block.includes('_saveDriverLinePreference(') && block.includes('false,'); })());
 check('Explicit online action saves the line preference before GPS startup', (() => { const start=app.indexOf('Future<void> _toggleDriverAvailability()'); const end=app.indexOf('\n  void _showLocationMessage',start); const block=app.slice(start,end); const save=block.indexOf('_saveDriverLinePreference('); const gps=block.indexOf('_startLocationTracking()'); return save>=0 && gps>save && block.includes('true,'); })());
 check('Dispatcher restore-access text is width-bounded and limited to two readable lines', app.includes('width: 160,\n                                child: ElevatedButton.icon') && app.includes("maxLines: 2,\n                                    softWrap: true,"));
+
+
+check('Dispatcher can force a driver offline without cancelling the assigned trip',worker.includes('url.pathname === "/dispatcher/drivers/force-offline"')&&worker.includes('active_order_preserved:!!active')&&app.includes('_forceDriverOffline(d)'));
+check('Driver self-close uses approved-driver Firebase UID and its own protected endpoint',worker.includes('url.pathname==="/driver/shifts/close"')&&worker.includes('requireApprovedDriver(request,env)')&&api.includes("'/driver/shifts/close'"));
+check('Driver self-close button appears only when server reports unclosed trips',app.includes("_driverEarnings['can_close_shift']==true")&&app.includes('_closeOwnDriverShift'));
+check('Driver and dispatcher financial calculations no longer silently replace a missing commission with 50 percent',!worker.includes('COALESCE(MAX(c.commission_percent),50)')&&!worker.includes('commission?.commission_percent ?? 50')&&!app.includes("_driverEarnings['commission_percent'] ?? 50"));
+check('FCM push token registration and Android notification channel are wired',worker.includes('driver_push_tokens')&&api.includes("'/drivers/push-token'")&&pubspec.includes('firebase_messaging:')&&pubspec.includes('flutter_local_notifications:')&&man.includes('POST_NOTIFICATIONS')&&app.includes('driverOrderNotificationChannel'));
+check('New orders are sent as high-priority audible Firebase push notifications',worker.includes('notifyOnlineDriversOfNewOrder(env')&&worker.includes('priority:"high"')&&worker.includes('sound:"default"'));
 
 for (const item of checks) {
   process.stdout.write(`${item.ok ? 'PASS' : 'FAIL'}  ${item.label}\n`);

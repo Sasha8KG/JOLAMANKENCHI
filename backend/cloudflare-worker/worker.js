@@ -1,7 +1,7 @@
 const FIREBASE_API_KEY = "AIzaSyBh5WG_rXaxBjDHOVPXPmmw8gqBCRubIAM";
 const PROJECT_ID = "jol-aman-kenchi";
 // Increment this marker for each published Worker revision.
-const WORKER_REVISION = "2026-11-26.1";
+const WORKER_REVISION = "2026-11-26.2";
 const DISPATCHER_UID = "AMGNzQEr7GfnisJcr7u4BqcdIvh1";
 
 function response(data, status = 200) {
@@ -98,6 +98,50 @@ async function createLiveKitToken(env, uid, name, roomName = "jol-aman-kenchi-ra
 }
 
 function num(v) { const n = Number(v); return Number.isFinite(n) ? n : null; }
+
+async function firebaseMessagingAccessToken(env) {
+  const email=String(env.FIREBASE_CLIENT_EMAIL||"").trim();
+  const pem=String(env.FIREBASE_PRIVATE_KEY||"").replace(/\\n/g,"\\n").trim();
+  if(!email||!pem)return null;
+  const now=Math.floor(Date.now()/1000);
+  const unsigned=base64Url(JSON.stringify({alg:"RS256",typ:"JWT"}))+"."+base64Url(JSON.stringify({
+    iss:email,scope:"https://www.googleapis.com/auth/firebase.messaging",
+    aud:"https://oauth2.googleapis.com/token",iat:now,exp:now+3600
+  }));
+  const encoded=pem.replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\\s/g,"");
+  const bytes=Uint8Array.from(atob(encoded),c=>c.charCodeAt(0));
+  const key=await crypto.subtle.importKey("pkcs8",bytes,{name:"RSASSA-PKCS1-v1_5",hash:"SHA-256"},false,["sign"]);
+  const sig=new Uint8Array(await crypto.subtle.sign("RSASSA-PKCS1-v1_5",key,new TextEncoder().encode(unsigned)));
+  const assertion=unsigned+"."+base64Url(sig);
+  const responseToken=await fetch("https://oauth2.googleapis.com/token",{method:"POST",
+    headers:{"Content-Type":"application/x-www-form-urlencoded"},
+    body:"grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion="+encodeURIComponent(assertion)});
+  if(!responseToken.ok)throw new Error("Firebase OAuth token request failed");
+  const data=await responseToken.json();
+  return typeof data.access_token==="string"?data.access_token:null;
+}
+async function notifyOnlineDriversOfNewOrder(env,order) {
+  if(!env.FIREBASE_CLIENT_EMAIL||!env.FIREBASE_PRIVATE_KEY)return;
+  const now=Math.floor(Date.now()/1000);
+  const rows=await env.DB.prepare(`SELECT t.token FROM driver_push_tokens t JOIN drivers d ON d.uid=t.driver_uid
+    WHERE d.approved=1 AND d.online=1 AND d.location_updated_at BETWEEN ? AND ?
+    AND NOT EXISTS(SELECT 1 FROM orders active WHERE active.assigned_driver_uid=d.uid
+      AND active.status IN ('driver_assigned','arrived'))`).bind(now-60,now).all();
+  const tokens=[...new Set((rows.results||[]).map(x=>String(x.token||"")).filter(Boolean))];
+  if(!tokens.length)return;
+  const access=await firebaseMessagingAccessToken(env);if(!access)return;
+  const endpoint=`https://fcm.googleapis.com/v1/projects/${PROJECT_ID}/messages:send`;
+  const title="Новый заказ · ЖОЛ АМАН КЕНЧИ";
+  const body=(String(order.pickup||"Место подачи")+" → "+String(order.destination||"Пункт назначения")).slice(0,180);
+  await Promise.allSettled(tokens.map(async token=>{
+    const sent=await fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+access},
+      body:JSON.stringify({message:{token,notification:{title,body},
+        android:{priority:"high",notification:{channel_id:"driver_orders",sound:"default"}},
+        data:{type:"new_order",order_id:String(order.id||"")}}})});
+    if(sent.status===404||sent.status===410)await env.DB.prepare("DELETE FROM driver_push_tokens WHERE token=?").bind(token).run();
+  }));
+}
+
 
 function hasFreshValidDriverLocation(driver, nowSeconds = Math.floor(Date.now() / 1000)) {
   const latitude = num(driver?.latitude);
@@ -241,6 +285,12 @@ export default {
         updated_by TEXT,
         updated_at INTEGER NOT NULL DEFAULT (unixepoch())
       )`).run();
+      await env.DB.prepare(`CREATE TABLE IF NOT EXISTS driver_push_tokens (
+        token TEXT PRIMARY KEY NOT NULL, driver_uid TEXT NOT NULL,
+        updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        FOREIGN KEY(driver_uid) REFERENCES drivers(uid)
+      )`).run();
+      await env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_driver_push_tokens_driver ON driver_push_tokens(driver_uid)").run();
       // Driver commission and immutable daily shift snapshots; existing trip_finances stays untouched.
       await env.DB.prepare(`CREATE TABLE IF NOT EXISTS driver_commission_settings (
         driver_uid TEXT PRIMARY KEY NOT NULL,
@@ -341,7 +391,8 @@ export default {
         VALUES (1,0,0)`).run();
       if (url.pathname === "/health" && request.method === "GET") {
         const tables = await env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").all();
-        return response({ status: "ok", project: PROJECT_ID, worker_revision: WORKER_REVISION, database: "connected", tables: tables.results });
+        return response({status:"ok",project:PROJECT_ID,worker_revision:WORKER_REVISION,database:"connected",
+          push_configured:!!(env.FIREBASE_CLIENT_EMAIL&&env.FIREBASE_PRIVATE_KEY),tables:tables.results});
       }
 
       if (url.pathname === "/auth/check" && request.method === "POST") {
@@ -729,6 +780,41 @@ export default {
         return response({ status: "ok", driver_uid: driverUid, commission_percent: percent });
       }
 
+      if(url.pathname==="/driver/shifts/close"&&request.method==="POST"){
+        const auth=await requireApprovedDriver(request,env);
+        const b=await readJsonObject(request);if(!b)return response({status:"error",message:"Переданы неверные данные запроса."},400);
+        const shiftDate=String(b.shift_date||kgTodayDate());const {start,end}=kgDateBounds(shiftDate);
+        if(shiftDate!==kgTodayDate())return response({status:"error",message:"Водитель может закрыть только свою смену за сегодняшний день."},400);
+        const commission=await env.DB.prepare("SELECT commission_percent FROM driver_commission_settings WHERE driver_uid=?").bind(auth.user.localId).first();
+        if(!commission||!Number.isSafeInteger(Number(commission.commission_percent))||Number(commission.commission_percent)<0||Number(commission.commission_percent)>100)
+          return response({status:"error",message:"Процент водителя не установлен диспетчером. Закрытие смены невозможно."},409);
+        const shiftId=crypto.randomUUID();
+        const results=await env.DB.batch([
+          env.DB.prepare(`INSERT INTO driver_shifts
+            (id,driver_uid,shift_date,trip_count,gross_earnings_som,driver_percent,driver_share_som,park_share_som,closed_at,closed_by)
+            SELECT ?,f.driver_uid,?,COUNT(*),SUM(f.fare_som),MAX(c.commission_percent),
+              CAST(ROUND(SUM(f.fare_som)*MAX(c.commission_percent)/100.0) AS INTEGER),
+              SUM(f.fare_som)-CAST(ROUND(SUM(f.fare_som)*MAX(c.commission_percent)/100.0) AS INTEGER),unixepoch(),?
+            FROM trip_finances f JOIN driver_commission_settings c ON c.driver_uid=f.driver_uid
+            WHERE f.driver_uid=? AND f.completed_at>=? AND f.completed_at<?
+              AND NOT EXISTS(SELECT 1 FROM shift_finance_items si WHERE si.order_id=f.order_id)
+            GROUP BY f.driver_uid ON CONFLICT(driver_uid,shift_date) DO NOTHING`)
+            .bind(shiftId,shiftDate,auth.user.localId,auth.user.localId,start,end),
+          env.DB.prepare(`INSERT INTO shift_finance_items(shift_id,order_id,driver_uid,fare_som,completed_at)
+            SELECT ?,f.order_id,f.driver_uid,f.fare_som,f.completed_at FROM trip_finances f
+            WHERE f.driver_uid=? AND f.completed_at>=? AND f.completed_at<?
+              AND EXISTS(SELECT 1 FROM driver_shifts ds WHERE ds.id=?)
+              AND NOT EXISTS(SELECT 1 FROM shift_finance_items si WHERE si.order_id=f.order_id)`)
+            .bind(shiftId,auth.user.localId,start,end,shiftId)
+        ]);
+        if(Number(results?.[0]?.meta?.changes||0)!==1){
+          const existing=await env.DB.prepare("SELECT id FROM driver_shifts WHERE driver_uid=? AND shift_date=?").bind(auth.user.localId,shiftDate).first();
+          return response({status:"error",message:existing?"Ваша смена за сегодня уже закрыта":"Нет завершённых поездок для закрытия смены"},409);
+        }
+        const shift=await env.DB.prepare("SELECT * FROM driver_shifts WHERE id=?").bind(shiftId).first();
+        return response({status:"ok",closed:true,shift});
+      }
+
       if (url.pathname === "/dispatcher/shifts/close" && request.method === "POST") {
         const auth = await requireDispatcher(request);
         const b = await readJsonObject(request);
@@ -740,6 +826,9 @@ export default {
         if (shiftDate > kgTodayDate()) return response({ status: "error", message: "Нельзя закрыть смену за будущую дату" }, 400);
         const driver = await env.DB.prepare("SELECT uid,name FROM drivers WHERE uid=?").bind(driverUid).first();
         if (!driver) return response({ status: "error", message: "Водитель не найден" }, 404);
+        const commission=await env.DB.prepare("SELECT commission_percent FROM driver_commission_settings WHERE driver_uid=?").bind(driverUid).first();
+        if(!commission||!Number.isSafeInteger(Number(commission.commission_percent))||Number(commission.commission_percent)<0||Number(commission.commission_percent)>100)
+          return response({status:"error",message:"Для водителя не установлен процент. Сначала задайте его в кабинете диспетчера."},409);
         const shiftId = crypto.randomUUID();
         // D1 batch is transactional. A fresh random ID means a repeated close cannot copy items
         // into an already closed shift, while UNIQUE(driver_uid, shift_date) prevents duplicates.
@@ -747,12 +836,12 @@ export default {
           env.DB.prepare(`INSERT INTO driver_shifts
             (id,driver_uid,shift_date,trip_count,gross_earnings_som,driver_percent,driver_share_som,park_share_som,closed_at,closed_by)
             SELECT ?, f.driver_uid, ?, COUNT(*), SUM(f.fare_som),
-              COALESCE(MAX(c.commission_percent),50),
-              CAST(ROUND(SUM(f.fare_som)*COALESCE(MAX(c.commission_percent),50)/100.0) AS INTEGER),
-              SUM(f.fare_som)-CAST(ROUND(SUM(f.fare_som)*COALESCE(MAX(c.commission_percent),50)/100.0) AS INTEGER),
+              MAX(c.commission_percent),
+              CAST(ROUND(SUM(f.fare_som)*MAX(c.commission_percent)/100.0) AS INTEGER),
+              SUM(f.fare_som)-CAST(ROUND(SUM(f.fare_som)*MAX(c.commission_percent)/100.0) AS INTEGER),
               unixepoch(), ?
             FROM trip_finances f
-            LEFT JOIN driver_commission_settings c ON c.driver_uid=f.driver_uid
+            JOIN driver_commission_settings c ON c.driver_uid=f.driver_uid
             WHERE f.driver_uid=? AND f.completed_at>=? AND f.completed_at<?
               AND NOT EXISTS (SELECT 1 FROM shift_finance_items si WHERE si.order_id=f.order_id)
             GROUP BY f.driver_uid
@@ -845,17 +934,22 @@ export default {
           WHERE f.driver_uid=? AND f.completed_at>=? AND f.completed_at<?
             AND NOT EXISTS (SELECT 1 FROM shift_finance_items si WHERE si.order_id=f.order_id)`)
           .bind(auth.user.localId, bounds.start, bounds.end).first();
-        const closed = await env.DB.prepare(`SELECT COALESCE(SUM(trip_count),0) AS trip_count,
+        const closed = await env.DB.prepare(`SELECT COUNT(*) AS closed_shift_count,
+          COALESCE(SUM(trip_count),0) AS trip_count,
           COALESCE(SUM(gross_earnings_som),0) AS gross_earnings_som,
           COALESCE(SUM(driver_share_som),0) AS driver_share_som,
           COALESCE(SUM(park_share_som),0) AS park_share_som
           FROM driver_shifts WHERE driver_uid=? AND shift_date=?`)
           .bind(auth.user.localId, businessDate).first();
-        const percent = Number(commission?.commission_percent ?? 50);
+        if(!commission||!Number.isSafeInteger(Number(commission.commission_percent))||Number(commission.commission_percent)<0||Number(commission.commission_percent)>100)
+          return response({status:"error",message:"Процент водителя не установлен диспетчером. Обратитесь к диспетчеру."},409);
+        const percent = Number(commission.commission_percent);
         const openGross = Number(open?.gross_earnings_som ?? 0);
         const openDriverShare = Math.round(openGross * percent / 100);
         return response({ status: "ok", business_date: businessDate, earnings: {
           completed_trips: Number(open?.trip_count ?? 0) + Number(closed?.trip_count ?? 0),
+          unclosed_trip_count:Number(open?.trip_count??0),
+          can_close_shift:Number(open?.trip_count??0)>0&&Number(closed?.closed_shift_count??0)===0,
           gross_earnings_som: openGross + Number(closed?.gross_earnings_som ?? 0),
           commission_percent: percent,
           driver_share_som: openDriverShare + Number(closed?.driver_share_som ?? 0),
@@ -886,10 +980,10 @@ export default {
         const today = await env.DB.prepare(`SELECT status, COUNT(*) AS count FROM orders
           WHERE created_at>=? AND created_at<? GROUP BY status`).bind(todayBounds.start, todayBounds.end).all();
         const earnings = await env.DB.prepare(`SELECT d.uid AS driver_uid, d.name AS driver_name,
-          d.car_number AS car_number, COALESCE(c.commission_percent,50) AS commission_percent,
+          d.car_number AS car_number, c.commission_percent AS commission_percent,
           COUNT(f.order_id) AS completed_trips, COALESCE(SUM(f.fare_som),0) AS earned_som,
-          CAST(ROUND(COALESCE(SUM(f.fare_som),0)*COALESCE(c.commission_percent,50)/100.0) AS INTEGER) AS driver_share_som,
-          COALESCE(SUM(f.fare_som),0)-CAST(ROUND(COALESCE(SUM(f.fare_som),0)*COALESCE(c.commission_percent,50)/100.0) AS INTEGER) AS park_share_som
+          CASE WHEN c.commission_percent IS NULL THEN NULL ELSE CAST(ROUND(COALESCE(SUM(f.fare_som),0)*c.commission_percent/100.0) AS INTEGER) END AS driver_share_som,
+          CASE WHEN c.commission_percent IS NULL THEN NULL ELSE COALESCE(SUM(f.fare_som),0)-CAST(ROUND(COALESCE(SUM(f.fare_som),0)*c.commission_percent/100.0) AS INTEGER) END AS park_share_som
           FROM drivers d
           LEFT JOIN driver_commission_settings c ON c.driver_uid=d.uid
           LEFT JOIN trip_finances f ON f.driver_uid=d.uid AND f.completed_at>=? AND f.completed_at<?
@@ -942,6 +1036,33 @@ export default {
         }
         await env.DB.prepare("DELETE FROM order_responses WHERE order_id=?").bind(orderId).run();
         return response({ status: "ok", assigned: true, order_id: orderId, driver_uid: driverUid });
+      }
+
+      if (url.pathname === "/drivers/push-token" && request.method === "POST") {
+        const auth=await requireApprovedDriver(request,env);
+        const b=await readJsonObject(request);
+        if(!b)return response({status:"error",message:"Переданы неверные данные запроса."},400);
+        const token=typeof b.token==="string"?b.token.trim():"";
+        if(token.length<20||token.length>4096||hasForbiddenControlCharacters(token))
+          return response({status:"error",message:"Получен неверный токен уведомлений."},400);
+        await env.DB.prepare("DELETE FROM driver_push_tokens WHERE driver_uid=? AND token<>?").bind(auth.user.localId,token).run();
+        await env.DB.prepare(`INSERT INTO driver_push_tokens(token,driver_uid,updated_at) VALUES(?,?,unixepoch())
+          ON CONFLICT(token) DO UPDATE SET driver_uid=excluded.driver_uid,updated_at=unixepoch()`).bind(token,auth.user.localId).run();
+        return response({status:"ok",registered:true});
+      }
+
+      if (url.pathname === "/dispatcher/drivers/force-offline" && request.method === "POST") {
+        await requireDispatcher(request);
+        const b=await readJsonObject(request);
+        if(!b)return response({status:"error",message:"Переданы неверные данные запроса."},400);
+        const uid=String(b.driver_uid||"").trim();
+        if(!uid||uid.length>128||/[\\/\\x00-\\x1f\\x7f]/.test(uid))
+          return response({status:"error",message:"Укажите корректного водителя."},400);
+        const update=await env.DB.prepare("UPDATE drivers SET online=0,updated_at=unixepoch() WHERE uid=? AND approved=1").bind(uid).run();
+        if(!update.meta||Number(update.meta.changes||0)!==1)
+          return response({status:"error",message:"Одобренный водитель не найден или уже отключён."},404);
+        const active=await env.DB.prepare("SELECT id,status FROM orders WHERE assigned_driver_uid=? AND status IN ('driver_assigned','arrived') LIMIT 1").bind(uid).first();
+        return response({status:"ok",online:false,active_order_preserved:!!active,active_order_id:active?.id||null});
       }
 
       if (url.pathname === "/drivers/online" && request.method === "POST") {
@@ -1026,13 +1147,11 @@ export default {
           return response({ status: "error", message: "Комментарий не должен превышать 500 символов" }, 400);
         }
         // Publishing is idempotent: a retry must never reset an assigned or completed order.
-        await env.DB.prepare(`INSERT INTO orders
-          (id, firebase_order_id, customer_uid, pickup_address, pickup_lat, pickup_lng, destination_address, destination_lat, destination_lng, passenger_count, payment_method, tariff_type, comment, status, assigned_driver_uid)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'new', NULL)
-          ON CONFLICT DO NOTHING`)
-          .bind(orderId, orderId, auth.user.localId, pickup, pickupLat, pickupLng,
-            destination, num(b.destinationLat), num(b.destinationLng),
-            people, payment, tariff, comment).run();
+        const insertedOrder=await env.DB.prepare(`INSERT INTO orders
+          (id,firebase_order_id,customer_uid,pickup_address,pickup_lat,pickup_lng,destination_address,destination_lat,destination_lng,passenger_count,payment_method,tariff_type,comment,status,assigned_driver_uid)
+          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,'new',NULL) ON CONFLICT DO NOTHING`)
+          .bind(orderId,orderId,auth.user.localId,pickup,pickupLat,pickupLng,destination,
+            num(b.destinationLat),num(b.destinationLng),people,payment,tariff,comment).run();
         const existing = await env.DB.prepare(
           "SELECT customer_uid FROM orders WHERE firebase_order_id=?"
         ).bind(orderId).first();
@@ -1042,7 +1161,10 @@ export default {
         if (existing.customer_uid !== auth.user.localId) {
           return response({ status: "error", message: "Заявка с таким номером уже принадлежит другому клиенту" }, 403);
         }
-        return response({ status: "ok", published: true, already_published: true });
+        if(Number(insertedOrder.meta?.changes||0)===1) {
+          try { await notifyOnlineDriversOfNewOrder(env,{id:orderId,pickup,destination}); } catch (_) {}
+        }
+        return response({status:"ok",published:true,already_published:Number(insertedOrder.meta?.changes||0)!==1});
       }
 
       if (url.pathname === "/orders/sync" && request.method === "POST") {

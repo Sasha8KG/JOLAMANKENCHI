@@ -4,6 +4,8 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -84,9 +86,35 @@ List<Widget> buildTaxiDarkMapLayers() => [
   ),
 ];
 
+
+final FlutterLocalNotificationsPlugin taxiLocalNotifications=FlutterLocalNotificationsPlugin();
+const AndroidNotificationChannel driverOrderNotificationChannel=AndroidNotificationChannel(
+  'driver_orders','Новые заказы',description:'Звуковые уведомления о новых заказах для водителя',
+  importance:Importance.max,playSound:true,
+);
+@pragma('vm:entry-point')
+Future<void> taxiFirebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp();
+}
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
+  FirebaseMessaging.onBackgroundMessage(taxiFirebaseMessagingBackgroundHandler);
+  await taxiLocalNotifications.initialize(const InitializationSettings(
+    android:AndroidInitializationSettings('@drawable/ic_launcher_kyrgyz'),
+  ));
+  final android=taxiLocalNotifications.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+  await android?.createNotificationChannel(driverOrderNotificationChannel);
+  FirebaseMessaging.onMessage.listen((message){
+    unawaited(taxiLocalNotifications.show(message.hashCode,
+      message.notification?.title??'Новый заказ · ЖОЛ АМАН КЕНЧИ',
+      message.notification?.body??'Поступил новый заказ. Откройте приложение.',
+      const NotificationDetails(android:AndroidNotificationDetails(
+        'driver_orders','Новые заказы',channelDescription:'Звуковые уведомления о новых заказах для водителя',
+        importance:Importance.max,priority:Priority.high,playSound:true,
+      )),
+    ));
+  });
   runApp(const SulyuktaTaxiApp());
 }
 
@@ -3103,6 +3131,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
   final MapController _driverMapController = MapController();
   bool _driverMapReady = false;
   StreamSubscription<Position>? _positionSubscription;
+  StreamSubscription<String>? _pushTokenSubscription;
   Timer? _heartbeatTimer;
   Timer? _ordersPollTimer;
   bool _ordersPollInProgress = false;
@@ -3119,6 +3148,8 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
   List<Map<String, dynamic>> _serverAssignedOrders = [];
   Map<String, dynamic> _driverEarnings = <String, dynamic>{};
   bool _driverEarningsLoading = false;
+  bool _driverShiftClosing = false;
+  String? _driverEarningsError;
   bool _assignedOrdersLoaded = false;
   final Set<String> _respondingOrderIds = <String>{};
   final Set<String> _orderActionIds = <String>{};
@@ -3143,6 +3174,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
     // offline must stay offline after closing and reopening the app.
     final currentDriver = TaxiParkState.currentLoggedInDriver;
     _driverWantsOnline = currentDriver?.isOnline ?? false;
+    if(currentDriver!=null)_registerDriverPushNotifications();
     if (_driverWantsOnline && currentDriver != null) {
       // Capture an existing server-online state as the local preference too,
       // so the first app restart after this update also restores the line.
@@ -3157,6 +3189,21 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
     _ordersPollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       _pollServerOrders();
     });
+  }
+
+  void _registerDriverPushNotifications() {
+    unawaited(() async {
+      try {
+        final permission=await FirebaseMessaging.instance.requestPermission(alert:true,badge:true,sound:true);
+        if(permission.authorizationStatus==AuthorizationStatus.denied)return;
+        final token=await FirebaseMessaging.instance.getToken();
+        if(token!=null&&token.isNotEmpty)await WorkerApi.registerDriverPushToken(token);
+        await _pushTokenSubscription?.cancel();
+        _pushTokenSubscription=FirebaseMessaging.instance.onTokenRefresh.listen((value) async {
+          try{await WorkerApi.registerDriverPushToken(value);}catch(_){}
+        });
+      }catch(_){/* Push failure must not block driver login or order handling. */}
+    }());
   }
 
   @override
@@ -3185,13 +3232,42 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
     try {
       final data = await WorkerApi.getDriverEarnings();
       final raw = data['earnings'];
-      if (!mounted || raw is! Map) return;
-      setState(() => _driverEarnings = Map<String, dynamic>.from(raw));
-    } catch (_) {
+      if(!mounted||raw is! Map)return;
+      setState(()=>_driverEarnings=Map<String,dynamic>.from(raw));
+      _driverEarningsError=null;
+    }catch(error){
+      if(mounted)setState(()=>_driverEarningsError=error.toString());
       // A temporary finance request failure must not interrupt order handling.
-    } finally {
+    }finally{
       _driverEarningsLoading = false;
     }
+  }
+
+  Future<void> _closeOwnDriverShift() async {
+    if(_driverShiftClosing||_driverEarnings['can_close_shift']!=true)return;
+    final gross=(_driverEarnings['gross_earnings_som'] as num?)?.toInt()??0;
+    final percent=(_driverEarnings['commission_percent'] as num?)?.toInt();
+    final share=(_driverEarnings['driver_share_som'] as num?)?.toInt()??0;
+    if(percent==null||gross<=0)return;
+    final confirm=await showDialog<bool>(context:context,builder:(ctx)=>AlertDialog(
+      title:const TaxiText('Закрыть свою смену?'),
+      content:TaxiText('Заработок: $gross сом\\nВаша доля: $percent% ($share сом)\\nТаксопарку: ${gross-share} сом.\\n\\nПосле закрытия суммы сохранятся в истории. Повторное закрытие за сегодня будет недоступно.'),
+      actions:[
+        TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const TaxiLocalizedText(russian:'Отмена',kyrgyz:'Жокко чыгаруу')),
+        ElevatedButton(onPressed:()=>Navigator.pop(ctx,true),child:const TaxiLocalizedText(russian:'Закрыть смену',kyrgyz:'Сменаны жабуу')),
+      ],
+    ));
+    if(confirm!=true||!mounted)return;
+    setState(()=>_driverShiftClosing=true);
+    try{
+      final result=await WorkerApi.closeOwnDriverShift();
+      final shift=Map<String,dynamic>.from(result['shift'] as Map? ?? {});
+      await _loadDriverEarnings();
+      if(mounted)_notice('Смена закрыта. Вам: ${shift['driver_share_som']??0} сом; таксопарку: ${shift['park_share_som']??0} сом.');
+    }catch(error){
+      if(mounted)_notice(error.toString());
+      await _loadDriverEarnings();
+    }finally{if(mounted)setState(()=>_driverShiftClosing=false);}
   }
 
   Future<void> _pollServerOrders() async {
@@ -3854,6 +3930,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
     _locationRetryTimer?.cancel();
     _offlineSyncRetryTimer?.cancel();
     _ordersPollTimer?.cancel();
+    unawaited(_pushTokenSubscription?.cancel());
     // Mark the driver offline when leaving the live driver screen.
     unawaited(WorkerApi.setDriverOnline(online: false).then<void>((_) {}).catchError((_) {}));
     super.dispose();
@@ -4036,10 +4113,19 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
                       const SizedBox(height: 5),
                       TaxiText('Выполнено заказов: ${_driverEarnings['completed_trips'] ?? 0}'),
                       TaxiText('Общая сумма поездок: ${_driverEarnings['gross_earnings_som'] ?? 0} сом'),
-                      TaxiText('Ваша доля (${_driverEarnings['commission_percent'] ?? 50}%): ${_driverEarnings['driver_share_som'] ?? 0} сом',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                      if (_driverEarnings.isEmpty)
-                        const TaxiText('Данные обновятся после подключения к серверу.', style: TextStyle(fontSize: 11, color: Colors.black54)),
+                      if(_driverEarnings.isNotEmpty)
+                        TaxiText('Ваша доля (${_driverEarnings['commission_percent']}%): ${_driverEarnings['driver_share_som']??0} сом',
+                          style:const TextStyle(fontWeight:FontWeight.bold,fontSize:16)),
+                      if(_driverEarnings.isEmpty)
+                        TaxiText(_driverEarningsError??(_driverEarningsLoading?'Загружаем финансовые данные…':'Процент и заработок пока не подтверждены сервером.'),
+                          style:const TextStyle(fontSize:11,color:Colors.black54)),
+                      if(_driverEarnings['can_close_shift']==true)
+                        Padding(padding:const EdgeInsets.only(top:10),child:SizedBox(width:double.infinity,
+                          child:ElevatedButton.icon(
+                            onPressed:_driverShiftClosing?null:_closeOwnDriverShift,
+                            icon:const Icon(Icons.lock_clock),
+                            label:TaxiText(_driverShiftClosing?'ЗАКРЫТИЕ СМЕНЫ…':'ЗАКРЫТЬ СМЕНУ'),
+                          ))),
                     ]),
                   ),
                 ),
@@ -4137,12 +4223,8 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
   void initState() {
     super.initState();
     _load();
-    unawaited(_refreshCancellationHistory(silent: true));
     _dispatcherRefreshTimer = Timer.periodic(const Duration(seconds: 15), (_) {
-      if (mounted && !_working) {
-        unawaited(_load(showLoading: false));
-        if (_cancellations.length <= 50) unawaited(_refreshCancellationHistory(silent: true));
-      }
+      if (mounted && !_working) unawaited(_load(showLoading: false));
     });
     _documentTransferMonitor = Timer.periodic(const Duration(seconds: 2), (_) => unawaited(_monitorDocumentTransfers()));
   }
@@ -4740,10 +4822,33 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
     );
   }
 
+  Future<void> _forceDriverOffline(Map<String,dynamic> driver) async {
+    final uid=(driver['uid']??driver['driver_uid']??'').toString();
+    final name=(driver['name']??driver['driver_name']??'Водитель').toString();
+    final online=driver['online']==true||driver['online']==1||driver['online'].toString()=='1';
+    if(uid.isEmpty||!online)return;
+    final confirm=await showDialog<bool>(context:context,builder:(ctx)=>AlertDialog(
+      title:const TaxiText('Снять водителя с линии?'),
+      content:TaxiText('$name будет исключён из новых заказов. Уже назначенный заказ останется у него и не будет отменён.'),
+      actions:[
+        TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const TaxiLocalizedText(russian:'Отмена',kyrgyz:'Жокко чыгаруу')),
+        ElevatedButton(onPressed:()=>Navigator.pop(ctx,true),child:const TaxiLocalizedText(russian:'Снять с линии',kyrgyz:'Линиядан алуу')),
+      ],
+    ));
+    if(confirm!=true||!mounted)return;
+    setState(()=>_working=true);
+    try{
+      final result=await WorkerApi.forceDriverOffline(driverUid:uid);
+      await _load(showLoading:false);
+      if(mounted)_notice(result['active_order_preserved']==true?'Водитель снят с линии. Назначенный заказ сохранён.':'Водитель снят с линии.');
+    }catch(error){if(mounted)_notice(error.toString());}
+    finally{if(mounted)setState(()=>_working=false);}
+  }
+
   Future<void> _editDriverCommission(Map<String, dynamic> driver) async {
     final uid = (driver['driver_uid'] ?? '').toString();
     if (uid.isEmpty) return;
-    final current = (driver['commission_percent'] as num?)?.toInt() ?? 50;
+    final current = (driver['commission_percent'] as num?)?.toInt() ?? 0;
     final controller = TextEditingController(text: current.toString());
     final percent = await showDialog<int>(
       context: context,
@@ -4792,7 +4897,7 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const TaxiText('Закрыть смену водителя?'),
-        content: TaxiText('Водитель: $name\\nЗаработок за день: $earned сом\nПроцент водителя: ${driver['commission_percent'] ?? 50}%\n\nПосле закрытия сумма и процент сохранятся в истории. Повторно закрыть эту смену будет нельзя.'),
+        content: TaxiText('Водитель: $name\\nЗаработок за день: $earned сом\nПроцент водителя: ${driver['commission_percent'] ?? 'не установлен'}%\n\nПосле закрытия сумма и процент сохранятся в истории. Повторно закрыть эту смену будет нельзя.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const TaxiLocalizedText(russian: 'Отмена', kyrgyz: 'Жокко чыгаруу')),
           ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const TaxiLocalizedText(russian: 'Закрыть смену', kyrgyz: 'Сменаны жабуу')),
@@ -4993,36 +5098,25 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
                     title: TaxiText((d['name'] ?? 'Водитель').toString()),
                     subtitle: TaxiText('${d['car_model'] ?? ''} · ${d['car_number'] ?? ''}\n$approvalLabel · ${online ? 'На линии' : 'Не на линии'}\nПроверка документов: $reviewStatus'),
                     isThreeLine: true,
-                    trailing: approved
-                        ? IconButton(
-                            tooltip: 'Отключить допуск',
-                            onPressed: _working ? null : () => _approve(d, false),
-                            icon: const Icon(Icons.block, color: Colors.red),
-                          )
-                        : reviewStatus == 'approved'
-                            ? SizedBox(
-                                width: 160,
-                                child: ElevatedButton.icon(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.green,
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                                  ),
-                                  onPressed: _working ? null : () => _approve(d, true),
-                                  icon: const Icon(Icons.check_circle, size: 18),
-                                  label: const Text(
-                                    'ВОССТАНОВИТЬ ДОПУСК',
-                                    maxLines: 2,
-                                    softWrap: true,
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(fontSize: 11, height: 1.1),
-                                  ),
-                                ),
-                              )
-                            : Icon(
-                                reviewStatus == 'pending' ? Icons.hourglass_empty : Icons.warning_amber_rounded,
-                                color: reviewStatus == 'pending' ? Colors.orange : Colors.redAccent,
-                              ),
+                    trailing: SizedBox(width:164,child:Column(mainAxisSize:MainAxisSize.min,children:[
+                      if(online) TextButton.icon(
+                        onPressed:_working?null:()=>_forceDriverOffline(d),
+                        icon:const Icon(Icons.power_settings_new,size:17),
+                        label:const Text('СНЯТЬ С ЛИНИИ',maxLines:1,style:TextStyle(fontSize:10)),
+                      ),
+                      if(approved) IconButton(tooltip:'Отключить допуск',
+                        onPressed:_working?null:()=>_approve(d,false),
+                        icon:const Icon(Icons.block,color:Colors.red),
+                      ) else if(reviewStatus=='approved') SizedBox(width:160,child:ElevatedButton.icon(
+                        style:ElevatedButton.styleFrom(backgroundColor:Colors.green,foregroundColor:Colors.white,
+                          padding:const EdgeInsets.symmetric(horizontal:8,vertical:8)),
+                        onPressed:_working?null:()=>_approve(d,true),
+                        icon:const Icon(Icons.check_circle,size:18),
+                        label:const Text('ВОССТАНОВИТЬ ДОПУСК',maxLines:2,softWrap:true,textAlign:TextAlign.center,
+                          style:TextStyle(fontSize:11,height:1.1)),
+                      )) else Icon(reviewStatus=='pending'?Icons.hourglass_empty:Icons.warning_amber_rounded,
+                        color:reviewStatus=='pending'?Colors.orange:Colors.redAccent),
+                    ])),
                   ));
                 }),
                 _sectionTitle('Открытые заказы', Icons.receipt_long),
@@ -5038,74 +5132,6 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
                     Align(alignment: Alignment.centerRight, child: ElevatedButton.icon(
                       onPressed: _working ? null : () => _assign(o), icon: const Icon(Icons.person_add_alt_1), label: const TaxiLocalizedText(russian: 'Назначить водителя', kyrgyz: 'Айдоочуну дайындоо'))),
                   ])))),
-                _sectionTitle('Водитель прибыл · ожидают закрытия', Icons.flag_circle_outlined),
-                ..._orders.where((o) => o['status'] == 'arrived').map((o) => Card(
-                  child: Padding(padding: const EdgeInsets.all(12), child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      TaxiText('Заказ №${o['id'] ?? ''}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                      TaxiText('Водитель: ${o['driver_name'] ?? 'не указан'} · ${o['driver_car_number'] ?? ''}'),
-                      TaxiText('Маршрут: ${o['pickup_address'] ?? '—'} → ${o['destination_address'] ?? '—'}'),
-                      Align(alignment: Alignment.centerRight, child: ElevatedButton.icon(
-                        onPressed: _working ? null : () => _completeTrip(o),
-                        icon: const Icon(Icons.check_circle),
-                        label: const TaxiText(
-                          'ЗАВЕРШИТЬ И ЗАПИСАТЬ ОПЛАТУ',
-                          maxLines: 2,
-                          softWrap: true,
-                          textAlign: TextAlign.center,
-                        ))),
-                    ])))),
-                _sectionTitle('Отмены после прибытия · неявка пассажира', Icons.person_off_outlined),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 4,
-                  children: [
-                    TextButton.icon(
-                      onPressed: _loadingMoreCancellations ? null : () => _refreshCancellationHistory(),
-                      icon: const Icon(Icons.refresh),
-                      label: const TaxiLocalizedText(russian: 'Обновить историю', kyrgyz: 'Тарыхты жаңылоо'),
-                    ),
-                    if (_hasMoreCancellations)
-                      TextButton.icon(
-                        onPressed: _loadingMoreCancellations ? null : _loadMoreCancellationHistory,
-                        icon: const Icon(Icons.expand_more),
-                        label: const TaxiLocalizedText(russian: 'Загрузить ещё', kyrgyz: 'Дагы жүктөө'),
-                      ),
-                  ],
-                ),
-                if (_cancellations.isEmpty && !_loadingMoreCancellations)
-                  const TaxiLocalizedText(russian: 'Нет отмен по причине отсутствия пассажира.', kyrgyz: 'Жүргүнчү келбегенине байланыштуу жокко чыгаруу жок.'),
-                if (_loadingMoreCancellations && _cancellations.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.all(12),
-                    child: Center(child: CircularProgressIndicator()),
-                  ),
-                ..._cancellations.map((o) {
-                  final reason = switch ((o['reason'] ?? '').toString()) {
-                    'customer_not_found' => 'Пассажир не вышел',
-                    'customer_unreachable' => 'Пассажир не отвечает',
-                    'customer_left_with_other_car' => 'Пассажир уехал на другой машине',
-                    _ => 'Причина не указана в старой записи',
-                  };
-                  final cancelledAt = (o['cancelled_at'] as num?)?.toInt();
-                  final cancelledTime = cancelledAt == null
-                      ? 'Время отмены не сохранилось в старой записи'
-                      : DateTime.fromMillisecondsSinceEpoch(cancelledAt * 1000).toLocal().toString();
-                  return Card(child: Padding(padding: const EdgeInsets.all(12), child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      TaxiText('Заказ №' + (o['order_id'] ?? '').toString(), style: const TextStyle(fontWeight: FontWeight.bold)),
-                      TaxiText('Водитель: ' + (o['driver_name'] ?? 'не указан').toString() + ' · ' + (o['driver_car_number'] ?? '').toString()),
-                      TaxiText('Причина: ' + reason),
-                      TaxiText('Отменён: ' + cancelledTime),
-                      TaxiLocalizedText(russian: 'Маршрут: ', kyrgyz: 'Маршрут: ' + (o['pickup_address'] ?? '—').toString() + ' → ' + (o['destination_address'] ?? '—').toString()),
-                      const TaxiLocalizedText(russian: 'Поездка не засчитана · начисление: 0 сом', kyrgyz: 'Жол жүрүү эсептелген жок · чегерүү: 0 сом'),
-                    ])));
-                }),
-                if (_loadingMoreCancellations && _cancellations.isNotEmpty)
-                  const Padding(
-                    padding: EdgeInsets.all(8),
-                    child: Center(child: CircularProgressIndicator()),
-                  ),
                 _sectionTitle('Финансовый итог за сегодня · $_businessDate', Icons.account_balance_wallet_outlined),
                 Card(child: Padding(padding: const EdgeInsets.all(14), child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start, children: [

@@ -355,6 +355,14 @@ class WorkerApi {
 
 
   static Future<Map<String, dynamic>> getDriverEarnings() => _request('/driver/earnings');
+  static Future<Map<String,dynamic>> registerDriverPushToken(String token) {
+    final value=token.trim();
+    if(value.length<20||value.length>4096||RegExp(r'[\\x00-\\x1F\\x7F]').hasMatch(value))
+      throw const WorkerApiException('Некорректный токен уведомлений.');
+    return _request('/drivers/push-token',method:'POST',body:{'token':value});
+  }
+  static Future<Map<String,dynamic>> closeOwnDriverShift() =>
+      _request('/driver/shifts/close',method:'POST',body:const {});
 
   static Future<Map<String, dynamic>> getTariffs() => _request('/tariffs');
 
@@ -390,6 +398,10 @@ class WorkerApi {
     });
   }
 
+  static Future<Map<String,dynamic>> forceDriverOffline({required String driverUid}) {
+    final uid=_validatedUid(driverUid);
+    return _request('/dispatcher/drivers/force-offline',method:'POST',body:{'driver_uid':uid});
+  }
   static Future<Map<String, dynamic>> closeDriverShift({
     required String driverUid,
     String? shiftDate,
