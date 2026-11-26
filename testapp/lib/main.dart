@@ -4078,7 +4078,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
                 ] else if (_serverAssignedOrders.isEmpty)
                   const TaxiLocalizedText(russian: 'Новых заказов пока нет. Ожидаем...', kyrgyz: 'Азырынча жаңы буйрутма жок. Күтүп жатабыз...', style: TextStyle(color: Colors.grey)),
                 const SizedBox(height: 10),
-                WalkieTalkieWidget(senderName: driver?.name ?? 'Водитель', allowText: _serverAssignedOrders.isEmpty && (order == null || order.status != 'accepted')),
+                WalkieTalkieWidget(senderName: driver?.name ?? 'Водитель', allowText: _serverAssignedOrders.isEmpty),
                   ],
                 ),
               ),
