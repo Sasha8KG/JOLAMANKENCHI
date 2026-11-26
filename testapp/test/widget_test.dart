@@ -38,7 +38,8 @@ void main() {
       expect(find.text('Кыргызча'), findsOneWidget);
       await tester.tap(find.text('Кыргызча').last);
       await tester.pumpAndSettle();
-      expect(find.text('Кыргызча'), findsOneWidget);
+      expect(TaxiLanguage.current.value, 'ky');
+      expect(find.text('Кыргызча'), findsNothing);
       expect(find.byType(Image), findsOneWidget);
       TaxiLanguage.current.value = 'ru';
     });
