@@ -1119,10 +1119,13 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                           borderRadius: BorderRadius.circular(18),
                           child: SizedBox(
                             width: double.infinity,
-                            height: constraints.maxWidth * 0.82,
+                            height: constraints.maxWidth * 1.20,
                             child: ClipRect(
                               child: Transform.translate(
-                                offset: Offset(0, -constraints.maxWidth * 0.07),
+                                // The source artwork is a full-height menu poster:
+                                // crop its embedded language control, but keep the
+                                // complete title, taxi, mountains and slogan visible.
+                                offset: Offset(0, -constraints.maxWidth * 0.12),
                                 child: Image.asset(
                                   'assets/jak_main_menu_optimized.webp',
                                   width: constraints.maxWidth,
