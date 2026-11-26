@@ -4425,6 +4425,20 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
   Future<void> _approve(Map<String, dynamic> driver, bool approved) async {
     final uid = (driver['uid'] ?? '').toString();
     if (uid.isEmpty) return;
+    if (!approved) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Отключить допуск водителя?'),
+          content: const Text('Водитель будет снят с линии. Одобрение документов сохранится, и допуск можно будет восстановить без повторной проверки.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
+            ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Отключить допуск')),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+    }
     setState(() => _working = true);
     try {
       await WorkerApi.approveDriver(uid: uid, approved: approved);
@@ -4942,20 +4956,34 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
                   final reviewStatus = (d['review_status'] ?? 'not_submitted').toString();
                   final approvalLabel = approved
                       ? 'Допущен'
-                      : reviewStatus == 'pending'
-                          ? 'Ожидает проверки документов'
-                          : reviewStatus == 'rejected'
-                              ? 'Заявка отклонена'
-                              : 'Не одобрен · документы не отправлены';
+                      : reviewStatus == 'approved'
+                          ? 'Документы одобрены · допуск отключён'
+                          : reviewStatus == 'pending'
+                              ? 'Ожидает проверки документов'
+                              : reviewStatus == 'rejected'
+                                  ? 'Заявка отклонена'
+                                  : 'Не одобрен · документы не отправлены';
                   return Card(child: ListTile(
                     leading: Icon(Icons.local_taxi, color: online ? Colors.green : Colors.grey),
                     title: TaxiText((d['name'] ?? 'Водитель').toString()),
                     subtitle: TaxiText('${d['car_model'] ?? ''} · ${d['car_number'] ?? ''}\n$approvalLabel · ${online ? 'На линии' : 'Не на линии'}\nПроверка документов: $reviewStatus'),
                     isThreeLine: true,
                     trailing: approved
-                        ? IconButton(tooltip: 'Отключить допуск', onPressed: _working ? null : () => _approve(d, false), icon: const Icon(Icons.block, color: Colors.red))
-                        : Icon(reviewStatus == 'pending' ? Icons.hourglass_empty : Icons.warning_amber_rounded,
-                            color: reviewStatus == 'pending' ? Colors.orange : Colors.redAccent),
+                        ? IconButton(
+                            tooltip: 'Отключить допуск',
+                            onPressed: _working ? null : () => _approve(d, false),
+                            icon: const Icon(Icons.block, color: Colors.red),
+                          )
+                        : reviewStatus == 'approved'
+                            ? IconButton(
+                                tooltip: 'Восстановить допуск: документы уже одобрены',
+                                onPressed: _working ? null : () => _approve(d, true),
+                                icon: const Icon(Icons.check_circle_outline, color: Colors.green),
+                              )
+                            : Icon(
+                                reviewStatus == 'pending' ? Icons.hourglass_empty : Icons.warning_amber_rounded,
+                                color: reviewStatus == 'pending' ? Colors.orange : Colors.redAccent,
+                              ),
                   ));
                 }),
                 _sectionTitle('Открытые заказы', Icons.receipt_long),
