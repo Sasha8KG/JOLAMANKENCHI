@@ -776,7 +776,9 @@ check('Role menu passenger title is localized', app.includes("МЕН ЖҮРГҮ�
 check('Role menu driver title is localized', app.includes("МЕН АЙДООЧУМУН") && app.includes("Я ВОДИТЕЛЬ"));
 check('Role menu passenger action is localized', app.includes("Унаа чакыруу") && app.includes("Заказать поездку"));
 check('Role menu driver action is localized', app.includes("Буйрутмалар жана айдоочу бөлмөсү"));
-check('Role menu slogan uses the approved Kyrgyz wording', app.includes("«Жолуңар байсалдуу, маанайыңар жакшы болсун!»"));
+check('Role menu shows the requested Kyrgyz and Russian slogans', app.includes("Жолунуз ачык болсун!") && app.includes("Быстро • Надёжно • По-нашему"));
+check('Role menu uses the new mountain and taxi banner asset', app.includes("assets/jak_menu_banner.svg") && read('testapp/assets/jak_menu_banner.svg').includes("СУЛЮКТА • ЛЕЙЛЕК • БАТКЕН"));
+check('Splash screen has a subtle repeating motion and loading indicator', app.includes("_ambient") && app.includes("CircularProgressIndicator"));
 check('Role menu service area is localized', app.includes("Кыргызстан • Баткен облусу"));
 check('Widget test covers switching between Russian and Kyrgyz', read('testapp/test/widget_test.dart').includes('Russian and Kyrgyz language switch'));
 
