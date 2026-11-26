@@ -33,3 +33,5 @@ flutter:
   assets:
     - assets/jak_splash.svg
     - assets/jak_menu_banner.svg
+    - assets/jak_splash_optimized.webp
+    - assets/jak_main_menu_optimized.webp
