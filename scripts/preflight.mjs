@@ -775,12 +775,13 @@ check('Language switch updates a shared app language notifier', localization.inc
 check('Role menu listens for language changes and rebuilds', app.includes("TaxiLanguage.current.addListener(_handleLanguageChanged)") && app.includes("removeListener(_handleLanguageChanged)"));
 check('Role menu passenger action target remains accessible over the supplied artwork', app.includes("label: 'Я пассажир / Мен жүргүнчүмүн'") && app.includes('ClientAuthScreen()'));
 check('Role menu driver action target remains accessible over the supplied artwork', app.includes("label: 'Я водитель / Мен айдоочумун'") && app.includes('DriverEntryScreen()'));
-check('Role menu language control overlays the supplied artwork and opens language choices', app.includes('_showMainMenuLanguagePicker(context)') && app.includes('Кыргызча') && app.includes('Русский'));
-check('Role menu driver hit target stays aligned with the artwork button', app.includes('height * 0.646') && app.includes('DriverEntryScreen()'));
+check('Role menu language control overlays the supplied artwork and opens language choices', app.includes('_showMainMenuLanguagePicker(context)') && app.includes('label: \'Выбрать язык / Тилди тандоо\'') && app.includes('SizedBox.expand()'));
+check('Role menu passenger hit target aligns with the supplied artwork', app.includes('height * 0.665') && app.includes('ClientAuthScreen()'));
+check('Role menu driver hit target stays aligned with the artwork button', app.includes('height * 0.758') && app.includes('DriverEntryScreen()'));
 check('Role menu uses the prepared banner image containing the supplied slogans', app.includes("'assets/jak_main_menu_optimized.webp'") && pubspec.includes('assets/jak_main_menu_optimized.webp') && fs.existsSync(path.join(root, 'testapp/assets/jak_main_menu_optimized.webp')) && fs.statSync(path.join(root, 'testapp/assets/jak_main_menu_optimized.webp')).size > 10000);
 check('Role menu decodes the supplied optimized artwork at bounded device resolution', app.includes('cacheWidth:') && app.includes('.clamp(1, 1152)'));
 check('Splash screen places the animated loading indicator at the bottom center', app.includes('CircularProgressIndicator(') && app.includes('top: height * 0.785') && app.includes('left: 0') && app.includes('right: 0'));
-check('Role menu dispatcher hit target stays aligned with the artwork button', app.includes('height * 0.727') && app.includes('_showDispatcherAuth(context)'));
+check('Role menu dispatcher hit target stays aligned with the artwork button', app.includes('height * 0.852') && app.includes('_showDispatcherAuth(context)'));
 check('Widget test covers switching between Russian and Kyrgyz', read('testapp/test/widget_test.dart').includes('Russian and Kyrgyz language switch'));
 
 
