@@ -1,7 +1,7 @@
 const FIREBASE_API_KEY = "AIzaSyBh5WG_rXaxBjDHOVPXPmmw8gqBCRubIAM";
 const PROJECT_ID = "jol-aman-kenchi";
 // Increment this marker for each published Worker revision.
-const WORKER_REVISION = "2026-11-26.2";
+const WORKER_REVISION = "2026-11-26.3";
 const DISPATCHER_UID = "AMGNzQEr7GfnisJcr7u4BqcdIvh1";
 
 function response(data, status = 200) {
@@ -49,6 +49,20 @@ async function verifyFirebaseUser(request) {
 async function driverRow(env, uid) {
   // No hardcoded test-account bypass: every driver must be approved in D1 by dispatch.
   return await env.DB.prepare("SELECT * FROM drivers WHERE uid=?").bind(uid).first();
+}
+
+async function ensureOrderSyncColumn(env) {
+  const columns = await env.DB.prepare("PRAGMA table_info(orders)").all();
+  const hasColumn = (columns.results || []).some((column) => column.name === "firebase_synced_at");
+  if (hasColumn) return;
+  try {
+    await env.DB.prepare("ALTER TABLE orders ADD COLUMN firebase_synced_at INTEGER").run();
+  } catch (error) {
+    // Concurrent first requests may both observe the missing column. Accept only
+    // the harmless duplicate-column race; propagate every other database error.
+    const message = String(error && error.message ? error.message : error).toLowerCase();
+    if (!message.includes("duplicate column")) throw error;
+  }
 }
 
 async function requireDispatcher(request) {
@@ -1216,6 +1230,8 @@ export default {
         // The open-order query below independently requires online status and fresh GPS.
         const auth = await requireApprovedDriver(request, env);
         await finalizeExpiredOrders(env);
+        // Keep older D1 databases compatible before the Firebase assignment-sync query.
+        await ensureOrderSyncColumn(env);
         // Если этот водитель выиграл отбор, он сам обновляет соответствующую заявку в Firebase своим токеном.
         const assignedToSync = await env.DB.prepare("SELECT * FROM orders WHERE status='driver_assigned' AND assigned_driver_uid=? AND firebase_synced_at IS NULL")
           .bind(auth.user.localId).all();
