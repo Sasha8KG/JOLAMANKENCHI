@@ -730,7 +730,7 @@ check('GPS tests cover sub-second future timestamps and exact custom age boundar
 check('Branded animated splash is the first app screen', app.includes('home: const BrandedSplashGate()'));
 check('Branded splash loads the scalable high-resolution SVG artwork', app.includes("'assets/jak_splash.svg'") && pubspec.includes('assets/jak_splash.svg') && pubspec.includes('flutter_svg:') && read('testapp/assets/jak_splash.svg').includes('ЖОЛ АМАН КЕНЧИ'));
 check('Branded splash stays visible for a bounded interval before the existing session gate', app.includes('Timer(const Duration(milliseconds: 4200)') && app.includes('const SessionGate()'));
-check('Branded splash animates its logo entrance and fades into the app', app.includes('SingleTickerProviderStateMixin') && app.includes('FadeTransition(') && app.includes('ScaleTransition(') && app.includes('transitionDuration: const Duration(milliseconds: 450)'));
+check('Branded splash animates its logo entrance and fades into the app', app.includes('TickerProviderStateMixin') && !app.includes('SingleTickerProviderStateMixin') && app.includes('FadeTransition(') && app.includes('ScaleTransition(') && app.includes('AnimatedBuilder(') && app.includes('_ambient') && app.includes('transitionDuration: const Duration(milliseconds: 450)'));
 check('Branded splash cancels its navigation timer on dispose', app.includes('_navigationTimer?.cancel();'));
 check('Branded splash guards navigation after widget disposal', app.includes('if (!mounted) return;'));
 check('Branded splash exposes an accessible semantic brand label', app.includes("label: 'ЖОЛ АМАН КЕНЧИ Такси'"));
