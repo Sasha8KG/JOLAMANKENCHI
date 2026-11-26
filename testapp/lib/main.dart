@@ -471,7 +471,7 @@ class BrandedSplashGate extends StatefulWidget {
 }
 
 class _BrandedSplashGateState extends State<BrandedSplashGate>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   Timer? _navigationTimer;
   late final AnimationController _entrance;
   late final AnimationController _ambient;
