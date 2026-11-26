@@ -475,9 +475,9 @@ check('Heartbeat refresh requires desired online state', app.includes('if (!moun
 check('GPS publication refuses to advertise an offline driver', app.includes('if (!mounted || !_driverWantsOnline || _locationUpdateInProgress'));
 check('An in-flight GPS publication restores offline state after a concurrent opt-out', app.includes('If the driver switched off while this request was in flight') && app.includes('await WorkerApi.setDriverOnline(online: false);'));
 
-check('Driver availability restores its initial value from the authenticated server profile', app.includes("_driverWantsOnline = TaxiParkState.currentLoggedInDriver?.isOnline ?? false;"));
-check('An offline driver does not start GPS automatically after reopening the driver screen', app.includes('if (_driverWantsOnline) {\n      _startLocationTracking();'));
-check('An offline driver restores assigned orders without starting GPS on initial screen load', app.includes('if (_driverWantsOnline) {\n      _startLocationTracking();\n    }\n    // Also restore an already assigned trip when the driver is temporarily offline.\n    // The server returns assigned trips separately and keeps the open queue empty.\n    unawaited(_pollServerOrders());'));
+check('Driver availability restores its initial value from the authenticated profile and saved preference', app.includes('final currentDriver = TaxiParkState.currentLoggedInDriver;') && app.includes('_driverWantsOnline = currentDriver?.isOnline ?? false;') && app.includes('unawaited(_saveDriverLinePreference(currentDriver.id, true))'));
+check('An offline driver does not start GPS automatically after reopening the driver screen', app.includes('if (_driverWantsOnline && currentDriver != null)') && !app.includes('if (_driverWantsOnline) {\n      _startLocationTracking();'));
+check('Assigned orders are restored on initial screen load regardless of line preference', (() => { const start=app.indexOf('void initState()', app.indexOf('class _DriverMapScreenState')); const end=app.indexOf('_ordersPollTimer =', start); const block=app.slice(start,end); return block.includes('if (_driverWantsOnline && currentDriver != null)') && block.includes('unawaited(_pollServerOrders());'); })());
 check('The five-second order timer remains available for later online transitions', app.includes("_ordersPollTimer = Timer.periodic(const Duration(seconds: 5)"));
 check('Availability changes have a dedicated in-progress lock', app.includes('bool _availabilityChanging = false;'));
 check('Rapid repeated availability taps are ignored while a change is running', app.includes('if (!mounted || _availabilityChanging) return;'));
@@ -494,7 +494,7 @@ check('Offline transition cancels the location subscription before returning', a
 check('GPS startup checks desired state after the initial position lookup', app.includes('if (!mounted || !_driverWantsOnline) return;\n      if (!_isUsableDriverPosition(firstPosition))'));
 check('GPS startup checks desired state after server location publication', app.includes('if (!mounted || !_driverWantsOnline) return;\n      if (!published)'));
 check('GPS startup rejects an unconfirmed online publication', app.includes("throw StateError('Не удалось подтвердить выход на линию на сервере.')"));
-check('Driver profile restoration continues to use the server online flag', app.includes("isOnline: _isEnabled(data['online'])"));
+check('Driver profile restoration uses server online state and saved local preference', app.includes("isOnline: _isEnabled(data['online']) ||") && app.includes('await _readDriverLinePreference(restoringUid)'));
 
 check('Offline state retry timer is declared', app.includes('Timer? _offlineSyncRetryTimer;'));
 check('Offline state retry lock is declared', app.includes('bool _offlineSyncInProgress = false;'));
