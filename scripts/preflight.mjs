@@ -731,7 +731,7 @@ check('GPS tests cover sub-second future timestamps and exact custom age boundar
 check('Branded animated splash is the first app screen', app.includes('home: const BrandedSplashGate()'));
 check('Branded splash loads the optimized high-resolution WebP artwork', app.includes("'assets/jak_splash_optimized.webp'") && pubspec.includes('assets/jak_splash_optimized.webp') && fs.existsSync(path.join(root, 'testapp/assets/jak_splash_optimized.webp')) && fs.statSync(path.join(root, 'testapp/assets/jak_splash_optimized.webp')).size > 10000);
 check('Branded splash stays visible for a bounded interval before the existing session gate', app.includes('Timer(const Duration(milliseconds: 4200)') && app.includes('const SessionGate()'));
-check('Branded splash animates its logo entrance and fades into the app', app.includes('TickerProviderStateMixin') && !app.includes('SingleTickerProviderStateMixin') && app.includes('FadeTransition(') && app.includes('ScaleTransition(') && app.includes('CircularProgressIndicator(') && app.includes('_ambient') && app.includes('transitionDuration: const Duration(milliseconds: 450)'));
+check('Branded splash animates its logo entrance and fades into the app', app.includes('TickerProviderStateMixin') && !app.includes('SingleTickerProviderStateMixin') && app.includes('_entrance.forward()') && app.includes('FadeTransition(') && app.includes('ScaleTransition(') && app.includes('CircularProgressIndicator(') && app.includes('transitionDuration: const Duration(milliseconds: 450)'));
 check('Branded splash cancels its navigation timer on dispose', app.includes('_navigationTimer?.cancel();'));
 check('Branded splash guards navigation after widget disposal', app.includes('if (!mounted) return;'));
 check('Branded splash exposes an accessible semantic brand label', app.includes("label: 'ЖОЛ АМАН КЕНЧИ Такси'"));
@@ -779,7 +779,7 @@ check('Role menu language control overlays the supplied artwork and opens langua
 check('Role menu driver hit target stays aligned with the artwork button', app.includes('height * 0.646') && app.includes('DriverEntryScreen()'));
 check('Role menu uses the prepared banner image containing the supplied slogans', app.includes("'assets/jak_main_menu_optimized.webp'") && pubspec.includes('assets/jak_main_menu_optimized.webp') && fs.existsSync(path.join(root, 'testapp/assets/jak_main_menu_optimized.webp')) && fs.statSync(path.join(root, 'testapp/assets/jak_main_menu_optimized.webp')).size > 10000);
 check('Role menu decodes the supplied optimized artwork at bounded device resolution', app.includes('cacheWidth:') && app.includes('.clamp(1, 1152)'));
-check('Splash screen has a subtle repeating motion and loading indicator', app.includes("_ambient") && app.includes("CircularProgressIndicator"));
+check('Splash screen places the animated loading indicator at the bottom center', app.includes('CircularProgressIndicator(') && app.includes('top: height * 0.785') && app.includes('left: 0') && app.includes('right: 0'));
 check('Role menu dispatcher hit target stays aligned with the artwork button', app.includes('height * 0.727') && app.includes('_showDispatcherAuth(context)'));
 check('Widget test covers switching between Russian and Kyrgyz', read('testapp/test/widget_test.dart').includes('Russian and Kyrgyz language switch'));
 
