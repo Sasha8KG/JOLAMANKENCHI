@@ -616,7 +616,7 @@ check('Dispatcher prevents a non-advancing cancellation pagination cursor', app.
 check('Dispatcher client requests the protected cancellation history endpoint', api.includes("return _request('/dispatcher/cancellations$query')"));
 check('Dispatcher can load subsequent cancellation pages without duplicate order IDs', app.includes('_loadMoreCancellationHistory') && app.includes('knownIds.contains'));
 check('Dispatcher history exposes refresh and load-more controls', app.includes('Обновить историю') && app.includes('Загрузить ещё'));
-check('Dispatcher cancellation history shows the route and preserves zero earnings', app.includes("o['pickup_address']") && app.includes('начисление: 0 сом'));
+check('Server-side no-show cancellation history retains route details and excludes fare credit', cancellationHistoryRoute.includes('o.pickup_address') && worker.includes('earned_som: 0'));
 check('Recent 100-order overview no longer limits the dedicated cancellation history', !worker.slice(worker.indexOf('if (url.pathname === "/dispatcher/overview"'), worker.indexOf('if (url.pathname === "/orders/assign"')).includes('LEFT JOIN order_cancellations c'));
 // Private local copies and a bounded direct-transfer packet protocol.
 check('Local document storage dependencies are declared', /crypto:\s*\^3\.0\.3/.test(pubspec) && /path_provider:\s*\^2\.1\.2/.test(pubspec));
