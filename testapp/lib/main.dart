@@ -5148,7 +5148,7 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
                 ..._earnings.map((row) {
                   final earned = (row['earned_som'] as num?)?.toInt() ?? 0;
                   final trips = (row['completed_trips'] as num?)?.toInt() ?? 0;
-                  final percent = (row['commission_percent'] as num?)?.toInt() ?? 50;
+                  final percent = (row['commission_percent'] as num?)?.toInt();
                   final driverShare = (row['driver_share_som'] as num?)?.toInt() ?? 0;
                   final parkShare = (row['park_share_som'] as num?)?.toInt() ?? 0;
                   return Card(child: Padding(padding: const EdgeInsets.all(12), child: Column(
@@ -5156,8 +5156,12 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
                       TaxiText((row['driver_name'] ?? 'Водитель').toString(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                       TaxiText('Авто: ${row['car_number'] ?? '—'} · Поездок: $trips'),
                       TaxiText('Общий заработок: $earned сом'),
-                      TaxiText('Доля водителя: $percent% · $driverShare сом'),
-                      TaxiText('Доля таксопарка: ${100 - percent}% · $parkShare сом'),
+                      TaxiText(percent == null
+                        ? 'Доля водителя: не установлена'
+                        : 'Доля водителя: $percent% · $driverShare сом'),
+                      TaxiText(percent == null
+                        ? 'Доля таксопарка: не рассчитана'
+                        : 'Доля таксопарка: ${100 - percent}% · $parkShare сом'),
                       const SizedBox(height: 8),
                       Wrap(spacing: 8, runSpacing: 8, children: [
                         OutlinedButton.icon(
