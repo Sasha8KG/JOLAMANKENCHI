@@ -68,7 +68,7 @@ void main() {
       expect(find.byWidgetPredicate((widget) =>
           widget is Semantics && widget.properties.label == 'ЖОЛ АМАН КЕНЧИ Такси'),
           findsOneWidget);
-      expect(find.byType(RotationTransition), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
       await tester.pump(const Duration(milliseconds: 100));
     });
   });
