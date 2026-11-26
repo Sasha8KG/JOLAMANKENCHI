@@ -5147,31 +5147,81 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
                               : reviewStatus == 'rejected'
                                   ? 'Заявка отклонена'
                                   : 'Не одобрен · документы не отправлены';
-                  return Card(child: ListTile(
-                    leading: Icon(Icons.local_taxi, color: online ? Colors.green : Colors.grey),
-                    title: TaxiText((d['name'] ?? 'Водитель').toString()),
-                    subtitle: TaxiText('${d['car_model'] ?? ''} · ${d['car_number'] ?? ''}\n$approvalLabel · ${online ? 'На линии' : 'Не на линии'}\nПроверка документов: $reviewStatus'),
-                    isThreeLine: true,
-                    trailing: SizedBox(width:164,child:Column(mainAxisSize:MainAxisSize.min,children:[
-                      if(online) TextButton.icon(
-                        onPressed:_working?null:()=>_forceDriverOffline(d),
-                        icon:const Icon(Icons.power_settings_new,size:17),
-                        label:const Text('СНЯТЬ С ЛИНИИ',maxLines:1,style:TextStyle(fontSize:10)),
+                  return Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(Icons.local_taxi, color: online ? Colors.green : Colors.grey),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    TaxiText((d['name'] ?? 'Водитель').toString(),
+                                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                                    const SizedBox(height: 3),
+                                    TaxiText('${d['car_model'] ?? ''} · ${d['car_number'] ?? ''}'),
+                                    TaxiText('$approvalLabel · ${online ? 'На линии' : 'Не на линии'}'),
+                                    TaxiText('Проверка документов: $reviewStatus',
+                                      style: const TextStyle(fontSize: 12, color: Colors.black54)),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 6,
+                            alignment: WrapAlignment.end,
+                            children: [
+                              if (online)
+                                OutlinedButton.icon(
+                                  onPressed: _working ? null : () => _forceDriverOffline(d),
+                                  icon: const Icon(Icons.power_settings_new, size: 17),
+                                  label: const Text('СНЯТЬ С ЛИНИИ'),
+                                ),
+                              if (approved)
+                                OutlinedButton.icon(
+                                  onPressed: _working ? null : () => _approve(d, false),
+                                  icon: const Icon(Icons.block, color: Colors.red),
+                                  label: const Text('ОТКЛЮЧИТЬ ДОПУСК'),
+                                )
+                              else if (reviewStatus == 'approved')
+                                ElevatedButton.icon(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.green,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                  ),
+                                  onPressed: _working ? null : () => _approve(d, true),
+                                  icon: const Icon(Icons.check_circle, size: 18),
+                                  label: const Text('ВОССТАНОВИТЬ ДОПУСК'),
+                                )
+                              else
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      reviewStatus == 'pending' ? Icons.hourglass_empty : Icons.warning_amber_rounded,
+                                      color: reviewStatus == 'pending' ? Colors.orange : Colors.redAccent,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(reviewStatus == 'pending' ? 'Ожидает проверки' : 'Нет допуска'),
+                                  ],
+                                ),
+                            ],
+                          ),
+                        ],
                       ),
-                      if(approved) IconButton(tooltip:'Отключить допуск',
-                        onPressed:_working?null:()=>_approve(d,false),
-                        icon:const Icon(Icons.block,color:Colors.red),
-                      ) else if(reviewStatus=='approved') SizedBox(width:160,child:ElevatedButton.icon(
-                        style:ElevatedButton.styleFrom(backgroundColor:Colors.green,foregroundColor:Colors.white,
-                          padding:const EdgeInsets.symmetric(horizontal:8,vertical:8)),
-                        onPressed:_working?null:()=>_approve(d,true),
-                        icon:const Icon(Icons.check_circle,size:18),
-                        label:const Text('ВОССТАНОВИТЬ ДОПУСК',maxLines:2,softWrap:true,textAlign:TextAlign.center,
-                          style:TextStyle(fontSize:11,height:1.1)),
-                      )) else Icon(reviewStatus=='pending'?Icons.hourglass_empty:Icons.warning_amber_rounded,
-                        color:reviewStatus=='pending'?Colors.orange:Colors.redAccent),
-                    ])),
-                  ));
+                    ),
+                  );
                 }),
                 _sectionTitle('Открытые заказы', Icons.receipt_long),
                 if (activeOrders.isEmpty) const TaxiLocalizedText(russian: 'Нет заказов, ожидающих назначения.', kyrgyz: 'Дайындоону күтүп жаткан буйрутмалар жок.'),
