@@ -47,13 +47,14 @@ void main() {
   });
 
   group('Branded splash screen', () {
-    testWidgets('shows the supplied taxi emblem on a yellow background', (tester) async {
+    testWidgets('shows the animated taxi splash on a blue sky background', (tester) async {
       await tester.pumpWidget(const MaterialApp(home: BrandedSplashGate()));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
       final scaffold = tester.widget<Scaffold>(find.byType(Scaffold).first);
-      expect(scaffold.backgroundColor, const Color(0xFFFFD400));
+      expect(scaffold.backgroundColor, const Color(0xFF0875C9));
       expect(find.byType(SvgPicture), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
       final image = tester.widget<SvgPicture>(find.byType(SvgPicture));
       expect(image.fit, BoxFit.contain);
       expect(find.byWidgetPredicate((widget) =>
