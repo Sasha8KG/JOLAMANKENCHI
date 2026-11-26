@@ -735,7 +735,7 @@ check('Branded splash animates its logo entrance and fades into the app', app.in
 check('Branded splash cancels its navigation timer on dispose', app.includes('_navigationTimer?.cancel();'));
 check('Branded splash guards navigation after widget disposal', app.includes('if (!mounted) return;'));
 check('Branded splash exposes an accessible semantic brand label', app.includes("label: 'ЖОЛ АМАН КЕНЧИ Такси'"));
-check('Branded splash uses the yellow brand background without a blue frame', app.includes('backgroundColor: const Color(0xFFFFD400)') && app.includes('fit: BoxFit.contain') && !app.includes('Border.all(color: gold, width: 4)'));
+check('Branded splash shows the complete supplied artwork without a drawn frame', app.includes('backgroundColor: const Color(0xFF102D4D)') && app.includes('fit: BoxFit.contain') && !app.includes('Border.all(color: gold, width: 4)'));
 check('Branded splash decodes raster artwork near device pixel width', app.includes('Image.asset(') && app.includes('cacheWidth:') && app.includes('.clamp(1, 1440)'));
 check('Driver and dispatcher sections use the requested green header palette', app.includes('backgroundColor: const Color(0xFF087A42)') && app.includes('foregroundColor: Colors.white'));
 check('Passenger order action uses a gold button with dark text', app.includes('backgroundColor: const Color(0xFFFFD400)') && app.includes('foregroundColor: const Color(0xFF171717)'));
