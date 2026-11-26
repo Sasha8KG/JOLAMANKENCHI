@@ -2596,6 +2596,12 @@ class DriverEntryScreen extends StatefulWidget {
 }
 
 class _DriverEntryScreenState extends State<DriverEntryScreen> {
+  bool _isEnabled(dynamic value) {
+    if (value == true || value == 1) return true;
+    final normalized = value?.toString().trim().toLowerCase();
+    return normalized == 'true' || normalized == '1';
+  }
+
   @override
   void initState() {
     super.initState();
