@@ -54,9 +54,9 @@ check('Driver no-show cancellation excludes orders already recorded in trip fina
 check('Driver no-show cancellation records zero earnings', worker.includes('earned_som: 0'));
 check('No-show cancellation does not force driver offline', !worker.includes("UPDATE drivers SET online=0 WHERE uid=(SELECT assigned_driver_uid FROM orders"));
 check('Flutter API validates no-show cancellation reason codes', api.includes('allowedReasons') && api.includes("'customer_left_with_other_car'"));
-check('Driver UI shows no-show cancellation only for arrived order', app.includes('_cancelArrivedNoShowOrder(item)') && app.includes("== 'arrived'"));
-check('Driver UI offers all three passenger no-show reasons', ['ПАССАЖИР НЕ ВЫШЕЛ', 'НЕ ОТВЕЧАЕТ', 'УЕХАЛ НА ДРУГОЙ МАШИНЕ'].every((label) => app.includes(label)));
-check('No-show cancellation refreshes assigned and open orders', app.includes("role: 'driver', reason: reason") && app.includes('await _pollServerOrders();'));
+check('Driver UI no longer requires an arrival step before order completion', !app.includes('_markAssignedOrderArrived') && !app.includes('_cancelArrivedNoShowOrder') && app.includes("russian: 'ЗАКАЗ ИСПОЛНЕН'"));
+check('Driver UI does not expose obsolete arrival/no-show stages', !app.includes('ПАССАЖИР НЕ ВЫШЕЛ') && !app.includes('НЕ ОТВЕЧАЕТ') && !app.includes('УЕХАЛ НА ДРУГОЙ МАШИНЕ'));
+check('Driver order completion refreshes assigned and open orders', app.includes('WorkerApi.completeDriverOrder') && app.includes('await _pollServerOrders();'));
 check('Worker has radio token endpoint', worker.includes('"/radio/token"'));
 check('Worker has radio chat endpoint', worker.includes('"/radio/messages"'));
 check('Worker reads LiveKit secret only from environment', /env\.LIVEKIT_API_SECRET/.test(worker) && !/LIVEKIT_API_SECRET\s*=\s*["'][^"']+["']/.test(worker));
@@ -592,7 +592,7 @@ check('Dispatcher has a separate no-show cancellation history section', app.incl
 check('Dispatcher translates all three cancellation reason codes', ['Пассажир не вышел','Пассажир не отвечает','Пассажир уехал на другой машине'].every(label => app.includes(label)));
 check('Dispatcher cancellation history displays driver and timestamp', app.includes("o['driver_name']") && app.includes("o['cancelled_at']") && app.includes('Отменён: '));
 check('No-show cancellation history explicitly records zero earnings', app.includes('начисление: 0 сом'));
-check('Driver no-show cancellation action remains available after arrival', app.includes('_cancelArrivedNoShowOrder') && app.includes('ПАССАЖИР НЕ ВЫШЕЛ'));
+check('Driver assigned-order card exposes completion without arrival-only cancellation', app.includes('_completeAssignedOrder(item)') && !app.includes('_cancelArrivedNoShowOrder'));
 
 check('Cancellation audit history has a dedicated dispatcher-only endpoint', cancellationHistoryRoute.includes('await requireDispatcher(request)'));
 check('Cancellation history includes all no-show statuses, not only recent dashboard orders', cancellationHistoryRoute.includes("WHERE o.status='cancelled_by_driver_no_show'"));

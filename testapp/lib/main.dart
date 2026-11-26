@@ -4049,11 +4049,6 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
                             icon: const Icon(Icons.check_circle, color: Colors.green),
                             label: const TaxiLocalizedText(russian: 'ЗАКАЗ ИСПОЛНЕН', kyrgyz: 'БУЙРУТМА АТКАРЫЛДЫ', style: TextStyle(color: Colors.green)),
                           ),
-                          TextButton.icon(
-                            onPressed: _orderActionIds.contains(_serverOrderId(item)) ? null : () => _cancelAssignedOrder(item),
-                            icon: const Icon(Icons.close, color: Colors.red),
-                            label: const TaxiLocalizedText(russian: 'ОТКАЗ', kyrgyz: 'БАШ ТАРТУУ', style: TextStyle(color: Colors.red)),
-                          ),
                         ],
                       ),
                     ),
