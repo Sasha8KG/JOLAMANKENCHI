@@ -3656,7 +3656,21 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
       }
       driver.isOnline = true;
       return true;
-    } catch (_) {
+    } catch (error) {
+      if (error.toString().toLowerCase().contains('диспетчер снял вас с линии')) {
+        _driverWantsOnline = false;
+        _driverGpsReady = false;
+        _serverOpenOrders = [];
+        driver.isOnline = false;
+        unawaited(_saveDriverLinePreference(driver.id,false));
+        _positionSubscription?.cancel();
+        _positionSubscription = null;
+        _stopLocationHeartbeat();
+        if (mounted) {
+          setState(() {});
+          _showLocationMessage('Диспетчер снял вас с линии. Для возвращения нажмите «Выйти на линию».');
+        }
+      }
       // The caller can distinguish a failed server update from a fresh GPS fix.
       return false;
     } finally {
@@ -3898,6 +3912,12 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
           if (mounted) _showLocationMessage('Нет подтверждения от сервера. Приложение повторит отключение автоматически.');
         }
       } else {
+        try {
+          await WorkerApi.returnDriverToLine();
+        } catch (error) {
+          if (mounted) _showLocationMessage(error.toString());
+          return;
+        }
         _offlineSyncRetryTimer?.cancel();
         _offlineSyncRetryTimer = null;
         setState(() {

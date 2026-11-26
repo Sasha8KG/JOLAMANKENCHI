@@ -969,6 +969,7 @@ check('Dispatcher restore-access text is width-bounded and limited to two readab
 
 
 check('Dispatcher can force a driver offline without cancelling the assigned trip',worker.includes('url.pathname === "/dispatcher/drivers/force-offline"')&&worker.includes('active_order_preserved:!!active')&&app.includes('_forceDriverOffline(d)'));
+check('A forced-offline driver cannot be automatically put back online by GPS heartbeat',worker.includes('dispatcher_forced_offline INTEGER NOT NULL DEFAULT 0')&&worker.includes('Number(auth.driver.dispatcher_forced_offline) === 1')&&api.includes("'/drivers/return-to-line'")&&app.includes('WorkerApi.returnDriverToLine()'));
 check('Driver self-close uses approved-driver Firebase UID and its own protected endpoint',worker.includes('url.pathname==="/driver/shifts/close"')&&worker.includes('requireApprovedDriver(request,env)')&&api.includes("'/driver/shifts/close'"));
 check('Driver self-close button appears only when server reports unclosed trips',app.includes("_driverEarnings['can_close_shift']==true")&&app.includes('_closeOwnDriverShift'));
 check('Driver and dispatcher financial calculations no longer silently replace a missing commission with 50 percent',!worker.includes('COALESCE(MAX(c.commission_percent),50)')&&!worker.includes('commission?.commission_percent ?? 50')&&!app.includes("_driverEarnings['commission_percent'] ?? 50")&&!app.includes("row['commission_percent'] as num?)?.toInt() ?? 50"));

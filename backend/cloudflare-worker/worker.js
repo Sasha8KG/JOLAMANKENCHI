@@ -374,6 +374,11 @@ export default {
         FOREIGN KEY(driver_uid) REFERENCES drivers(uid)
       )`).run();
       // Additive, backward-compatible review metadata for existing Stage 12 databases.
+      const driverTableColumns = await env.DB.prepare("PRAGMA table_info(drivers)").all();
+      const knownDriverColumns = new Set((driverTableColumns.results || []).map(c => c.name));
+      if (!knownDriverColumns.has("dispatcher_forced_offline")) {
+        await env.DB.prepare("ALTER TABLE drivers ADD COLUMN dispatcher_forced_offline INTEGER NOT NULL DEFAULT 0").run();
+      }
       const docColumns = await env.DB.prepare("PRAGMA table_info(driver_documents)").all();
       const knownDocColumns = new Set((docColumns.results || []).map(c => c.name));
       for (const [name, definition] of [
@@ -1058,17 +1063,30 @@ export default {
         const uid=String(b.driver_uid||"").trim();
         if(!uid||uid.length>128||/[\\/\\x00-\\x1f\\x7f]/.test(uid))
           return response({status:"error",message:"Укажите корректного водителя."},400);
-        const update=await env.DB.prepare("UPDATE drivers SET online=0,updated_at=unixepoch() WHERE uid=? AND approved=1").bind(uid).run();
+        const update=await env.DB.prepare("UPDATE drivers SET online=0,dispatcher_forced_offline=1,updated_at=unixepoch() WHERE uid=? AND approved=1").bind(uid).run();
         if(!update.meta||Number(update.meta.changes||0)!==1)
           return response({status:"error",message:"Одобренный водитель не найден или уже отключён."},404);
         const active=await env.DB.prepare("SELECT id,status FROM orders WHERE assigned_driver_uid=? AND status IN ('driver_assigned','arrived') LIMIT 1").bind(uid).first();
         return response({status:"ok",online:false,active_order_preserved:!!active,active_order_id:active?.id||null});
       }
 
+      if (url.pathname === "/drivers/return-to-line" && request.method === "POST") {
+        const auth = await requireApprovedDriver(request,env);
+        const active = await env.DB.prepare("SELECT id FROM orders WHERE assigned_driver_uid=? AND status IN ('driver_assigned','arrived') LIMIT 1")
+          .bind(auth.user.localId).first();
+        if(active) return response({status:"error",message:"Сначала завершите активный заказ, затем возвращайтесь на линию."},409);
+        await env.DB.prepare("UPDATE drivers SET dispatcher_forced_offline=0,updated_at=unixepoch() WHERE uid=? AND approved=1")
+          .bind(auth.user.localId).run();
+        return response({status:"ok",return_allowed:true});
+      }
+
       if (url.pathname === "/drivers/online" && request.method === "POST") {
         const auth = await requireApprovedDriver(request, env);
         const b = await readJsonObject(request);
-        if (!b) return response({ status: "error", message: "Переданы неверные данные запроса. Отправьте корректный JSON-объект." }, 400);
+        if (!b) return response({status:"error",message:"Переданы неверные данные запроса."},400);
+        if (b.online === true && Number(auth.driver.dispatcher_forced_offline) === 1) {
+          return response({status:"error",message:"Диспетчер снял вас с линии. Нажмите «Выйти на линию» вручную, чтобы запросить возвращение."},409);
+        }
         if (typeof b.online !== "boolean") {
           return response({ status: "error", message: "Укажите, выходит ли водитель на линию" }, 400);
         }

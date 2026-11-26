@@ -363,6 +363,8 @@ class WorkerApi {
   }
   static Future<Map<String,dynamic>> closeOwnDriverShift() =>
       _request('/driver/shifts/close',method:'POST',body:const {});
+  static Future<Map<String,dynamic>> returnDriverToLine() =>
+      _request('/drivers/return-to-line',method:'POST',body:const {});
 
   static Future<Map<String, dynamic>> getTariffs() => _request('/tariffs');
 
