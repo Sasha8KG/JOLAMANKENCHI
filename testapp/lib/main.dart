@@ -536,30 +536,29 @@ class _BrandedSplashGateState extends State<BrandedSplashGate>
               ),
             ),
           ),
-          SafeArea(
-            child: FadeTransition(
-              opacity: _fade,
-              child: AnimatedBuilder(
-                animation: _float,
-                builder: (context, child) => Transform.translate(
-                  offset: Offset(0, _float.value),
-                  child: child,
-                ),
-                child: ScaleTransition(
-                  scale: _scale,
-                  child: Semantics(
-                    label: 'ЖОЛ АМАН КЕНЧИ Такси',
-                    image: true,
-                    child: Image.asset(
-                      'assets/jak_splash_optimized.webp',
-                      width: size.width,
-                      height: size.height * 0.98,
-                      fit: BoxFit.contain,
-                      cacheWidth: (size.width * MediaQuery.of(context).devicePixelRatio)
-                          .round()
-                          .clamp(1, 1440)
-                          .toInt(),
-                    ),
+          FadeTransition(
+            opacity: _fade,
+            child: AnimatedBuilder(
+              animation: _float,
+              builder: (context, child) => Transform.translate(
+                offset: Offset(0, _float.value),
+                child: child,
+              ),
+              child: ScaleTransition(
+                scale: _scale,
+                child: Semantics(
+                  label: 'ЖОЛ АМАН КЕНЧИ Такси',
+                  image: true,
+                  child: Image.asset(
+                    'assets/jak_splash_optimized.webp',
+                    width: size.width,
+                    height: size.height,
+                    fit: BoxFit.cover,
+                    alignment: Alignment.center,
+                    cacheWidth: (size.width * MediaQuery.of(context).devicePixelRatio)
+                        .round()
+                        .clamp(1, 1440)
+                        .toInt(),
                   ),
                 ),
               ),
@@ -1119,13 +1118,13 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                           borderRadius: BorderRadius.circular(18),
                           child: SizedBox(
                             width: double.infinity,
-                            height: constraints.maxWidth * 1.20,
+                            height: constraints.maxWidth * 1.05,
                             child: ClipRect(
                               child: Transform.translate(
                                 // The source artwork is a full-height menu poster:
                                 // crop its embedded language control, but keep the
                                 // complete title, taxi, mountains and slogan visible.
-                                offset: Offset(0, -constraints.maxWidth * 0.12),
+                                offset: Offset(0, -constraints.maxWidth * 0.08),
                                 child: Image.asset(
                                   'assets/jak_main_menu_optimized.webp',
                                   width: constraints.maxWidth,
