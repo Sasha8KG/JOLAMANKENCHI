@@ -1084,9 +1084,6 @@ export default {
         const auth = await requireApprovedDriver(request, env);
         const b = await readJsonObject(request);
         if (!b) return response({status:"error",message:"Переданы неверные данные запроса."},400);
-        if (b.online === true && Number(auth.driver.dispatcher_forced_offline) === 1) {
-          return response({status:"error",message:"Диспетчер снял вас с линии. Нажмите «Выйти на линию» вручную, чтобы запросить возвращение."},409);
-        }
         if (typeof b.online !== "boolean") {
           return response({ status: "error", message: "Укажите, выходит ли водитель на линию" }, 400);
         }
@@ -1098,6 +1095,13 @@ export default {
         if ((hasLatitude && (typeof b.latitude !== "number" || !Number.isFinite(b.latitude) || b.latitude < -90 || b.latitude > 90)) ||
             (hasLongitude && (typeof b.longitude !== "number" || !Number.isFinite(b.longitude) || b.longitude < -180 || b.longitude > 180))) {
           return response({ status: "error", message: "Получены неверные координаты GPS" }, 400);
+        }
+        if (b.online === true && Number(auth.driver.dispatcher_forced_offline) === 1) {
+          await env.DB.prepare(`UPDATE drivers SET online=0,latitude=?,longitude=?,
+            location_updated_at=unixepoch(),updated_at=unixepoch()
+            WHERE uid=? AND approved=1 AND dispatcher_forced_offline=1`)
+            .bind(b.latitude,b.longitude,auth.user.localId).run();
+          return response({status:"ok",online:false,dispatcher_forced_offline:true,location_updated:true});
         }
         const online = b.online ? 1 : 0;
         const lat = hasLatitude ? b.latitude : null;

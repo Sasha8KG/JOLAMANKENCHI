@@ -3149,6 +3149,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
   Map<String, dynamic> _driverEarnings = <String, dynamic>{};
   bool _driverEarningsLoading = false;
   bool _driverShiftClosing = false;
+  bool _dispatcherForcedOffline = false;
   String? _driverEarningsError;
   bool _assignedOrdersLoaded = false;
   final Set<String> _respondingOrderIds = <String>{};
@@ -3642,11 +3643,16 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
         point.longitude < -180 || point.longitude > 180) return false;
     _locationUpdateInProgress = true;
     try {
-      await WorkerApi.setDriverOnline(
+      final result = await WorkerApi.setDriverOnline(
         online: true,
         latitude: point.latitude,
         longitude: point.longitude,
       );
+      if (result['dispatcher_forced_offline'] == true) {
+        _dispatcherForcedOffline = true;
+        driver.isOnline = false;
+        return true; // GPS remains active for a trip that was already assigned.
+      }
       // If the driver switched off while this request was in flight, the final
       // server state must remain offline rather than being overwritten by GPS.
       if (!mounted || !_driverWantsOnline) {
@@ -3656,21 +3662,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
       }
       driver.isOnline = true;
       return true;
-    } catch (error) {
-      if (error.toString().toLowerCase().contains('диспетчер снял вас с линии')) {
-        _driverWantsOnline = false;
-        _driverGpsReady = false;
-        _serverOpenOrders = [];
-        driver.isOnline = false;
-        unawaited(_saveDriverLinePreference(driver.id,false));
-        _positionSubscription?.cancel();
-        _positionSubscription = null;
-        _stopLocationHeartbeat();
-        if (mounted) {
-          setState(() {});
-          _showLocationMessage('Диспетчер снял вас с линии. Для возвращения нажмите «Выйти на линию».');
-        }
-      }
+    } catch (_) {
       // The caller can distinguish a failed server update from a fresh GPS fix.
       return false;
     } finally {
@@ -3724,7 +3716,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
 
   void _setDriverGpsReady(bool ready) {
     // A late GPS callback must never put an offline/disposed driver back on line.
-    final confirmedReady = ready && mounted && _driverWantsOnline;
+    final confirmedReady = ready && mounted && _driverWantsOnline && !_dispatcherForcedOffline;
     final driver = TaxiParkState.currentLoggedInDriver;
     if (driver != null) driver.isOnline = confirmedReady;
     if (!mounted || _driverGpsReady == confirmedReady) return;
@@ -3914,6 +3906,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
       } else {
         try {
           await WorkerApi.returnDriverToLine();
+          _dispatcherForcedOffline = false;
         } catch (error) {
           if (mounted) _showLocationMessage(error.toString());
           return;
