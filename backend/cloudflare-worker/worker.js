@@ -608,19 +608,23 @@ export default {
           (request_id,driver_uid,document_type,byte_size,sha256,received_at) VALUES (?,?,?,?,?,?)
           ON CONFLICT(request_id,document_type) DO UPDATE SET byte_size=excluded.byte_size,sha256=excluded.sha256,received_at=excluded.received_at`)
           .bind(requestId, uid, file.type, file.size, file.sha, now));
+        // Receiving a local copy is a file-transfer event, not a new review.
+        // Preserve the dispatcher's existing decision and driver access. A
+        // deliberate re-review must go through /drivers/documents/resubmit.
         statements.push(env.DB.prepare(`INSERT INTO driver_documents
           (driver_uid,license_url,driver_photo_url,car_photo_url,submitted_at,review_status,rejection_reason,reviewed_at,reviewed_by,local_transfer_request_id)
           VALUES (?,'','','',?,'pending',NULL,NULL,NULL,?)
-          ON CONFLICT(driver_uid) DO UPDATE SET license_url='',driver_photo_url='',car_photo_url='',
-          submitted_at=excluded.submitted_at,review_status='pending',rejection_reason=NULL,reviewed_at=NULL,
-          reviewed_by=NULL,local_transfer_request_id=excluded.local_transfer_request_id`).bind(uid, now, requestId));
-        statements.push(env.DB.prepare(`UPDATE drivers SET approved=0,online=0,updated_at=? WHERE uid=?`).bind(now, uid));
+          ON CONFLICT(driver_uid) DO UPDATE SET
+            license_url='',driver_photo_url='',car_photo_url='',
+            submitted_at=excluded.submitted_at,
+            local_transfer_request_id=excluded.local_transfer_request_id`).bind(uid, now, requestId));
         statements.push(env.DB.prepare(`UPDATE driver_document_transfer_requests SET status='received',completed_at=?
           WHERE request_id=? AND status IN ('requested','transferring')`).bind(now, requestId));
         const result = await env.DB.batch(statements);
-        if ((result || []).length !== 6 || (result[5]?.meta?.changes || 0) !== 1)
+        if ((result || []).length !== 5 || (result[4]?.meta?.changes || 0) !== 1)
           return response({ status: "error", message: "Не удалось зафиксировать получение документов. Обновите список и повторите" }, 409);
-        return response({ status: "ok", documents_received: true, review_status: "pending" });
+        const review = await env.DB.prepare("SELECT review_status FROM driver_documents WHERE driver_uid=?").bind(uid).first();
+        return response({ status: "ok", documents_received: true, review_status: review?.review_status || "pending" });
       }
 
       if (url.pathname === "/drivers/review" && request.method === "POST") {
