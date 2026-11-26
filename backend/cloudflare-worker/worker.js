@@ -101,7 +101,7 @@ function num(v) { const n = Number(v); return Number.isFinite(n) ? n : null; }
 
 async function firebaseMessagingAccessToken(env) {
   const email=String(env.FIREBASE_CLIENT_EMAIL||"").trim();
-  const pem=String(env.FIREBASE_PRIVATE_KEY||"").replace(/\\n/g,"\\n").trim();
+  const pem=String(env.FIREBASE_PRIVATE_KEY||"").replace(/\\n/g,"\n").trim();
   if(!email||!pem)return null;
   const now=Math.floor(Date.now()/1000);
   const unsigned=base64Url(JSON.stringify({alg:"RS256",typ:"JWT"}))+"."+base64Url(JSON.stringify({
