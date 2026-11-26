@@ -32,8 +32,8 @@ void main() {
       TaxiLanguage.current.value = 'ru';
       await tester.pumpWidget(const MaterialApp(home: RoleSelectionScreen()));
       expect(find.byType(Image), findsOneWidget);
-      expect(find.text('Русский'), findsOneWidget);
-      await tester.tap(find.text('Русский'));
+      expect(find.bySemanticsLabel('Выбрать язык / Тилди тандоо'), findsOneWidget);
+      await tester.tap(find.bySemanticsLabel('Выбрать язык / Тилди тандоо'));
       await tester.pumpAndSettle();
       expect(find.text('Кыргызча'), findsOneWidget);
       await tester.tap(find.text('Кыргызча').last);
