@@ -551,37 +551,18 @@ class _BrandedSplashGateState extends State<BrandedSplashGate>
                   child: Semantics(
                     label: 'ЖОЛ АМАН КЕНЧИ Такси',
                     image: true,
-                    child: SvgPicture.asset(
-                      'assets/jak_splash.svg',
+                    child: Image.asset(
+                      'assets/jak_splash_optimized.webp',
                       width: size.width,
                       height: size.height * 0.98,
                       fit: BoxFit.contain,
+                      cacheWidth: (size.width * MediaQuery.of(context).devicePixelRatio)
+                          .round()
+                          .clamp(1, 1440)
+                          .toInt(),
                     ),
                   ),
                 ),
-              ),
-            ),
-          ),
-          Positioned(
-            left: 0, right: 0, bottom: 34,
-            child: IgnorePointer(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const SizedBox(
-                    width: 42, height: 42,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 5,
-                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFFD400)),
-                      backgroundColor: Color(0x668AA6BD),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text('Загрузка...', style: const TextStyle(
-                    color: Colors.white, fontSize: 17, fontWeight: FontWeight.w700,
-                    shadows: [Shadow(color: Colors.black54, blurRadius: 5)],
-                  )),
-                ],
               ),
             ),
           ),
@@ -1128,38 +1109,35 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                   children: [
                     const TaxiLanguageSwitcher(),
                     const SizedBox(height: 8),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(18),
-                      child: AspectRatio(
-                        aspectRatio: 0.78,
-                        child: SvgPicture.asset(
-                          'assets/jak_menu_banner.svg',
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                          alignment: Alignment.topCenter,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 7),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF092E55),
-                        borderRadius: BorderRadius.circular(15),
-                        border: Border.all(color: gold, width: 1.3),
-                      ),
-                      child: const Column(
-                        children: [
-                          TaxiText('Жолунуз ачык болсун!',
-                            style: TextStyle(color: Colors.white, fontSize: 18,
-                              fontWeight: FontWeight.w800, fontStyle: FontStyle.italic)),
-                          SizedBox(height: 3),
-                          TaxiText('Быстро • Надёжно • По-нашему',
-                            style: TextStyle(color: Color(0xFFFFD400), fontSize: 13,
-                              fontWeight: FontWeight.w800)),
-                        ],
-                      ),
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final dpr = MediaQuery.of(context).devicePixelRatio;
+                        final decodeWidth = (constraints.maxWidth * dpr)
+                            .round()
+                            .clamp(1, 1152)
+                            .toInt();
+                        return ClipRRect(
+                          borderRadius: BorderRadius.circular(18),
+                          child: SizedBox(
+                            width: double.infinity,
+                            height: constraints.maxWidth * 0.82,
+                            child: ClipRect(
+                              child: Transform.translate(
+                                offset: Offset(0, -constraints.maxWidth * 0.07),
+                                child: Image.asset(
+                                  'assets/jak_main_menu_optimized.webp',
+                                  width: constraints.maxWidth,
+                                  fit: BoxFit.fitWidth,
+                                  alignment: Alignment.topCenter,
+                                  cacheWidth: decodeWidth,
+                                  cacheHeight: (decodeWidth * 2320 / 1152)
+                                      .round(),
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
                     ),
                     const SizedBox(height: 16),
                     _roleButton(
