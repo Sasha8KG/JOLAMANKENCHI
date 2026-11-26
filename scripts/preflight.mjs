@@ -615,7 +615,7 @@ check('Dispatcher rejects malformed or missing next-page cursors', app.includes(
 check('Dispatcher prevents a non-advancing cancellation pagination cursor', app.includes('nextAt == beforeAt && nextId == beforeId'));
 check('Dispatcher client requests the protected cancellation history endpoint', api.includes("return _request('/dispatcher/cancellations$query')"));
 check('Dispatcher can load subsequent cancellation pages without duplicate order IDs', app.includes('_loadMoreCancellationHistory') && app.includes('knownIds.contains'));
-check('Dispatcher history exposes refresh and load-more controls', app.includes('Обновить историю') && app.includes('Загрузить ещё'));
+check('Dispatcher cancellation audit API keeps pagination while the dashboard panel is hidden', api.includes("return _request('/dispatcher/cancellations$query')") && cancellationHistoryRoute.includes('LIMIT 51') && !app.includes('Обновить историю'));
 check('Server-side no-show cancellation history retains route details and excludes fare credit', cancellationHistoryRoute.includes('o.pickup_address') && worker.includes('earned_som: 0'));
 check('Recent 100-order overview no longer limits the dedicated cancellation history', !worker.slice(worker.indexOf('if (url.pathname === "/dispatcher/overview"'), worker.indexOf('if (url.pathname === "/orders/assign"')).includes('LEFT JOIN order_cancellations c'));
 // Private local copies and a bounded direct-transfer packet protocol.
@@ -863,7 +863,7 @@ check('Driver refusal cannot reopen an order after a concurrent status change', 
 check('Worker JSON reader converts malformed and empty request bodies into client validation failures', /async function readJsonObject\(request\)[\s\S]*?try \{[\s\S]*?await request\.json\(\)[\s\S]*?catch \(_\)[\s\S]*?return null;/.test(worker));
 check('Worker JSON reader rejects arrays and primitive JSON values', /return value && typeof value === "object" && !Array\.isArray\(value\) \? value : null;/.test(worker));
 check('Worker JSON reader is the only direct request JSON parser', (worker.match(/request\.json\(\)/g) || []).length === 1);
-check('All 21 POST JSON handlers use the safe JSON reader', (worker.match(/await readJsonObject\(request\)/g) || []).length === 21);
+check('All 24 POST JSON handlers use the safe JSON reader', (worker.match(/await readJsonObject\(request\)/g) || []).length === 24);
 const driverCompleteRoute = worker.slice(worker.indexOf('url.pathname === "/orders/complete-driver"'));
 check('Driver can complete only their own assigned trip and save it once to the finance ledger',
   driverCompleteRoute.includes('requireApprovedDriver(request, env)') &&
@@ -892,7 +892,7 @@ check('Dispatcher snapshot regression tests cover malformed and duplicate data',
 check('Dispatcher section headings wrap and localize inside the available phone width', app.includes('Expanded(\n          child: TaxiLocalizedText(\n            russian: value,') && app.includes('softWrap: true,') && app.includes('kyrgyz: TaxiLanguage.translate(value)'));
 
 check('Dispatcher app-bar title truncates safely on narrow devices', app.includes("'Диспетчер · ЖОЛ АМАН КЕНЧИ',\n          maxLines: 1,\n          softWrap: false,\n          overflow: TextOverflow.ellipsis,"));
-check('Dispatcher trip completion action label can occupy two lines', app.includes("'ЗАВЕРШИТЬ И ЗАПИСАТЬ ОПЛАТУ',\n                          maxLines: 2,"));
+check('Driver assigned-order completion remains available after removing the dispatcher arrived-orders panel', app.includes('_completeAssignedOrder(item)') && app.includes("russian: 'ЗАКАЗ ИСПОЛНЕН'"));
 check('Closed-shift earnings trailing text has a bounded responsive width', app.includes('trailing: SizedBox(\n                    width: 116,') && app.includes('maxLines: 2,\n                      softWrap: true,'));
 
 
@@ -965,7 +965,7 @@ check('An already-online server profile is captured as local preference on first
 check('Both automatic session restoration and manual driver login restore the saved line preference', app.includes('await _readDriverLinePreference(restoringUid)') && app.includes('await _readDriverLinePreference(driverUid)'));
 check('Explicit offline action clears the saved line preference', (() => { const start=app.indexOf('Future<void> _toggleDriverAvailability()'); const end=app.indexOf('\n  void _showLocationMessage',start); const block=app.slice(start,end); return block.includes('_saveDriverLinePreference(') && block.includes('false,'); })());
 check('Explicit online action saves the line preference before GPS startup', (() => { const start=app.indexOf('Future<void> _toggleDriverAvailability()'); const end=app.indexOf('\n  void _showLocationMessage',start); const block=app.slice(start,end); const save=block.indexOf('_saveDriverLinePreference('); const gps=block.indexOf('_startLocationTracking()'); return save>=0 && gps>save && block.includes('true,'); })());
-check('Dispatcher restore-access text is width-bounded and limited to two readable lines', app.includes('width: 160,\n                                child: ElevatedButton.icon') && app.includes("maxLines: 2,\n                                    softWrap: true,"));
+check('Dispatcher restore-access text remains width-bounded and wraps on narrow screens', app.includes('SizedBox(width:160,child:ElevatedButton.icon(') && app.includes('maxLines:2,softWrap:true,textAlign:TextAlign.center'));
 
 
 check('Dispatcher can force a driver offline without cancelling the assigned trip',worker.includes('url.pathname === "/dispatcher/drivers/force-offline"')&&worker.includes('active_order_preserved:!!active')&&app.includes('_forceDriverOffline(d)'));
