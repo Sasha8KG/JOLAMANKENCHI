@@ -1244,50 +1244,23 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                           Positioned(
                             left: width * 0.535,
                             top: height * 0.012,
-                            width: width * 0.30,
+                            width: width * 0.42,
                             height: height * 0.047,
-                            child: ValueListenableBuilder<String>(
-                              valueListenable: TaxiLanguage.current,
-                              builder: (context, language, _) => Semantics(
-                                button: true,
-                                label: 'Выбрать язык / Тилди тандоо',
-                                child: GestureDetector(
-                                  behavior: HitTestBehavior.opaque,
-                                  onTap: () => _showMainMenuLanguagePicker(context),
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFFFD45A),
-                                      borderRadius: BorderRadius.circular(40),
-                                      border: Border.all(color: const Color(0xFF171F1D), width: 1.2),
-                                    ),
-                                    padding: EdgeInsets.symmetric(horizontal: width * 0.018),
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                                      children: [
-                                        FittedBox(
-                                          fit: BoxFit.scaleDown,
-                                          child: Text(
-                                            language == 'ky' ? 'Кыргызча' : 'Русский',
-                                            style: TextStyle(
-                                              color: const Color(0xFF171F1D),
-                                              fontSize: width * 0.027,
-                                              fontWeight: FontWeight.w800,
-                                            ),
-                                          ),
-                                        ),
-                                        Icon(Icons.language_rounded, color: const Color(0xFF171F1D), size: width * 0.038),
-                                      ],
-                                    ),
-                                  ),
-                                ),
+                            child: Semantics(
+                              button: true,
+                              label: 'Выбрать язык / Тилди тандоо',
+                              child: GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: () => _showMainMenuLanguagePicker(context),
+                                child: const SizedBox.expand(),
                               ),
                             ),
                           ),
                           Positioned(
                             left: width * 0.035,
-                            top: height * 0.565,
+                            top: height * 0.665,
                             width: width * 0.93,
-                            height: height * 0.071,
+                            height: height * 0.080,
                             child: Semantics(
                               button: true,
                               label: 'Я пассажир / Мен жүргүнчүмүн',
@@ -1302,9 +1275,9 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                           ),
                           Positioned(
                             left: width * 0.035,
-                            top: height * 0.646,
+                            top: height * 0.758,
                             width: width * 0.93,
-                            height: height * 0.071,
+                            height: height * 0.080,
                             child: Semantics(
                               button: true,
                               label: 'Я водитель / Мен айдоочумун',
@@ -1319,9 +1292,9 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                           ),
                           Positioned(
                             left: width * 0.035,
-                            top: height * 0.727,
+                            top: height * 0.852,
                             width: width * 0.93,
-                            height: height * 0.071,
+                            height: height * 0.080,
                             child: Semantics(
                               button: true,
                               label: 'Диспетчер',
