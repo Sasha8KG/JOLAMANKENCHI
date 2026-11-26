@@ -53,7 +53,7 @@ void main() {
       final scaffold = tester.widget<Scaffold>(find.byType(Scaffold).first);
       expect(scaffold.backgroundColor, const Color(0xFF0875C9));
       expect(find.byType(Image), findsOneWidget);
-      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
       final image = tester.widget<Image>(find.byType(Image));
       expect(image.fit, BoxFit.contain);
       expect(image.image, isA<AssetImage>());
