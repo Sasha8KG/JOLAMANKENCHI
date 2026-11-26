@@ -539,7 +539,6 @@ class _BrandedSplashGateState extends State<BrandedSplashGate>
     with TickerProviderStateMixin {
   Timer? _navigationTimer;
   late final AnimationController _entrance;
-  late final AnimationController _ambient;
   late final Animation<double> _fade;
   late final Animation<double> _scale;
 
@@ -555,10 +554,6 @@ class _BrandedSplashGateState extends State<BrandedSplashGate>
       CurvedAnimation(parent: _entrance, curve: Curves.easeOutCubic),
     );
     _entrance.forward();
-    _ambient = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1400),
-    )..repeat();
     _navigationTimer = Timer(const Duration(milliseconds: 4200), () {
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
@@ -575,7 +570,6 @@ class _BrandedSplashGateState extends State<BrandedSplashGate>
   @override
   void dispose() {
     _navigationTimer?.cancel();
-    _ambient.dispose();
     _entrance.dispose();
     super.dispose();
   }
@@ -638,13 +632,10 @@ class _BrandedSplashGateState extends State<BrandedSplashGate>
                                   shape: BoxShape.circle,
                                 ),
                                 padding: EdgeInsets.all(4),
-                                child: RotationTransition(
-                                  turns: _ambient,
-                                  child: const CircularProgressIndicator(
-                                    strokeWidth: 3.5,
-                                    valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFFC928)),
-                                    backgroundColor: Color(0xFF8995A4),
-                                  ),
+                                child: const CircularProgressIndicator(
+                                  strokeWidth: 3.5,
+                                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFFC928)),
+                                  backgroundColor: Color(0xFF8995A4),
                                 ),
                               ),
                             ),
