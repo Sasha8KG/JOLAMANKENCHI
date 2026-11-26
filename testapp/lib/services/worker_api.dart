@@ -635,6 +635,19 @@ class WorkerApi {
         'order_id': _validatedOrderId(orderId),
       });
 
+  static Future<Map<String, dynamic>> completeDriverOrder({
+    required String orderId,
+    required int fareSom,
+  }) {
+    if (fareSom < 1 || fareSom > 1000000) {
+      throw const WorkerApiException('Стоимость поездки должна быть от 1 до 1 000 000 сом.');
+    }
+    return _request('/orders/complete-driver', method: 'POST', body: {
+      'order_id': _validatedOrderId(orderId),
+      'fare_som': fareSom,
+    });
+  }
+
   static Future<Map<String, dynamic>> completeOrder({
     required String orderId,
     required int fareSom,
