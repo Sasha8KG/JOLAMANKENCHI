@@ -55,7 +55,7 @@ void main() {
       expect(find.byType(Image), findsOneWidget);
       expect(find.byType(CircularProgressIndicator), findsNothing);
       final image = tester.widget<Image>(find.byType(Image));
-      expect(image.fit, BoxFit.contain);
+      expect(image.fit, BoxFit.cover);
       expect(find.byWidgetPredicate((widget) =>
           widget is Semantics && widget.properties.label == 'ЖОЛ АМАН КЕНЧИ Такси'),
           findsOneWidget);
