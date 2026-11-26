@@ -3135,8 +3135,12 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
     WidgetsBinding.instance.addObserver(this);
     // Restore the server-confirmed line state. A driver who explicitly went
     // offline must stay offline after closing and reopening the app.
-    _driverWantsOnline = TaxiParkState.currentLoggedInDriver?.isOnline ?? false;
-    if (_driverWantsOnline) {
+    final currentDriver = TaxiParkState.currentLoggedInDriver;
+    _driverWantsOnline = currentDriver?.isOnline ?? false;
+    if (_driverWantsOnline && currentDriver != null) {
+      // Capture an existing server-online state as the local preference too,
+      // so the first app restart after this update also restores the line.
+      unawaited(_saveDriverLinePreference(currentDriver.id, true));
       _startLocationTracking();
     }
     // Also restore an already assigned trip when the driver is temporarily offline.
