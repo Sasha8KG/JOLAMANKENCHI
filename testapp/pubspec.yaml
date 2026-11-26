@@ -32,3 +32,4 @@ flutter:
   uses-material-design: true
   assets:
     - assets/jak_splash.svg
+    - assets/jak_menu_banner.svg
