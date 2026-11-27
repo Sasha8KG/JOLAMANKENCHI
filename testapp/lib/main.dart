@@ -1278,13 +1278,36 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                                   alignment: Alignment.center,
                                   decoration: BoxDecoration(
                                     gradient: const LinearGradient(
-                                      begin: Alignment.topLeft, end: Alignment.bottomRight,
-                                      colors: [Color(0xFF343434), Color(0xFF111111)],
+                                      begin: Alignment.topCenter,
+                                      end: Alignment.bottomCenter,
+                                      colors: [
+                                        Color(0xFFD9F3FF),
+                                        Color(0xFF83C9F0),
+                                        Color(0xFF368BC7),
+                                      ],
+                                      stops: [0.0, 0.42, 1.0],
                                     ),
-                                    borderRadius: BorderRadius.circular(14),
+                                    borderRadius: BorderRadius.circular(18),
+                                    border: Border.all(
+                                      color: Color(0xFFEAF9FF),
+                                      width: 1.4,
+                                    ),
                                     boxShadow: [
-                                      BoxShadow(color: Colors.black.withOpacity(0.38), blurRadius: 0, offset: const Offset(0, 4)),
-                                      BoxShadow(color: const Color(0xFFFFD400).withOpacity(0.18), blurRadius: 8),
+                                      BoxShadow(
+                                        color: Color(0xFF123F67).withOpacity(0.48),
+                                        blurRadius: 9,
+                                        offset: Offset(0, 7),
+                                      ),
+                                      BoxShadow(
+                                        color: Colors.white.withOpacity(0.72),
+                                        blurRadius: 2,
+                                        offset: Offset(0, -2),
+                                      ),
+                                      BoxShadow(
+                                        color: Color(0xFF4B9BCB).withOpacity(0.22),
+                                        blurRadius: 12,
+                                        spreadRadius: 1,
+                                      ),
                                     ],
                                   ),
                                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -1293,7 +1316,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                                     child: TaxiLocalizedText(
                                       russian: 'Я пассажир',
                                       kyrgyz: 'Мен жүргүнчүмүн',
-                                      style: TextStyle(color: Color(0xFFFFD400), fontSize: 18, fontWeight: FontWeight.w900),
+                                      style: TextStyle(color: Color(0xFF103B5A), fontSize: 18, fontWeight: FontWeight.w900, letterSpacing: 0.2),
                                     ),
                                   ),
                                 ),
@@ -1322,13 +1345,36 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                                   alignment: Alignment.center,
                                   decoration: BoxDecoration(
                                     gradient: const LinearGradient(
-                                      begin: Alignment.topLeft, end: Alignment.bottomRight,
-                                      colors: [Color(0xFF343434), Color(0xFF111111)],
+                                      begin: Alignment.topCenter,
+                                      end: Alignment.bottomCenter,
+                                      colors: [
+                                        Color(0xFFD9F3FF),
+                                        Color(0xFF83C9F0),
+                                        Color(0xFF368BC7),
+                                      ],
+                                      stops: [0.0, 0.42, 1.0],
                                     ),
-                                    borderRadius: BorderRadius.circular(14),
+                                    borderRadius: BorderRadius.circular(18),
+                                    border: Border.all(
+                                      color: Color(0xFFEAF9FF),
+                                      width: 1.4,
+                                    ),
                                     boxShadow: [
-                                      BoxShadow(color: Colors.black.withOpacity(0.38), blurRadius: 0, offset: const Offset(0, 4)),
-                                      BoxShadow(color: const Color(0xFFFFD400).withOpacity(0.18), blurRadius: 8),
+                                      BoxShadow(
+                                        color: Color(0xFF123F67).withOpacity(0.48),
+                                        blurRadius: 9,
+                                        offset: Offset(0, 7),
+                                      ),
+                                      BoxShadow(
+                                        color: Colors.white.withOpacity(0.72),
+                                        blurRadius: 2,
+                                        offset: Offset(0, -2),
+                                      ),
+                                      BoxShadow(
+                                        color: Color(0xFF4B9BCB).withOpacity(0.22),
+                                        blurRadius: 12,
+                                        spreadRadius: 1,
+                                      ),
                                     ],
                                   ),
                                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -1337,7 +1383,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                                     child: TaxiLocalizedText(
                                       russian: 'Я водитель',
                                       kyrgyz: 'Мен айдоочумун',
-                                      style: TextStyle(color: Color(0xFFFFD400), fontSize: 18, fontWeight: FontWeight.w900),
+                                      style: TextStyle(color: Color(0xFF103B5A), fontSize: 18, fontWeight: FontWeight.w900, letterSpacing: 0.2),
                                     ),
                                   ),
                                 ),
@@ -1363,13 +1409,36 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                                   alignment: Alignment.center,
                                   decoration: BoxDecoration(
                                     gradient: const LinearGradient(
-                                      begin: Alignment.topLeft, end: Alignment.bottomRight,
-                                      colors: [Color(0xFF343434), Color(0xFF111111)],
+                                      begin: Alignment.topCenter,
+                                      end: Alignment.bottomCenter,
+                                      colors: [
+                                        Color(0xFFD9F3FF),
+                                        Color(0xFF83C9F0),
+                                        Color(0xFF368BC7),
+                                      ],
+                                      stops: [0.0, 0.42, 1.0],
                                     ),
-                                    borderRadius: BorderRadius.circular(14),
+                                    borderRadius: BorderRadius.circular(18),
+                                    border: Border.all(
+                                      color: Color(0xFFEAF9FF),
+                                      width: 1.4,
+                                    ),
                                     boxShadow: [
-                                      BoxShadow(color: Colors.black.withOpacity(0.38), blurRadius: 0, offset: const Offset(0, 4)),
-                                      BoxShadow(color: const Color(0xFFFFD400).withOpacity(0.18), blurRadius: 8),
+                                      BoxShadow(
+                                        color: Color(0xFF123F67).withOpacity(0.48),
+                                        blurRadius: 9,
+                                        offset: Offset(0, 7),
+                                      ),
+                                      BoxShadow(
+                                        color: Colors.white.withOpacity(0.72),
+                                        blurRadius: 2,
+                                        offset: Offset(0, -2),
+                                      ),
+                                      BoxShadow(
+                                        color: Color(0xFF4B9BCB).withOpacity(0.22),
+                                        blurRadius: 12,
+                                        spreadRadius: 1,
+                                      ),
                                     ],
                                   ),
                                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -1378,7 +1447,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                                     child: TaxiLocalizedText(
                                       russian: 'Диспетчер',
                                       kyrgyz: 'Диспетчер',
-                                      style: TextStyle(color: Color(0xFFFFD400), fontSize: 18, fontWeight: FontWeight.w900),
+                                      style: TextStyle(color: Color(0xFF103B5A), fontSize: 18, fontWeight: FontWeight.w900, letterSpacing: 0.2),
                                     ),
                                   ),
                                 ),
