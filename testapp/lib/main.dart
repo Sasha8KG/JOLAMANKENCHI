@@ -1098,7 +1098,6 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
   void initState() {
     super.initState();
     TaxiLanguage.current.addListener(_handleLanguageChanged);
-    _loadDispatcherPhones();
   }
   void _handleLanguageChanged() { if (mounted) setState(() {}); }
   @override
@@ -1443,6 +1442,7 @@ class _ClientAuthScreenState extends State<ClientAuthScreen> {
   void initState() {
     super.initState();
     TaxiLanguage.current.addListener(_handleLanguageChanged);
+    _loadDispatcherPhones();
   }
   void _handleLanguageChanged() { if (mounted) setState(() {}); }
   @override
@@ -1707,7 +1707,6 @@ class _ClientMapScreenState extends State<ClientMapScreen> with WidgetsBindingOb
   bool _clientLoggingOut = false;
   int _cityFareSom = 0;
   int _intercityFareSom = 0;
-  List<String> _dispatcherPhones = [];
   bool _tariffsLoaded = false;
   Timer? _orderStatusTimer;
   bool _orderStatusRequestInProgress = false;
@@ -4467,6 +4466,7 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
   String _businessDate = '';
   int _cityFareSom = 0;
   int _intercityFareSom = 0;
+  List<String> _dispatcherPhones = [];
   bool _working = false;
   bool _dispatcherLoadInProgress = false;
   bool _dispatcherRefreshPending = false;
