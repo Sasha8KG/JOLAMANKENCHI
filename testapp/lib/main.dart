@@ -4168,6 +4168,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
+        leading: const SizedBox.shrink(),
         title: TaxiText(
           'Водитель: ${driver?.name ?? ""} (${driver?.fullCarInfo ?? ""})',
           maxLines: 1,
@@ -4190,16 +4191,16 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
                     ? const Color(0xFF075B32)
                     : const Color(0xFF145C3A),
                 disabledForegroundColor: Colors.white70,
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                minimumSize: const Size(0, 46),
-                textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-                side: const BorderSide(color: Color(0xFFFFD400), width: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
+                minimumSize: const Size(0, 54),
+                textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                side: const BorderSide(color: Color(0xFFFFD400), width: 3),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
               icon: Icon(!_driverWantsOnline
                   ? Icons.toggle_off
                   : (_driverGpsReady ? Icons.toggle_on : Icons.gps_not_fixed),
-                  size: 23),
+                  size: 27),
               label: TaxiText(_availabilityChanging
                   ? 'Подождите…'
                   : (!_driverWantsOnline
