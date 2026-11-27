@@ -1,7 +1,7 @@
 const FIREBASE_API_KEY = "AIzaSyBh5WG_rXaxBjDHOVPXPmmw8gqBCRubIAM";
 const PROJECT_ID = "jol-aman-kenchi";
 // Increment this marker for each published Worker revision.
-const WORKER_REVISION = "2026-11-26.3";
+const WORKER_REVISION = "2026-11-27.1";
 const DISPATCHER_UID = "AMGNzQEr7GfnisJcr7u4BqcdIvh1";
 
 function response(data, status = 200) {
@@ -65,9 +65,19 @@ async function ensureOrderSyncColumn(env) {
   }
 }
 
-async function requireDispatcher(request) {
+function isDispatcherUid(uid, env) {
+  const configured = typeof env?.DISPATCHER_UIDS === "string"
+    ? env.DISPATCHER_UIDS.split(/[\\s,;]+/)
+    : [];
+  const allowed = new Set([DISPATCHER_UID, ...configured]
+    .map(value => String(value || "").trim())
+    .filter(value => value.length > 0 && value.length <= 128 && !/[\\/\\x00-\\x1f\\x7f]/.test(value)));
+  return allowed.has(String(uid || ""));
+}
+
+async function requireDispatcher(request, env) {
   const auth = await verifyFirebaseUser(request);
-  if (auth.user.localId !== DISPATCHER_UID) throw new Error("Требуются права диспетчера");
+  if (!isDispatcherUid(auth.user.localId, env)) throw new Error("Требуются права диспетчера");
   return auth;
 }
 
@@ -81,7 +91,7 @@ async function requireApprovedDriver(request, env, requireOnline = false) {
 
 async function requireRadioMember(request, env) {
   const auth = await verifyFirebaseUser(request);
-  if (auth.user.localId === DISPATCHER_UID) return { ...auth, role: "dispatcher", name: "Диспетчер" };
+  if (isDispatcherUid(auth.user.localId, env)) return { ...auth, role: "dispatcher", name: "Диспетчер" };
   const driver = await driverRow(env, auth.user.localId);
   if (!driver || Number(driver.approved) !== 1) throw new Error("Рация доступна только одобренным водителям и диспетчеру");
   return { ...auth, role: "driver", driver, name: String(driver.name || "Водитель") };
@@ -417,7 +427,7 @@ export default {
         const { user } = await verifyFirebaseUser(request);
         const driver = await driverRow(env, user.localId);
         return response({ status: "ok", authenticated: true, uid: user.localId,
-          dispatcher: user.localId === DISPATCHER_UID,
+          dispatcher: isDispatcherUid(user.localId, env),
           driver: !!driver, driverApproved: !!driver && Number(driver.approved) === 1 });
       }
 
@@ -597,7 +607,7 @@ export default {
       }
 
       if (url.pathname === "/drivers/documents/request" && request.method === "POST") {
-        const auth = await requireDispatcher(request);
+        const auth = await requireDispatcher(request, env);
         const b = await readJsonObject(request);
         if (!b || typeof b.uid !== "string" || !b.uid.trim() || b.uid.length > 128)
           return response({ status: "error", message: "Укажите корректный UID водителя" }, 400);
@@ -620,7 +630,7 @@ export default {
         const now = Math.floor(Date.now() / 1000);
         await env.DB.prepare(`UPDATE driver_document_transfer_requests SET status='expired'
           WHERE status IN ('requested','transferring') AND expires_at<=?`).bind(now).run();
-        if (auth.user.localId === DISPATCHER_UID) {
+        if (isDispatcherUid(auth.user.localId, env)) {
           const rows = await env.DB.prepare(`SELECT r.request_id,r.driver_uid,r.status,r.created_at,r.expires_at,r.completed_at,
             d.name AS driver_name,d.phone AS driver_phone
             FROM driver_document_transfer_requests r JOIN drivers d ON d.uid=r.driver_uid
@@ -644,7 +654,7 @@ export default {
         const now = Math.floor(Date.now() / 1000);
         if (!transfer || Number(transfer.expires_at) <= now || !['requested','transferring'].includes(transfer.status))
           return response({ status: "error", message: "Запрос документов истёк или уже закрыт" }, 409);
-        const isDispatcher = auth.user.localId === DISPATCHER_UID;
+        const isDispatcher = isDispatcherUid(auth.user.localId, env);
         if (!isDispatcher && auth.user.localId !== transfer.driver_uid)
           return response({ status: "error", message: "Нет доступа к передаче этих документов" }, 403);
         const driver = await driverRow(env, transfer.driver_uid);
@@ -657,7 +667,7 @@ export default {
       }
 
       if (url.pathname === "/drivers/documents/received" && request.method === "POST") {
-        const auth = await requireDispatcher(request);
+        const auth = await requireDispatcher(request, env);
         const b = await readJsonObject(request);
         const requestId = String(b?.request_id || "");
         const uid = String(b?.uid || "");
@@ -708,7 +718,7 @@ export default {
       }
 
       if (url.pathname === "/drivers/review" && request.method === "POST") {
-        const auth = await requireDispatcher(request);
+        const auth = await requireDispatcher(request, env);
         const b = await readJsonObject(request);
         if (!b) return response({ status: "error", message: "Переданы неверные данные запроса. Отправьте корректный JSON-объект." }, 400);
         const uid = String(b.uid || "");
@@ -753,7 +763,7 @@ export default {
       }
 
       if (url.pathname === "/drivers/approve" && request.method === "POST") {
-        const auth = await requireDispatcher(request);
+        const auth = await requireDispatcher(request, env);
         const b = await readJsonObject(request);
         if (!b) return response({ status: "error", message: "Переданы неверные данные запроса. Отправьте корректный JSON-объект." }, 400);
         const uid = String(b.uid || "");
@@ -775,7 +785,7 @@ export default {
       }
 
       if (url.pathname === "/tariffs" && request.method === "POST") {
-        const auth = await requireDispatcher(request);
+        const auth = await requireDispatcher(request, env);
         const b = await readJsonObject(request);
         if (!b) return response({ status: "error", message: "Переданы неверные данные запроса. Отправьте корректный JSON-объект." }, 400);
         const city = Number(b.city_fare_som), intercity = Number(b.intercity_fare_som);
@@ -791,7 +801,7 @@ export default {
       }
 
       if (url.pathname === "/drivers/commission" && request.method === "POST") {
-        const auth = await requireDispatcher(request);
+        const auth = await requireDispatcher(request, env);
         const b = await readJsonObject(request);
         if (!b) return response({ status: "error", message: "Переданы неверные данные запроса. Отправьте корректный JSON-объект." }, 400);
         const driverUid = String(b.driver_uid || "");
@@ -845,7 +855,7 @@ export default {
       }
 
       if (url.pathname === "/dispatcher/shifts/close" && request.method === "POST") {
-        const auth = await requireDispatcher(request);
+        const auth = await requireDispatcher(request, env);
         const b = await readJsonObject(request);
         if (!b) return response({ status: "error", message: "Переданы неверные данные запроса. Отправьте корректный JSON-объект." }, 400);
         const driverUid = String(b.driver_uid || "");
@@ -899,7 +909,7 @@ export default {
 
       // Complete, cursor-paginated audit history; never limited by the recent 100-order dashboard.
       if (url.pathname === "/dispatcher/cancellations" && request.method === "GET") {
-        await requireDispatcher(request);
+        await requireDispatcher(request, env);
         const beforeAtValues = url.searchParams.getAll("before_at");
         const beforeIdValues = url.searchParams.getAll("before_id");
         if (beforeAtValues.length > 1 || beforeIdValues.length > 1) {
@@ -988,7 +998,7 @@ export default {
 
       // Secure dispatcher dashboard: only the fixed dispatcher Firebase UID can read fleet data.
       if (url.pathname === "/dispatcher/overview" && request.method === "GET") {
-        await requireDispatcher(request);
+        await requireDispatcher(request, env);
         const drivers = await env.DB.prepare(`SELECT d.uid, d.name, d.phone, d.car_model, d.car_number, d.approved, d.online,
           d.latitude, d.longitude, d.location_updated_at,
           (SELECT active.id FROM orders active WHERE active.assigned_driver_uid=d.uid
@@ -1035,7 +1045,7 @@ export default {
       }
 
       if (url.pathname === "/orders/assign" && request.method === "POST") {
-        await requireDispatcher(request);
+        await requireDispatcher(request, env);
         const b = await readJsonObject(request);
         if (!b) return response({ status: "error", message: "Переданы неверные данные запроса. Отправьте корректный JSON-объект." }, 400);
         const orderId = String(b.order_id || "");
@@ -1081,7 +1091,7 @@ export default {
       }
 
       if (url.pathname === "/dispatcher/drivers/force-offline" && request.method === "POST") {
-        await requireDispatcher(request);
+        await requireDispatcher(request, env);
         const b=await readJsonObject(request);
         if(!b)return response({status:"error",message:"Переданы неверные данные запроса."},400);
         const uid=String(b.driver_uid||"").trim();
@@ -1214,7 +1224,7 @@ export default {
       }
 
       if (url.pathname === "/orders/sync" && request.method === "POST") {
-        await requireDispatcher(request);
+        await requireDispatcher(request, env);
         const b = await readJsonObject(request);
         if (!b) return response({ status: "error", message: "Переданы неверные данные запроса. Отправьте корректный JSON-объект." }, 400);
         const items = Array.isArray(b.orders) ? b.orders : [b.order];
@@ -1327,7 +1337,7 @@ export default {
             SELECT id, assigned_driver_uid, ?, ?, unixepoch() FROM orders
             WHERE id=? AND assigned_driver_uid=? AND status IN ('driver_assigned','arrived')
             ON CONFLICT(order_id) DO NOTHING`)
-            .bind(fareSom, DISPATCHER_UID, orderId, auth.user.localId),
+            .bind(fareSom, auth.user.localId, orderId, auth.user.localId),
           env.DB.prepare(`UPDATE orders SET status='completed'
             WHERE id=? AND assigned_driver_uid=? AND status IN ('driver_assigned','arrived')
               AND EXISTS (SELECT 1 FROM trip_finances f WHERE f.order_id=orders.id AND f.driver_uid=?)`)
@@ -1342,7 +1352,7 @@ export default {
       }
 
       if (url.pathname === "/orders/complete" && request.method === "POST") {
-        const auth = await requireDispatcher(request);
+        const auth = await requireDispatcher(request, env);
         const b = await readJsonObject(request);
         if (!b) return response({ status: "error", message: "Переданы неверные данные запроса. Отправьте корректный JSON-объект." }, 400);
         const orderId = String(b.order_id || "");
