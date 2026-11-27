@@ -4167,6 +4167,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
 
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         title: TaxiText(
           'Водитель: ${driver?.name ?? ""} (${driver?.fullCarInfo ?? ""})',
           maxLines: 1,
@@ -4183,9 +4184,22 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
                 : (_driverGpsReady ? 'Выйти с линии' : 'Отменить выход на линию'),
             child: TextButton.icon(
               onPressed: _availabilityChanging ? null : _toggleDriverAvailability,
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.white,
+                backgroundColor: _driverWantsOnline
+                    ? const Color(0xFF075B32)
+                    : const Color(0xFF145C3A),
+                disabledForegroundColor: Colors.white70,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                minimumSize: const Size(0, 46),
+                textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                side: const BorderSide(color: Color(0xFFFFD400), width: 2),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
               icon: Icon(!_driverWantsOnline
                   ? Icons.toggle_off
-                  : (_driverGpsReady ? Icons.toggle_on : Icons.gps_not_fixed)),
+                  : (_driverGpsReady ? Icons.toggle_on : Icons.gps_not_fixed),
+                  size: 23),
               label: TaxiText(_availabilityChanging
                   ? 'Подождите…'
                   : (!_driverWantsOnline
