@@ -1,7 +1,7 @@
 const FIREBASE_API_KEY = "AIzaSyBh5WG_rXaxBjDHOVPXPmmw8gqBCRubIAM";
 const PROJECT_ID = "jol-aman-kenchi";
 // Increment this marker for each published Worker revision.
-const WORKER_REVISION = "2026-11-27.1";
+const WORKER_REVISION = "2026-11-27.2";
 const DISPATCHER_UID = "AMGNzQEr7GfnisJcr7u4BqcdIvh1";
 
 function response(data, status = 200) {
@@ -1044,6 +1044,27 @@ export default {
           closed_shifts: closedShifts.results || [], business_date: todayDate });
       }
 
+      if (url.pathname === "/dispatcher/orders/remove" && request.method === "POST") {
+        await requireDispatcher(request, env);
+        const b = await readJsonObject(request);
+        if (!b) return response({ status: "error", message: "Переданы неверные данные запроса." }, 400);
+        const orderId = typeof b.order_id === "string" ? b.order_id.trim() : "";
+        if (!/^[A-Za-z0-9_-]{1,128}$/.test(orderId)) {
+          return response({ status: "error", message: "Укажите корректный номер заказа." }, 400);
+        }
+        // Archive only unassigned orders. Keep the row for audit/history; never delete a trip.
+        const results = await env.DB.batch([
+          env.DB.prepare(`UPDATE orders SET status='cancelled_by_dispatcher', response_deadline=NULL
+            WHERE id=? AND status='new' AND assigned_driver_uid IS NULL`).bind(orderId),
+          env.DB.prepare("DELETE FROM order_responses WHERE order_id=?").bind(orderId)
+        ]);
+        if (Number(results?.[0]?.meta?.changes || 0) !== 1) {
+          return response({ status: "error", message: "Заказ уже принят, назначен или изменил статус. Обновите список." }, 409);
+        }
+        return response({ status: "ok", archived: true, order_id: orderId,
+          message: "Заказ убран из открытого списка. Запись сохранена в базе." });
+      }
+
       if (url.pathname === "/orders/assign" && request.method === "POST") {
         await requireDispatcher(request, env);
         const b = await readJsonObject(request);
@@ -1274,7 +1295,7 @@ export default {
           AND NOT EXISTS (SELECT 1 FROM orders active WHERE active.assigned_driver_uid=?
             AND active.status IN ('driver_assigned','arrived'))
           AND NOT EXISTS (SELECT 1 FROM order_refusals x WHERE x.order_id=o.id AND x.driver_uid=?)
-          ORDER BY created_at ASC LIMIT 100`).bind(
+          ORDER BY created_at ASC LIMIT 10`).bind(
             auth.user.localId, openNow - 60, openNow,
             auth.user.localId, auth.user.localId
           ).all();
