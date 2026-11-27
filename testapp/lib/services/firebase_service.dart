@@ -127,8 +127,33 @@ class FirebaseService {
   static Future<UserCredential> signInWithPhone({
     required String phone,
     required String password,
-  }) =>
-      signIn(email: phoneLoginEmail(phone), password: password);
+  }) async {
+    final normalizedEmail = phoneLoginEmail(phone);
+    try {
+      return await signIn(email: normalizedEmail, password: password);
+    } on FirebaseAuthException {
+      // Compatibility for one existing dispatcher account whose synthetic
+      // email was created with a typo. Restrict the fallback to that phone
+      // and verify its exact UID before allowing server-side authorization.
+      if (normalizedEmail != 'kg996773997870@jolamankenchi.app') rethrow;
+      try {
+        final credential = await signIn(
+          email: 'kg996773997870@jaolamankenchi.app',
+          password: password,
+        );
+        if (credential.user?.uid != 'DLJbfioIlEhPZRWItPiZg1J6hII3') {
+          await signOut();
+          throw FirebaseAuthException(
+            code: 'invalid-credential',
+            message: 'Не удалось подтвердить учётную запись диспетчера.',
+          );
+        }
+        return credential;
+      } on FirebaseAuthException {
+        rethrow;
+      }
+    }
+  }
 
   static Future<UserCredential> registerWithPhone({
     required String phone,
