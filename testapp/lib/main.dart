@@ -12,6 +12,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:livekit_client/livekit_client.dart' hide ConnectionState;
 import 'services/firebase_service.dart';
 import 'driver_registration_screen.dart';
@@ -1097,6 +1098,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
   void initState() {
     super.initState();
     TaxiLanguage.current.addListener(_handleLanguageChanged);
+    _loadDispatcherPhones();
   }
   void _handleLanguageChanged() { if (mounted) setState(() {}); }
   @override
@@ -1276,9 +1278,15 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                                   height: height * 0.056,
                                   alignment: Alignment.center,
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF171717),
-                                    border: Border.all(color: const Color(0xFFFFD400), width: 2),
+                                    gradient: const LinearGradient(
+                                      begin: Alignment.topLeft, end: Alignment.bottomRight,
+                                      colors: [Color(0xFF343434), Color(0xFF111111)],
+                                    ),
                                     borderRadius: BorderRadius.circular(14),
+                                    boxShadow: [
+                                      BoxShadow(color: Colors.black.withOpacity(0.38), blurRadius: 0, offset: const Offset(0, 4)),
+                                      BoxShadow(color: const Color(0xFFFFD400).withOpacity(0.18), blurRadius: 8),
+                                    ],
                                   ),
                                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                   child: const FittedBox(
@@ -1314,9 +1322,15 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                                   height: height * 0.056,
                                   alignment: Alignment.center,
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF171717),
-                                    border: Border.all(color: const Color(0xFFFFD400), width: 2),
+                                    gradient: const LinearGradient(
+                                      begin: Alignment.topLeft, end: Alignment.bottomRight,
+                                      colors: [Color(0xFF343434), Color(0xFF111111)],
+                                    ),
                                     borderRadius: BorderRadius.circular(14),
+                                    boxShadow: [
+                                      BoxShadow(color: Colors.black.withOpacity(0.38), blurRadius: 0, offset: const Offset(0, 4)),
+                                      BoxShadow(color: const Color(0xFFFFD400).withOpacity(0.18), blurRadius: 8),
+                                    ],
                                   ),
                                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                   child: const FittedBox(
@@ -1349,9 +1363,15 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                                   height: height * 0.056,
                                   alignment: Alignment.center,
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF171717),
-                                    border: Border.all(color: const Color(0xFFFFD400), width: 2),
+                                    gradient: const LinearGradient(
+                                      begin: Alignment.topLeft, end: Alignment.bottomRight,
+                                      colors: [Color(0xFF343434), Color(0xFF111111)],
+                                    ),
                                     borderRadius: BorderRadius.circular(14),
+                                    boxShadow: [
+                                      BoxShadow(color: Colors.black.withOpacity(0.38), blurRadius: 0, offset: const Offset(0, 4)),
+                                      BoxShadow(color: const Color(0xFFFFD400).withOpacity(0.18), blurRadius: 8),
+                                    ],
                                   ),
                                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                   child: const FittedBox(
@@ -1388,6 +1408,37 @@ class ClientAuthScreen extends StatefulWidget {
   State<ClientAuthScreen> createState() => _ClientAuthScreenState();
 }
 class _ClientAuthScreenState extends State<ClientAuthScreen> {
+  List<String> _dispatcherPhones = [];
+  bool _dispatcherPhonesLoading = true;
+  String? _dispatcherPhonesError;
+
+  Future<void> _loadDispatcherPhones() async {
+    try {
+      final data = await WorkerApi.getPublicDispatcherPhones();
+      final raw = data['phones'];
+      if (raw is! List || raw.length > 3 || raw.any((value) => value is! String)) {
+        throw const FormatException('Сервер вернул неверный список телефонов.');
+      }
+      if (!mounted) return;
+      setState(() {
+        _dispatcherPhones = raw.map((value) => value.toString()).toList();
+        _dispatcherPhonesLoading = false;
+        _dispatcherPhonesError = null;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() { _dispatcherPhonesLoading = false; _dispatcherPhonesError = error.toString(); });
+    }
+  }
+
+  Future<void> _callDispatcherPhone(String phone) async {
+    try {
+      if (!await launchUrl(Uri(scheme: 'tel', path: phone))) throw Exception('Телефонное приложение недоступно.');
+    } catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: TaxiText('Не удалось открыть набор номера: $error')));
+    }
+  }
   @override
   void initState() {
     super.initState();
@@ -1578,33 +1629,58 @@ class _ClientAuthScreenState extends State<ClientAuthScreen> {
           title: const TaxiLocalizedText(russian: 'Клиентская панель', kyrgyz: 'Кардардын панели'),
           backgroundColor: Colors.amber,
           actions: const [Padding(padding: EdgeInsets.only(right: 12), child: TaxiLanguageSwitcher())]),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Icon(Icons.account_circle, size: 80, color: Colors.amber),
-              const SizedBox(height: 20),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.amber,
-                    padding: const EdgeInsets.symmetric(vertical: 16)),
-                onPressed: () => _showLoginDialog(context),
-                child: const TaxiLocalizedText(russian: 'Войти в аккаунт', kyrgyz: 'Аккаунтка кирүү',
-                    style: TextStyle(fontWeight: FontWeight.bold)),
-              ),
-              const SizedBox(height: 16),
-              OutlinedButton(
-                style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16)),
-                onPressed: () => _showRegisterDialog(context),
-                child: const TaxiLocalizedText(russian: 'Регистрация нового клиента', kyrgyz: 'Жаңы кардарды каттоо',
-                    style: TextStyle(fontWeight: FontWeight.bold)),
-              ),
-            ],
-          ),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.all(20),
+          children: [
+            const SizedBox(height: 12),
+            const Icon(Icons.account_circle, size: 80, color: Colors.amber),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.amber, padding: const EdgeInsets.symmetric(vertical: 16)),
+              onPressed: () => _showLoginDialog(context),
+              child: const TaxiLocalizedText(russian: 'Войти в аккаунт', kyrgyz: 'Аккаунтка кирүү',
+                style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+            const SizedBox(height: 16),
+            OutlinedButton(
+              style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
+              onPressed: () => _showRegisterDialog(context),
+              child: const TaxiLocalizedText(russian: 'Регистрация нового клиента', kyrgyz: 'Жаңы кардарды каттоо',
+                style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+            const SizedBox(height: 24),
+            Card(child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const TaxiLocalizedText(russian: 'Телефоны диспетчера', kyrgyz: 'Диспетчердин телефондору',
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                const TaxiLocalizedText(
+                  russian: 'Если приложение временно не работает по техническим или другим причинам, вы можете оформить заказ такси по телефонам диспетчера:',
+                  kyrgyz: 'Эгер тиркеме техникалык же башка себептерден улам убактылуу иштебей калса, таксиге буйрутманы төмөнкү диспетчердик телефондор аркылуу бере аласыз:',
+                ),
+                const SizedBox(height: 10),
+                if (_dispatcherPhonesLoading)
+                  const Center(child: Padding(padding: EdgeInsets.all(8), child: CircularProgressIndicator()))
+                else if (_dispatcherPhonesError != null)
+                  Row(children: [
+                    const Expanded(child: TaxiLocalizedText(russian: 'Не удалось загрузить телефоны.', kyrgyz: 'Телефондорду жүктөө мүмкүн болгон жок.')),
+                    IconButton(onPressed: _loadDispatcherPhones, icon: const Icon(Icons.refresh)),
+                  ])
+                else if (_dispatcherPhones.isEmpty)
+                  const TaxiLocalizedText(russian: 'Телефоны пока не добавлены.', kyrgyz: 'Телефондор азырынча кошулган жок.')
+                else
+                  ..._dispatcherPhones.map((phone) => ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.phone, color: Color(0xFF087A42)),
+                    title: TaxiText(phone, style: const TextStyle(fontWeight: FontWeight.bold)),
+                    trailing: const Icon(Icons.call, color: Color(0xFF087A42)),
+                    onTap: () => _callDispatcherPhone(phone),
+                  )),
+              ]),
+            )),
+          ],
         ),
       ),
     );
@@ -1631,6 +1707,7 @@ class _ClientMapScreenState extends State<ClientMapScreen> with WidgetsBindingOb
   bool _clientLoggingOut = false;
   int _cityFareSom = 0;
   int _intercityFareSom = 0;
+  List<String> _dispatcherPhones = [];
   bool _tariffsLoaded = false;
   Timer? _orderStatusTimer;
   bool _orderStatusRequestInProgress = false;
@@ -4497,6 +4574,14 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
       final snapshot = DispatcherOverviewSnapshot.parse(data);
       final tariffData = await WorkerApi.getTariffs();
       final tariffs = Map<String, dynamic>.from(tariffData['tariffs'] as Map? ?? {});
+      List<String> dispatcherPhones = _dispatcherPhones;
+      try {
+        final phoneData = await WorkerApi.getPublicDispatcherPhones();
+        final rawPhones = phoneData['phones'];
+        if (rawPhones is List && rawPhones.length <= 3 && rawPhones.every((value) => value is String)) {
+          dispatcherPhones = rawPhones.map((value) => value.toString()).toList();
+        }
+      } catch (_) {}
       // Do not let a response started by a previous dispatcher account replace
       // the current screen after logout or an account switch.
       if (!mounted || requestUid == null ||
@@ -4504,6 +4589,7 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
       setState(() {
         _cityFareSom = (tariffs['city_fare_som'] as num?)?.toInt() ?? 0;
         _intercityFareSom = (tariffs['intercity_fare_som'] as num?)?.toInt() ?? 0;
+        _dispatcherPhones = dispatcherPhones;
         _drivers = snapshot.drivers.map((e) => Map<String, dynamic>.from(e)).toList();
         _orders = snapshot.orders.map((e) => Map<String, dynamic>.from(e)).toList();
         _today = snapshot.today.map((e) => Map<String, dynamic>.from(e)).toList();
@@ -4898,6 +4984,122 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
     }
   }
 
+  Future<void> _editDispatcherPhones() async {
+    final controllers = List.generate(3, (index) => TextEditingController(
+      text: index < _dispatcherPhones.length ? _dispatcherPhones[index] : '',
+    ));
+    final values = await showDialog<List<String>>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const TaxiLocalizedText(russian: 'Телефоны диспетчера', kyrgyz: 'Диспетчердин телефондору'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          for (var i = 0; i < controllers.length; i++) ...[
+            TextField(controller: controllers[i], keyboardType: TextInputType.phone,
+              decoration: InputDecoration(labelText: 'Телефон ${i + 1}', hintText: '0555123456')),
+            if (i < 2) const SizedBox(height: 10),
+          ],
+          const SizedBox(height: 8),
+          const TaxiLocalizedText(russian: 'Оставьте поле пустым, если номер не нужен. Максимум три номера.',
+            kyrgyz: 'Номер кереги жок болсо, талааны бош калтырыңыз. Эң көп дегенде үч номер.'),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const TaxiLocalizedText(russian: 'Отмена', kyrgyz: 'Жокко чыгаруу')),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx,
+            controllers.map((controller) => controller.text.trim()).where((value) => value.isNotEmpty).toList()),
+            child: const TaxiLocalizedText(russian: 'Сохранить', kyrgyz: 'Сактоо')),
+        ],
+      ),
+    );
+    Future<void>.delayed(const Duration(milliseconds: 350), () {
+      for (final controller in controllers) { controller.dispose(); }
+    });
+    if (values == null || !mounted) return;
+    setState(() => _working = true);
+    try {
+      final result = await WorkerApi.saveDispatcherPhones(values);
+      final raw = result['phones'];
+      if (raw is! List || raw.length > 3 || raw.any((value) => value is! String)) {
+        throw const FormatException('Сервер вернул неверный список телефонов.');
+      }
+      if (mounted) setState(() => _dispatcherPhones = raw.map((value) => value.toString()).toList());
+      if (mounted) _notice('Телефоны сохранены. Клиенты увидят изменения без переустановки приложения.');
+    } catch (error) {
+      if (mounted) _notice(error.toString());
+    } finally {
+      if (mounted) setState(() => _working = false);
+    }
+  }
+
+  Future<void> _createPhoneOrder() async {
+    final phone = TextEditingController(), pickup = TextEditingController();
+    final destination = TextEditingController(), comment = TextEditingController();
+    String payment = 'Наличные', tariff = 'По городу';
+    int people = 1;
+    final values = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(builder: (ctx, setDialog) => AlertDialog(
+        title: const TaxiLocalizedText(russian: 'Заказ по телефону', kyrgyz: 'Телефон аркылуу буйрутма'),
+        content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(controller: phone, keyboardType: TextInputType.phone,
+            decoration: const InputDecoration(labelText: 'Телефон клиента', hintText: '0555123456')),
+          const SizedBox(height: 10),
+          TextField(controller: pickup, maxLength: 200,
+            decoration: const InputDecoration(labelText: 'Откуда забрать', border: OutlineInputBorder())),
+          const SizedBox(height: 10),
+          TextField(controller: destination, maxLength: 200,
+            decoration: const InputDecoration(labelText: 'Куда отвезти', border: OutlineInputBorder())),
+          const SizedBox(height: 10),
+          DropdownButtonFormField<String>(value: tariff, decoration: const InputDecoration(labelText: 'Тариф'),
+            items: const [DropdownMenuItem(value: 'По городу', child: Text('По городу')), DropdownMenuItem(value: 'Межгород', child: Text('Межгород'))],
+            onChanged: (value) { if (value != null) setDialog(() => tariff = value); }),
+          const SizedBox(height: 10),
+          DropdownButtonFormField<String>(value: payment, decoration: const InputDecoration(labelText: 'Оплата'),
+            items: const [DropdownMenuItem(value: 'Наличные', child: Text('Наличные')), DropdownMenuItem(value: 'QR-код', child: Text('QR-код')), DropdownMenuItem(value: 'По договору', child: Text('По договору'))],
+            onChanged: (value) { if (value != null) setDialog(() => payment = value); }),
+          const SizedBox(height: 10),
+          DropdownButtonFormField<int>(value: people, decoration: const InputDecoration(labelText: 'Пассажиров'),
+            items: [1, 2, 3, 4].map((value) => DropdownMenuItem(value: value, child: Text('$value'))).toList(),
+            onChanged: (value) { if (value != null) setDialog(() => people = value); }),
+          const SizedBox(height: 10),
+          TextField(controller: comment, maxLength: 500, decoration: const InputDecoration(labelText: 'Комментарий (необязательно)')),
+        ])),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const TaxiLocalizedText(russian: 'Отмена', kyrgyz: 'Жокко чыгаруу')),
+          ElevatedButton(onPressed: () {
+            if (phone.text.trim().isEmpty || pickup.text.trim().isEmpty || destination.text.trim().isEmpty) return;
+            Navigator.pop(ctx, {'phone': phone.text.trim(), 'pickup': pickup.text.trim(),
+              'destination': destination.text.trim(), 'payment': payment, 'tariff': tariff,
+              'people': people, 'comment': comment.text.trim()});
+          }, child: const TaxiLocalizedText(russian: 'Создать заказ', kyrgyz: 'Буйрутма түзүү')),
+        ],
+      )),
+    );
+    Future<void>.delayed(const Duration(milliseconds: 350), () {
+      phone.dispose(); pickup.dispose(); destination.dispose(); comment.dispose();
+    });
+    if (values == null || !mounted) return;
+    setState(() => _working = true);
+    try {
+      final result = await WorkerApi.createDispatcherPhoneOrder(
+        customerPhone: values['phone'] as String, pickup: values['pickup'] as String,
+        destination: values['destination'] as String, payment: values['payment'] as String,
+        tariff: values['tariff'] as String, people: values['people'] as int,
+        comment: values['comment'] as String,
+      );
+      final orderId = (result['order_id'] ?? '').toString().trim();
+      if (orderId.isEmpty) throw const FormatException('Сервер не вернул номер заказа.');
+      await _load(showLoading: false);
+      if (mounted) _notice('Заказ создан. Теперь выберите водителя для назначения.');
+      if (mounted) await _assign({'id': orderId, 'status': 'new'});
+    } catch (error) {
+      if (mounted) _notice(error.toString());
+      await _load(showLoading: false);
+    } finally {
+      if (mounted) setState(() => _working = false);
+    }
+  }
+
+
   Future<void> _editTariffs() async {
     final cityController = TextEditingController(text: _cityFareSom.toString());
     final intercityController = TextEditingController(text: _intercityFareSom.toString());
@@ -5235,6 +5437,28 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
                       onPressed: _working ? null : _editTariffs,
                       icon: const Icon(Icons.edit), label: const TaxiLocalizedText(russian: 'ИЗМЕНИТЬ ТАРИФЫ', kyrgyz: 'ТАРИФТЕРДИ ӨЗГӨРТҮҮ'))),
                   ]))),
+                _sectionTitle('Телефоны диспетчера для клиентов', Icons.phone),
+                Card(child: Padding(padding: const EdgeInsets.all(12), child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    if (_dispatcherPhones.isEmpty)
+                      const TaxiLocalizedText(russian: 'Номера ещё не добавлены.', kyrgyz: 'Номерлер азырынча кошулган жок.')
+                    else ..._dispatcherPhones.map((phone) => TaxiText(phone, style: const TextStyle(fontWeight: FontWeight.w700))),
+                    const SizedBox(height: 8),
+                    Align(alignment: Alignment.centerRight, child: OutlinedButton.icon(
+                      onPressed: _working ? null : _editDispatcherPhones, icon: const Icon(Icons.edit),
+                      label: const TaxiLocalizedText(russian: 'ИЗМЕНИТЬ ТЕЛЕФОНЫ', kyrgyz: 'ТЕЛЕФОНДОРДУ ӨЗГӨРТҮҮ'))),
+                  ]))),
+                _sectionTitle('Заказ от клиента по телефону', Icons.add_call),
+                Card(child: Padding(padding: const EdgeInsets.all(12), child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    const TaxiLocalizedText(russian: 'Создайте заявку за клиента, который позвонил диспетчеру и не пользуется приложением.',
+                      kyrgyz: 'Тиркемени колдонбогон кардар диспетчерге чалса, анын атынан буйрутма түзүңүз.'),
+                    const SizedBox(height: 8),
+                    SizedBox(width: double.infinity, child: ElevatedButton.icon(
+                      onPressed: _working ? null : _createPhoneOrder, icon: const Icon(Icons.add_call),
+                      label: const TaxiLocalizedText(russian: 'СОЗДАТЬ ЗАКАЗ ПО ТЕЛЕФОНУ', kyrgyz: 'ТЕЛЕФОН АРКЫЛУУ БУЙРУТМА ТҮЗҮҮ'))),
+                  ]))),
+
                 _sectionTitle('Заявки водителей · ожидают решения', Icons.verified_user),
                 if (pending.isEmpty) const TaxiLocalizedText(russian: 'Нет новых заявок водителей.', kyrgyz: 'Жаңы айдоочу арыздары жок.'),
                 ...pending.map((d) => Card(child: Padding(

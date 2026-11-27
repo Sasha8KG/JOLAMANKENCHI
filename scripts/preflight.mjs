@@ -57,6 +57,27 @@ check('Firebase project is jol-aman-kenchi', firebase.project_info?.project_id =
 check('LiveKit client dependency is pinned', /livekit_client:\s*2\.2\.4(?:\s|$)/.test(pubspec));
 check('App has microphone permission', /android\.permission\.RECORD_AUDIO/.test(manifest));
 check('App has location permissions', /ACCESS_FINE_LOCATION/.test(manifest) && /ACCESS_COARSE_LOCATION/.test(manifest));
+check('Dispatcher phone orders are protected and stored with a customer phone',
+  worker.includes('"/dispatcher/orders/create-phone"') &&
+  worker.includes('requireDispatcher(request, env)') &&
+  worker.includes('customer_phone') &&
+  worker.includes('phone_'));
+check('Dispatcher phone numbers are stored server-side and readable before client login',
+  worker.includes('dispatcher_phone_numbers') &&
+  worker.includes('"/public/dispatcher-phones"') &&
+  worker.includes('"/dispatcher/phones"') &&
+  api.includes("'/public/dispatcher-phones'") &&
+  api.includes("'/dispatcher/phones'"));
+check('Client pre-login panel includes the exact Russian and Kyrgyz instructions and tap-to-call',
+  app.includes('Если приложение временно не работает по техническим или другим причинам, вы можете оформить заказ такси по телефонам диспетчера:') &&
+  app.includes('Эгер тиркеме техникалык же башка себептерден улам убактылуу иштебей калса, таксиге буйрутманы төмөнкү диспетчердик телефондор аркылуу бере аласыз:') &&
+  app.includes("Uri(scheme: 'tel', path: phone)"));
+check('Dispatcher can create phone orders and assign through the regular assignment flow',
+  app.includes('_createPhoneOrder()') &&
+  app.includes('WorkerApi.createDispatcherPhoneOrder') &&
+  app.includes("await _assign({'id': orderId, 'status': 'new'})"));
+check('Main role buttons have a raised style on exactly three surfaces',
+  app.split('BoxShadow(color: Colors.black.withOpacity(0.38)').length - 1 === 3);
 check('Worker has cancellation endpoint', worker.includes('"/orders/cancel"'));
 check('Worker has trip completion endpoint', worker.includes('"/orders/complete"'));
 check('Driver no-show cancellation is allowed only after arrival', worker.includes('if (order.status === "arrived")') && worker.includes("status='cancelled_by_driver_no_show'"));
@@ -100,7 +121,7 @@ check('Order snapshot parser rejects partial, duplicate and contradictory respon
   orderSnapshot.includes("!seen.add(id)") &&
   orderSnapshot.includes("openIds.contains(order['id'])"));
 check('Order snapshot parser limits free offers to Worker page size',
-  orderSnapshot.includes('maxOpenOrders = 100') && orderSnapshot.includes('rawOpen.length > maxOpenOrders'));
+  orderSnapshot.includes('maxOpenOrders = 10') && orderSnapshot.includes('rawOpen.length > maxOpenOrders'));
 check('Order snapshot tests cover malformed, duplicate, status and overlap cases',
   ['rejects non-map order entries', 'rejects duplicate free order ids',
    'rejects more than one assigned order', 'rejects the same order appearing in both lists',
@@ -897,7 +918,7 @@ check('Driver refusal cannot reopen an order after a concurrent status change', 
 check('Worker JSON reader converts malformed and empty request bodies into client validation failures', /async function readJsonObject\(request\)[\s\S]*?try \{[\s\S]*?await request\.json\(\)[\s\S]*?catch \(_\)[\s\S]*?return null;/.test(worker));
 check('Worker JSON reader rejects arrays and primitive JSON values', /return value && typeof value === "object" && !Array\.isArray\(value\) \? value : null;/.test(worker));
 check('Worker JSON reader is the only direct request JSON parser', (worker.match(/request\.json\(\)/g) || []).length === 1);
-check('All 24 POST JSON handlers use the safe JSON reader', (worker.match(/await readJsonObject\(request\)/g) || []).length === 24);
+check('All 27 POST JSON handlers use the safe JSON reader', (worker.match(/await readJsonObject\(request\)/g) || []).length === 27);
 const driverCompleteRoute = worker.slice(worker.indexOf('url.pathname === "/orders/complete-driver"'));
 check('Driver can complete only their own assigned trip and save it once to the finance ledger',
   driverCompleteRoute.includes('requireApprovedDriver(request, env)') &&

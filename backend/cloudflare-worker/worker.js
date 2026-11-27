@@ -65,6 +65,15 @@ async function ensureOrderSyncColumn(env) {
   }
 }
 
+async function ensureOrderCustomerPhoneColumn(env) {
+  const columns = await env.DB.prepare("PRAGMA table_info(orders)").all();
+  if ((columns.results || []).some(column => column.name === "customer_phone")) return;
+  try { await env.DB.prepare("ALTER TABLE orders ADD COLUMN customer_phone TEXT").run(); }
+  catch (error) {
+    const message = String(error && error.message ? error.message : error).toLowerCase();
+    if (!message.includes("duplicate column")) throw error;
+  }
+}
 function isDispatcherUid(uid, env) {
   const configured = typeof env?.DISPATCHER_UIDS === "string"
     ? env.DISPATCHER_UIDS.split(/[\s,;]+/)
@@ -417,6 +426,15 @@ export default {
       }
       await env.DB.prepare(`INSERT OR IGNORE INTO tariff_settings (id,city_fare_som,intercity_fare_som)
         VALUES (1,0,0)`).run();
+      await env.DB.prepare(`CREATE TABLE IF NOT EXISTS dispatcher_phone_numbers (
+        slot INTEGER PRIMARY KEY CHECK(slot BETWEEN 1 AND 3),
+        phone TEXT NOT NULL
+      )`).run();
+      await ensureOrderCustomerPhoneColumn(env);
+      if (url.pathname === "/public/dispatcher-phones" && request.method === "GET") {
+        const rows = await env.DB.prepare("SELECT phone FROM dispatcher_phone_numbers ORDER BY slot ASC").all();
+        return response({ status: "ok", phones: (rows.results || []).map(row => String(row.phone || "")).filter(Boolean) });
+      }
       if (url.pathname === "/health" && request.method === "GET") {
         const tables = await env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").all();
         return response({status:"ok",project:PROJECT_ID,worker_revision:WORKER_REVISION,database:"connected",
@@ -1008,7 +1026,7 @@ export default {
           docs.review_status, docs.rejection_reason, docs.reviewed_at, docs.local_transfer_request_id
           FROM drivers d LEFT JOIN driver_documents docs ON docs.driver_uid=d.uid
           ORDER BY d.approved ASC, d.name ASC`).all();
-        const orders = await env.DB.prepare(`SELECT o.id, o.firebase_order_id, o.pickup_address, o.pickup_lat, o.pickup_lng,
+        const orders = await env.DB.prepare(`SELECT o.id, o.firebase_order_id, o.customer_phone, o.pickup_address, o.pickup_lat, o.pickup_lng,
           o.destination_address, o.destination_lat, o.destination_lng, o.passenger_count, o.payment_method,
           o.tariff_type, o.comment, o.status, o.created_at, o.assigned_at, o.assigned_driver_uid,
           d.name AS driver_name, d.car_number AS driver_car_number
@@ -1065,6 +1083,57 @@ export default {
           message: "Заказ убран из открытого списка. Запись сохранена в базе." });
       }
 
+      if (url.pathname === "/dispatcher/phones" && request.method === "POST") {
+        await requireDispatcher(request, env);
+        const b = await readJsonObject(request);
+        if (!b || !Array.isArray(b.phones) || b.phones.length > 3)
+          return response({ status: "error", message: "Можно сохранить не более трёх телефонов диспетчера." }, 400);
+        const phones = [];
+        for (const raw of b.phones) {
+          if (typeof raw !== "string") return response({ status: "error", message: "Проверьте формат телефонных номеров." }, 400);
+          const digits = raw.replace(/\D/g, "");
+          const normalized = digits.length === 10 && digits.startsWith("0") ? "+996" + digits.slice(1)
+            : digits.length === 12 && digits.startsWith("996") ? "+" + digits : "";
+          if (!normalized) return response({ status: "error", message: "Введите корректный номер Кыргызстана, например 0555123456." }, 400);
+          if (phones.includes(normalized)) return response({ status: "error", message: "Один и тот же номер нельзя указывать дважды." }, 400);
+          phones.push(normalized);
+        }
+        const statements = [env.DB.prepare("DELETE FROM dispatcher_phone_numbers")];
+        phones.forEach((phone, index) => statements.push(
+          env.DB.prepare("INSERT INTO dispatcher_phone_numbers(slot,phone) VALUES(?,?)").bind(index + 1, phone)
+        ));
+        await env.DB.batch(statements);
+        return response({ status: "ok", phones });
+      }
+
+      if (url.pathname === "/dispatcher/orders/create-phone" && request.method === "POST") {
+        await requireDispatcher(request, env);
+        const b = await readJsonObject(request);
+        if (!b) return response({ status: "error", message: "Переданы неверные данные запроса." }, 400);
+        const rawPhone = typeof b.customer_phone === "string" ? b.customer_phone.trim() : "";
+        const digits = rawPhone.replace(/\D/g, "");
+        const customerPhone = digits.length === 10 && digits.startsWith("0") ? "+996" + digits.slice(1)
+          : digits.length === 12 && digits.startsWith("996") ? "+" + digits : "";
+        const pickup = typeof b.pickup === "string" ? b.pickup.trim() : "";
+        const destination = typeof b.destination === "string" ? b.destination.trim() : "";
+        const payment = b.payment, tariff = b.tariff, people = b.people;
+        const comment = b.comment === undefined || b.comment === null ? "" : b.comment;
+        if (!customerPhone || !pickup || pickup.length > 200 || hasForbiddenControlCharacters(pickup) ||
+            !destination || destination.length > 200 || hasForbiddenControlCharacters(destination) ||
+            !["Наличные", "QR-код", "По договору"].includes(payment) ||
+            !["По городу", "Межгород"].includes(tariff) ||
+            !Number.isInteger(people) || people < 1 || people > 4 ||
+            typeof comment !== "string" || comment.length > 500 || hasForbiddenControlCharacters(comment))
+          return response({ status: "error", message: "Проверьте телефон, адреса, количество пассажиров и параметры заказа." }, 400);
+        const orderId = "phone_" + crypto.randomUUID().replace(/-/g, "");
+        await env.DB.prepare(`INSERT INTO orders
+          (id,firebase_order_id,customer_uid,customer_phone,pickup_address,pickup_lat,pickup_lng,
+           destination_address,destination_lat,destination_lng,passenger_count,payment_method,tariff_type,
+           comment,status,assigned_driver_uid)
+          VALUES (?,?,NULL,?,?,NULL,NULL,?,NULL,NULL,?,?,?,?,'new',NULL)`)
+          .bind(orderId, orderId, customerPhone, pickup, destination, people, payment, tariff, comment).run();
+        return response({ status: "ok", created: true, order_id: orderId, customer_phone: customerPhone });
+      }
       if (url.pathname === "/orders/assign" && request.method === "POST") {
         await requireDispatcher(request, env);
         const b = await readJsonObject(request);

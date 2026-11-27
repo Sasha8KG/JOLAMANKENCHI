@@ -466,6 +466,36 @@ class WorkerApi {
     });
   }
 
+  static Future<Map<String, dynamic>> getPublicDispatcherPhones() =>
+      _request('/public/dispatcher-phones', authenticated: false);
+
+  static Future<Map<String, dynamic>> saveDispatcherPhones(List<String> phones) {
+    if (phones.length > 3 || phones.any((phone) => phone.trim().isEmpty || _normalizeKgPhone(phone).isEmpty)) {
+      throw const WorkerApiException('Укажите не более трёх корректных телефонов Кыргызстана.');
+    }
+    final normalized = phones.map(_normalizeKgPhone).toList();
+    if (normalized.toSet().length != normalized.length) throw const WorkerApiException('Один и тот же номер нельзя указывать дважды.');
+    return _request('/dispatcher/phones', method: 'POST', body: {'phones': normalized});
+  }
+
+  static Future<Map<String, dynamic>> createDispatcherPhoneOrder({
+    required String customerPhone, required String pickup, required String destination,
+    required String payment, required String tariff, required int people, String comment = '',
+  }) {
+    final phone = _normalizeKgPhone(customerPhone);
+    final from = pickup.trim(), to = destination.trim(), note = comment.trim();
+    if (phone.isEmpty || from.isEmpty || from.length > 200 || to.isEmpty || to.length > 200 ||
+        people < 1 || people > 4 || !['Наличные', 'QR-код', 'По договору'].contains(payment) ||
+        !['По городу', 'Межгород'].contains(tariff) || note.length > 500 ||
+        _hasControlCharacters(from) || _hasControlCharacters(to) || _hasControlCharacters(note)) {
+      throw const WorkerApiException('Проверьте телефон, адреса и параметры заказа.');
+    }
+    return _request('/dispatcher/orders/create-phone', method: 'POST', body: {
+      'customer_phone': phone, 'pickup': from, 'destination': to, 'payment': payment,
+      'tariff': tariff, 'people': people, 'comment': note,
+    });
+  }
+
   static Future<Map<String, dynamic>> assignOrder({
     required String orderId,
     required String driverUid,
