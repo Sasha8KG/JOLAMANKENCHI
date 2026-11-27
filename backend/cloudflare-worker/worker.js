@@ -1,7 +1,7 @@
 const FIREBASE_API_KEY = "AIzaSyBh5WG_rXaxBjDHOVPXPmmw8gqBCRubIAM";
 const PROJECT_ID = "jol-aman-kenchi";
 // Increment this marker for each published Worker revision.
-const WORKER_REVISION = "2026-11-27.4";
+const WORKER_REVISION = "2026-11-27.5";
 const DISPATCHER_UID = "AMGNzQEr7GfnisJcr7u4BqcdIvh1";
 
 function response(data, status = 200) {
