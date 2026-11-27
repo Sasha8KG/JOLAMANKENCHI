@@ -9,7 +9,7 @@ class ServerOrderSnapshot {
     required this.assignedOrders,
   });
 
-  static const int maxOpenOrders = 100;
+  static const int maxOpenOrders = 10;
   // Keep this limit aligned with the Worker /orders/open assignedOrders LIMIT 5.
   static const int maxAssignedOrders = 5;
 
