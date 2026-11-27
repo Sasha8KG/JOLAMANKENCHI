@@ -91,9 +91,9 @@ void main() {
       }), throwsFormatException);
     });
 
-    test('rejects more than the Worker maximum of 100 open offers', () {
+    test('rejects more than the Worker maximum of 10 open offers', () {
       expect(() => ServerOrderSnapshot.parse({
-        'orders': List.generate(101, (index) => order('o_$index', 'new')),
+        'orders': List.generate(11, (index) => order('o_$index', 'new')),
         'assignedOrders': <dynamic>[],
       }), throwsFormatException);
     });
