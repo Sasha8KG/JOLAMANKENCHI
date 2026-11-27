@@ -4802,6 +4802,37 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
         isGpsTimestampFresh(gpsUpdatedAt);
   }
 
+  Future<void> _removeOpenOrder(Map<String, dynamic> order) async {
+    final orderId = (order['id'] ?? '').toString().trim();
+    if (orderId.isEmpty) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const TaxiLocalizedText(russian: 'Убрать старый заказ?', kyrgyz: 'Эски буйрутманы тизмеден алып саласызбы?'),
+        content: const TaxiLocalizedText(
+          russian: 'Заказ исчезнет из открытого списка водителей и диспетчера. Запись останется в базе, а принятые и завершённые поездки не затрагиваются.',
+          kyrgyz: 'Буйрутма айдоочулардын жана диспетчердин ачык тизмесинен алынат. Маалымат базада сакталат, кабыл алынган жана аяктаган сапарларга таасир этпейт.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const TaxiLocalizedText(russian: 'Отмена', kyrgyz: 'Жокко чыгаруу')),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const TaxiLocalizedText(russian: 'Убрать', kyrgyz: 'Алып салуу')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _working = true);
+    try {
+      await WorkerApi.removeOpenOrder(orderId: orderId);
+      await _load(showLoading: false);
+      if (mounted) _notice('Заказ убран из открытого списка. История сохранена.');
+    } catch (e) {
+      if (mounted) _notice(e.toString());
+      await _load(showLoading: false);
+    } finally {
+      if (mounted) setState(() => _working = false);
+    }
+  }
+
   Future<void> _assign(Map<String, dynamic> order) async {
     final orderId = (order['id'] ?? '').toString().trim();
     if (orderId.isEmpty || orderId.length > 128) {
@@ -5360,8 +5391,23 @@ class _DispatcherScreenState extends State<DispatcherScreen> {
                     TaxiText('Куда: ${o['destination_address'] ?? 'Не указано'}'),
                     TaxiText('Пассажиров: ${o['passenger_count'] ?? 1} · Оплата: ${o['payment_method'] ?? '—'}'),
                     TaxiText('Тариф: ${o['tariff_type'] ?? '—'}'),
-                    Align(alignment: Alignment.centerRight, child: ElevatedButton.icon(
-                      onPressed: _working ? null : () => _assign(o), icon: const Icon(Icons.person_add_alt_1), label: const TaxiLocalizedText(russian: 'Назначить водителя', kyrgyz: 'Айдоочуну дайындоо'))),
+                    Wrap(
+                      alignment: WrapAlignment.end,
+                      spacing: 8,
+                      runSpacing: 6,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: _working ? null : () => _removeOpenOrder(o),
+                          icon: const Icon(Icons.archive_outlined),
+                          label: const TaxiLocalizedText(russian: 'Убрать из списка', kyrgyz: 'Тизмеден алып салуу'),
+                        ),
+                        ElevatedButton.icon(
+                          onPressed: _working ? null : () => _assign(o),
+                          icon: const Icon(Icons.person_add_alt_1),
+                          label: const TaxiLocalizedText(russian: 'Назначить водителя', kyrgyz: 'Айдоочуну дайындоо'),
+                        ),
+                      ],
+                    ),
                   ])))),
                 _sectionTitle('Финансовый итог за сегодня · $_businessDate', Icons.account_balance_wallet_outlined),
                 Card(child: Padding(padding: const EdgeInsets.all(14), child: Column(
