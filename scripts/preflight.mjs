@@ -303,7 +303,7 @@ check("Passenger cancels nearby timer when disposed", /_nearbyDriversTimer\?\.ca
 
  // Dispatcher live fleet map and refresh regression checks.
 check("Dispatcher overview supplies driver GPS coordinates", worker.includes("d.latitude, d.longitude, d.location_updated_at"));
-check("Dispatcher overview is protected by dispatcher authentication", /url\.pathname === "\/dispatcher\/overview"[\s\S]{0,100}requireDispatcher\(request\)/.test(worker));
+check("Dispatcher overview is protected by dispatcher authentication", /url\\.pathname === "\\/dispatcher\\/overview"[\\s\\S]{0,120}requireDispatcher\\(request, env\\)/.test(worker));
 check("Dispatcher dashboard refresh timer is configured", app.includes("Timer.periodic(const Duration(seconds: 15)"));
 check("Dispatcher refresh runs without replacing the dashboard", app.includes("_load(showLoading: false)"));
 check("Dispatcher refresh coalesces overlapping requests into one follow-up", app.includes("if (_dispatcherLoadInProgress) {") && app.includes("_dispatcherRefreshPending = true;") && app.includes("scheduleMicrotask(() => _load(showLoading: false))"));
