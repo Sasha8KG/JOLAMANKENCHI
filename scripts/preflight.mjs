@@ -119,7 +119,7 @@ check('Automatic candidate selection requires approved online drivers', worker.i
 check('Automatic selection excludes drivers with active orders', worker.includes('active.assigned_driver_uid=r.driver_uid'));
 check('Automatic assignment rechecks active-order exclusion', worker.includes("UPDATE orders SET status='driver_assigned'") && worker.includes('NOT EXISTS (SELECT 1 FROM orders active WHERE active.assigned_driver_uid=?') && worker.includes("active.status IN ('driver_assigned','arrived')") && /\.bind\(winner\.driver_uid, assignmentNow, order\.id, assignmentNow, winner\.driver_uid,\s*winner\.driver_uid, assignmentNow - 60, assignmentNow\)\.run\(\)/.test(worker));
 check('Automatic assignment only changes new orders', worker.includes("WHERE id=? AND status='new' AND response_deadline<=?"));
-check('Trip completion is dispatcher-only', worker.includes('url.pathname === "/orders/complete"') && worker.includes('const auth = await requireDispatcher(request);'));
+check('Trip completion is dispatcher-only', worker.includes('url.pathname === "/orders/complete"') && worker.includes('const auth = await requireDispatcher(request, env);'));
 check('Trip completion requires driver arrival', worker.includes("WHERE id=? AND status='arrived' AND assigned_driver_uid IS NOT NULL"));
 check('Trip earnings insert is idempotent', worker.includes('ON CONFLICT(order_id) DO NOTHING'));
 check('Trip completion changes status to completed', worker.includes("UPDATE orders SET status='completed'"));
@@ -303,7 +303,7 @@ check("Passenger cancels nearby timer when disposed", /_nearbyDriversTimer\?\.ca
 
  // Dispatcher live fleet map and refresh regression checks.
 check("Dispatcher overview supplies driver GPS coordinates", worker.includes("d.latitude, d.longitude, d.location_updated_at"));
-check("Dispatcher overview is protected by dispatcher authentication", /url\\.pathname === "\\/dispatcher\\/overview"[\\s\\S]{0,120}requireDispatcher\\(request, env\\)/.test(worker));
+check("Dispatcher overview is protected by dispatcher authentication", /url\.pathname === "\/dispatcher\/overview"[\s\S]{0,120}requireDispatcher\(request, env\)/.test(worker));
 check("Dispatcher dashboard refresh timer is configured", app.includes("Timer.periodic(const Duration(seconds: 15)"));
 check("Dispatcher refresh runs without replacing the dashboard", app.includes("_load(showLoading: false)"));
 check("Dispatcher refresh coalesces overlapping requests into one follow-up", app.includes("if (_dispatcherLoadInProgress) {") && app.includes("_dispatcherRefreshPending = true;") && app.includes("scheduleMicrotask(() => _load(showLoading: false))"));
@@ -607,7 +607,7 @@ check('Removed dispatcher sections do not delete server-side no-show audit recor
 
 check('Driver assigned-order card exposes completion without arrival-only cancellation', app.includes('_completeAssignedOrder(item)') && !app.includes('_cancelArrivedNoShowOrder'));
 
-check('Cancellation audit history has a dedicated dispatcher-only endpoint', cancellationHistoryRoute.includes('await requireDispatcher(request)'));
+check('Cancellation audit history has a dedicated dispatcher-only endpoint', cancellationHistoryRoute.includes('await requireDispatcher(request, env)'));
 check('Cancellation history includes all no-show statuses, not only recent dashboard orders', cancellationHistoryRoute.includes("WHERE o.status='cancelled_by_driver_no_show'"));
 check('Cancellation history retains legacy rows without a reason audit record', cancellationHistoryRoute.includes('LEFT JOIN order_cancellations c'));
 check('Cancellation history uses stable timestamp and order ID cursor ordering', cancellationHistoryRoute.includes('ORDER BY sort_at DESC, o.id DESC') && cancellationHistoryRoute.includes('o.id < ?'));
@@ -680,7 +680,7 @@ check('Document submission stores a pending review state and clears any previous
 check('Resubmitted documents reset the review state to pending', documentsRoute.includes("review_status='pending'"));
 check('Document submission clears previous rejection details', documentsRoute.includes('rejection_reason=NULL, reviewed_at=NULL, reviewed_by=NULL'));
 check('Document submission immediately disables driver approval and online status', documentsRoute.includes('UPDATE drivers SET approved=0, online=0'));
-check('Driver review endpoint requires dispatcher authentication', reviewRoute.includes('await requireDispatcher(request)'));
+check('Driver review endpoint requires dispatcher authentication', reviewRoute.includes('await requireDispatcher(request, env)'));
 check('Driver review accepts only approved or rejected decisions', reviewRoute.includes('!["approved", "rejected"].includes(decision)'));
 check('Driver rejection requires a meaningful reason', reviewRoute.includes("decision === \"rejected\" && reason.length < 5"));
 check('Driver approval can proceed when no document row exists', reviewRoute.includes('if (!docs)') && reviewRoute.includes('INSERT OR IGNORE INTO driver_documents'));
