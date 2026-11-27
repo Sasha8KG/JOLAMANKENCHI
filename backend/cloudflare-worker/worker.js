@@ -281,8 +281,10 @@ async function syncOrder(env, o) {
       customer_uid=excluded.customer_uid, pickup_address=excluded.pickup_address, pickup_lat=excluded.pickup_lat,
       pickup_lng=excluded.pickup_lng, destination_address=excluded.destination_address, destination_lat=excluded.destination_lat,
       destination_lng=excluded.destination_lng, passenger_count=excluded.passenger_count, payment_method=excluded.payment_method,
-      tariff_type=excluded.tariff_type, comment=excluded.comment, status=excluded.status,
-      assigned_driver_uid=excluded.assigned_driver_uid`)
+      tariff_type=excluded.tariff_type, comment=excluded.comment
+      -- D1 is authoritative after import; a stale Firestore snapshot must not
+      -- revert an assigned or completed trip.
+      `)
     .bind(id, id, o.customerUid || null, o.pickup || "", num(o.pickupLat), num(o.pickupLng), o.destination || o.dest || "",
       num(o.destinationLat), num(o.destinationLng), Number(o.people || 1), o.payment || "", o.tariff || "", o.comment || "",
       status, o.assignedDriverUid || null).run();

@@ -3685,11 +3685,37 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
       Future<void>.delayed(const Duration(milliseconds: 350), () => fareController.dispose());
     }
     if (fare == null || !mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const TaxiLocalizedText(russian: 'Завершить поездку?', kyrgyz: 'Сапарды аяктайсызбы?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const TaxiLocalizedText(
+              russian: 'Подтвердите только после фактического окончания поездки. Заказ будет закрыт, а сумма попадёт в финансовый отчёт.',
+              kyrgyz: 'Сапар чындап аяктагандан кийин гана ырастаңыз. Буйрутма жабылып, сумма каржылык отчётко жазылат.',
+            ),
+            const SizedBox(height: 10),
+            Text('Сумма поездки: $fare сом'),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false),
+            child: const TaxiLocalizedText(russian: 'НАЗАД', kyrgyz: 'АРТКА')),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx, true),
+            child: const TaxiLocalizedText(russian: 'ЗАВЕРШИТЬ', kyrgyz: 'АЯКТОО')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final fareSom = fare;
     setState(() => _orderActionIds.add(id));
     try {
-      await WorkerApi.completeDriverOrder(orderId: id, fareSom: fare);
+      await WorkerApi.completeDriverOrder(orderId: id, fareSom: fareSom);
       await _loadDriverEarnings();
-      if (mounted) _showLocationMessage('Заказ завершён. В финансовый отчёт записано $fare сом.');
+      if (mounted) _showLocationMessage('Заказ завершён. В финансовый отчёт записано $fareSom сом.');
     } on WorkerApiException catch (e) {
       if (mounted) _showLocationMessage(e.message);
     } catch (_) {
@@ -4472,7 +4498,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
                           TextButton.icon(
                             onPressed: _orderActionIds.contains(_serverOrderId(item)) ? null : () => _completeAssignedOrder(item),
                             icon: const Icon(Icons.check_circle, color: Colors.green),
-                            label: const TaxiLocalizedText(russian: 'ЗАКАЗ ИСПОЛНЕН', kyrgyz: 'БУЙРУТМА АТКАРЫЛДЫ', style: TextStyle(color: Colors.green)),
+                            label: const TaxiLocalizedText(russian: 'ЗАВЕРШИТЬ ПОЕЗДКУ', kyrgyz: 'САПАРДЫ АЯКТОО', style: TextStyle(color: Colors.green)),
                           ),
                         ],
                       ),

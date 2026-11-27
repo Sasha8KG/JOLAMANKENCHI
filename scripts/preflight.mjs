@@ -949,7 +949,11 @@ check('Dispatcher snapshot regression tests cover malformed and duplicate data',
 check('Dispatcher section headings wrap and localize inside the available phone width', app.includes('Expanded(\n          child: TaxiLocalizedText(\n            russian: value,') && app.includes('softWrap: true,') && app.includes('kyrgyz: TaxiLanguage.translate(value)'));
 
 check('Dispatcher app-bar title truncates safely on narrow devices', app.includes("'Диспетчер · ЖОЛ АМАН КЕНЧИ',\n          maxLines: 1,\n          softWrap: false,\n          overflow: TextOverflow.ellipsis,"));
-check('Driver assigned-order completion remains available after removing the dispatcher arrived-orders panel', app.includes('_completeAssignedOrder(item)') && app.includes("russian: 'ЗАКАЗ ИСПОЛНЕН'"));
+check('Assigned order action is clearly labelled as trip completion and requires explicit confirmation', app.includes("russian: 'ЗАВЕРШИТЬ ПОЕЗДКУ'") && app.includes("russian: 'Завершить поездку?'") && app.includes('if (confirmed != true || !mounted) return;'));
+const authoritativeSyncStart = worker.indexOf('async function syncOrder(env, o)');
+const authoritativeSyncEnd = worker.indexOf('\nexport default', authoritativeSyncStart);
+const authoritativeSyncSource = worker.slice(authoritativeSyncStart, authoritativeSyncEnd);
+check('Firestore order sync cannot overwrite the authoritative D1 status or assigned driver', authoritativeSyncSource.includes('ON CONFLICT(firebase_order_id) DO UPDATE SET') && !/status=excluded\.status/.test(authoritativeSyncSource) && !/assigned_driver_uid=excluded\.assigned_driver_uid/.test(authoritativeSyncSource));
 check('Closed-shift earnings trailing text has a bounded responsive width', app.includes('trailing: SizedBox(\n                    width: 116,') && app.includes('maxLines: 2,\n                      softWrap: true,'));
 
 
