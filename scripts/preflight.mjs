@@ -467,7 +467,18 @@ check('Open-order offers bind both active-trip and refusal exclusions', openOrde
 check('Open-order offers remain limited to new unassigned orders', openOrdersQuery.includes("FROM orders o WHERE status='new'"));
 check('Open-order offers continue excluding active trips', openOrdersQuery.includes("active.status IN ('driver_assigned','arrived')"));
 check('Open-order offers continue respecting driver refusals', openOrdersQuery.includes('order_refusals x WHERE x.order_id=o.id AND x.driver_uid=?'));
-check('Open-order offer result count remains bounded', openOrdersQuery.includes('ORDER BY created_at ASC LIMIT 100'));
+check('Open-order offer result count remains bounded to ten', openOrdersQuery.includes('ORDER BY created_at ASC LIMIT 10'));
+const dispatcherArchiveStart = worker.indexOf('if (url.pathname === "/dispatcher/orders/remove" && request.method === "POST")');
+const dispatcherArchiveEnd = worker.indexOf('if (url.pathname === "/orders/assign" && request.method === "POST")', dispatcherArchiveStart);
+const dispatcherArchiveRoute = dispatcherArchiveStart >= 0 && dispatcherArchiveEnd > dispatcherArchiveStart
+  ? worker.slice(dispatcherArchiveStart, dispatcherArchiveEnd) : '';
+check('Dispatcher can archive only unassigned new orders without deleting history',
+  dispatcherArchiveRoute.includes('requireDispatcher(request, env)') &&
+  dispatcherArchiveRoute.includes("status='cancelled_by_dispatcher'") &&
+  dispatcherArchiveRoute.includes("status='new' AND assigned_driver_uid IS NULL") &&
+  !dispatcherArchiveRoute.includes('DELETE FROM orders'));
+check('Dispatcher archive API is connected to the Flutter panel',
+  api.includes("'/dispatcher/orders/remove'") && app.includes('_removeOpenOrder(o)'));
 check('Assigned active orders are fetched separately from open offers', openOrdersRoute.includes('const assignedOrders = await env.DB.prepare'));
 check('Assigned active orders remain visible even when open-offer GPS is stale', openOrdersRoute.includes("status IN ('driver_assigned','arrived') AND assigned_driver_uid=?"));
 check('Driver API response keeps open and assigned order lists separate', openOrdersRoute.includes('orders: open.results || [], assignedOrders: assignedOrders.results || []'));
