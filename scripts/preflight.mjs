@@ -89,7 +89,7 @@ check('Driver no-show cancellation excludes orders already recorded in trip fina
 check('Driver no-show cancellation records zero earnings', worker.includes('earned_som: 0'));
 check('No-show cancellation does not force driver offline', !worker.includes("UPDATE drivers SET online=0 WHERE uid=(SELECT assigned_driver_uid FROM orders"));
 check('Flutter API validates no-show cancellation reason codes', api.includes('allowedReasons') && api.includes("'customer_left_with_other_car'"));
-check('Driver UI no longer requires an arrival step before order completion', !app.includes('_markAssignedOrderArrived') && !app.includes('_cancelArrivedNoShowOrder') && app.includes("russian: 'ЗАКАЗ ИСПОЛНЕН'"));
+check('Driver UI no longer requires an arrival step before order completion', !app.includes('_markAssignedOrderArrived') && !app.includes('_cancelArrivedNoShowOrder') && app.includes("russian: 'ЗАВЕРШИТЬ ПОЕЗДКУ'"));
 check('Driver UI does not expose obsolete arrival/no-show stages', !app.includes('ПАССАЖИР НЕ ВЫШЕЛ') && !app.includes('НЕ ОТВЕЧАЕТ') && !app.includes('УЕХАЛ НА ДРУГОЙ МАШИНЕ'));
 check('Driver order completion refreshes assigned and open orders', app.includes('WorkerApi.completeDriverOrder') && app.includes('await _pollServerOrders();'));
 check('Worker has radio token endpoint', worker.includes('"/radio/token"'));
