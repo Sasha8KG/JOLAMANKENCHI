@@ -4028,9 +4028,8 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
 
     setState(() => _logoutInProgress = true);
     try {
-      // Always obtain a fresh server snapshot before signing out. The local
-      // loaded flag can remain false after a temporary network failure, even
-      // when there is no active trip; it must not create a permanent dead end.
+      // Always obtain a fresh server snapshot before signing out so a
+      // temporary network failure cannot hide an active assigned trip.
       final data = await WorkerApi.openOrders();
       final snapshot = ServerOrderSnapshot.parse(data);
       if (!mounted) return;
@@ -4039,7 +4038,6 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
         _serverOpenOrders = _driverWantsOnline
             ? snapshot.openOrders
             : <Map<String, dynamic>>[];
-        _assignedOrdersLoaded = true;
       });
 
       if (snapshot.assignedOrders.isNotEmpty) {
