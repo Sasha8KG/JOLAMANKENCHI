@@ -76,8 +76,10 @@ check('Dispatcher can create phone orders and assign through the regular assignm
   app.includes('_createPhoneOrder()') &&
   app.includes('WorkerApi.createDispatcherPhoneOrder') &&
   app.includes("await _assign({'id': orderId, 'status': 'new'})"));
-check('Main role buttons have a raised style on exactly three surfaces',
-  app.split('BoxShadow(color: Colors.black.withOpacity(0.38)').length - 1 === 3);
+check('Main role buttons have a raised blue 3D style on exactly three surfaces',
+  app.split('Color(0xFF123F67).withOpacity(0.48)').length - 1 === 3 &&
+  app.split('Color(0xFFD9F3FF)').length - 1 === 3 &&
+  app.split('BorderRadius.circular(18)').length - 1 >= 3);
 check('Worker has cancellation endpoint', worker.includes('"/orders/cancel"'));
 check('Worker has trip completion endpoint', worker.includes('"/orders/complete"'));
 check('Driver no-show cancellation is allowed only after arrival', worker.includes('if (order.status === "arrived")') && worker.includes("status='cancelled_by_driver_no_show'"));
