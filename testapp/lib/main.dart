@@ -3192,7 +3192,6 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
   bool _driverShiftClosing = false;
   bool _dispatcherForcedOffline = false;
   String? _driverEarningsError;
-  bool _assignedOrdersLoaded = false;
   final Set<String> _respondingOrderIds = <String>{};
   final Set<String> _orderActionIds = <String>{};
   RoadRoute? _driverApproachRoute;
@@ -3354,7 +3353,6 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
       setState(() {
         _serverOpenOrders = visibleOpen;
         _serverAssignedOrders = assigned;
-        _assignedOrdersLoaded = true;
         // Never leave the previous passenger's route on the map after an
         // assignment changes or is cancelled.
         if (activeAssignedId != _driverRouteOrderId) {
