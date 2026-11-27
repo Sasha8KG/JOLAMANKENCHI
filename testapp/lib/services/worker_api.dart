@@ -458,6 +458,14 @@ class WorkerApi {
     });
   }
 
+  static Future<Map<String, dynamic>> removeOpenOrder({
+    required String orderId,
+  }) {
+    return _request('/dispatcher/orders/remove', method: 'POST', body: {
+      'order_id': _validatedOrderId(orderId),
+    });
+  }
+
   static Future<Map<String, dynamic>> assignOrder({
     required String orderId,
     required String driverUid,
