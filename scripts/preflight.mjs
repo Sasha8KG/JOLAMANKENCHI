@@ -75,8 +75,18 @@ check('Worker reads LiveKit secret only from environment', /env\.LIVEKIT_API_SEC
 check('Flutter API calls radio endpoints', api.includes("'/radio/token'") && api.includes("'/radio/messages'"));
 check('App includes shared radio UI', app.includes('ОБЩАЯ РАЦИЯ ТАКСОПАРКА'));
 const dispatcherUid = worker.match(/const DISPATCHER_UID = "([^"]+)";/)?.[1];
-const storageDispatcherUid = storageRules.match(/request\.auth\.uid == '([^']+)'/)?.[1];
-check('Firebase Storage dispatcher access matches Worker dispatcher', Boolean(dispatcherUid) && dispatcherUid === storageDispatcherUid);
+const storageDispatcherUids = [...storageRules.matchAll(/'([A-Za-z0-9_-]{20,128})'/g)]
+  .map((match) => match[1])
+  .filter((value) => !['license.jpg', 'driver_photo.jpg', 'car_photo.jpg'].includes(value));
+check('Worker supports the configured multi-dispatcher UID allowlist',
+  worker.includes('env?.DISPATCHER_UIDS') &&
+  worker.includes('isDispatcherUid(auth.user.localId, env)') &&
+  Boolean(dispatcherUid));
+check('Firebase Storage dispatcher access includes the primary and second dispatcher only',
+  Boolean(dispatcherUid) &&
+  storageDispatcherUids.includes(dispatcherUid) &&
+  storageDispatcherUids.includes('DLJbfioIlEhPZRWItPiZg1J6hII3') &&
+  storageDispatcherUids.length === 2);
 check('Firebase Storage accepts the full 8 MB app upload limit', /request\.resource\.size\s*<=\s*8\s*\*\s*1024\s*\*\s*1024/.test(storageRules));
 const driverDocumentRule = storageRules.match(/function isDriverDocument\(fileName\) \{([\s\S]*?)\}/)?.[1] || '';
 const driverDocumentRuleUses = (storageRules.match(/isDriverDocument\(fileName\)/g) || []).length;
