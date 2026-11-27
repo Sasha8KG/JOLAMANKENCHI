@@ -67,11 +67,11 @@ async function ensureOrderSyncColumn(env) {
 
 function isDispatcherUid(uid, env) {
   const configured = typeof env?.DISPATCHER_UIDS === "string"
-    ? env.DISPATCHER_UIDS.split(/[\\s,;]+/)
+    ? env.DISPATCHER_UIDS.split(/[\s,;]+/)
     : [];
   const allowed = new Set([DISPATCHER_UID, ...configured]
     .map(value => String(value || "").trim())
-    .filter(value => value.length > 0 && value.length <= 128 && !/[\\/\\x00-\\x1f\\x7f]/.test(value)));
+    .filter(value => value.length > 0 && value.length <= 128 && !/[\/\x00-\x1f\x7f]/.test(value)));
   return allowed.has(String(uid || ""));
 }
 
