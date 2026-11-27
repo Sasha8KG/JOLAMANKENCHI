@@ -3,7 +3,10 @@ service firebase.storage {
   match /b/{bucket}/o {
     function signedIn() { return request.auth != null; }
     function isDispatcher() {
-      return signedIn() && request.auth.uid == 'AMGNzQEr7GfnisJcr7u4BqcdIvh1';
+      return signedIn() && request.auth.uid in [
+        'AMGNzQEr7GfnisJcr7u4BqcdIvh1',
+        'DLJbfioIlEhPZRWItPiZg1J6hII3'
+      ];
     }
     function isDriverDocument(fileName) {
       return fileName in ['license.jpg', 'driver_photo.jpg', 'car_photo.jpg'];
