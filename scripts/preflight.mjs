@@ -1001,6 +1001,42 @@ check('Only legacy commission rows without a dispatcher audit are cleared',worke
 check('FCM push token registration and Android notification channel are wired',worker.includes('driver_push_tokens')&&api.includes("'/drivers/push-token'")&&pubspec.includes('firebase_messaging:')&&pubspec.includes('flutter_local_notifications:')&&manifest.includes('POST_NOTIFICATIONS')&&app.includes('driverOrderNotificationChannel'));
 check('New orders are sent as high-priority audible Firebase push notifications',worker.includes('notifyOnlineDriversOfNewOrder(env')&&worker.includes('priority:"high"')&&worker.includes('sound:"default"'));
 
+
+check('Second dispatcher UID is handled by the shared allowlist in auth restoration and radio access',
+  worker.includes('isDispatcherUid(user.localId, env)') &&
+  worker.includes('if (isDispatcherUid(auth.user.localId, env))') &&
+  worker.includes('env?.DISPATCHER_UIDS') &&
+  !/auth\\.user\\.localId\\s*===?\\s*DISPATCHER_UID/.test(worker));
+check('All privileged dispatcher operations use the shared multi-dispatcher guard',
+  ['/drivers/review','/drivers/approve','/tariffs','/drivers/commission',
+   '/dispatcher/shifts/close','/dispatcher/overview','/orders/assign',
+   '/dispatcher/drivers/force-offline','/orders/complete'].every((route) => {
+    const at = worker.indexOf('url.pathname === "' + route + '"');
+    return at >= 0 && worker.slice(at, at + 650).includes('requireDispatcher(request, env)');
+  }));
+check('Dispatcher can approve a driver even when no document row exists',
+  reviewRoute.includes('if (!docs)') &&
+  reviewRoute.includes('INSERT OR IGNORE INTO driver_documents') &&
+  reviewRoute.includes("VALUES (?,'','','',unixepoch(),'pending',NULL,NULL,NULL)") &&
+  reviewRoute.includes('decision === "approved"'));
+check('Driver approval decision does not depend on document receipt count or file URLs',
+  reviewRoute.includes('UPDATE drivers SET approved=?, online=0') &&
+  !/files\\.length|documents_received|hasAllDocuments|license_url\\s*&&/.test(reviewRoute));
+check('Driver registration saves each selected photo independently and permits all three to be absent',
+  registration.includes('if (_license != null)') &&
+  registration.includes('if (_driverPhoto != null)') &&
+  registration.includes('if (_carPhoto != null)') &&
+  !/if \\(_license == null\\)|if \\(_driverPhoto == null\\)|if \\(_carPhoto == null\\)/.test(registration));
+check('Driver approval button uses the review decision flow, not the legacy restore-access endpoint',
+  app.includes("_review(d, 'approved')") &&
+  app.includes("reviewStatus == 'approved'") &&
+  app.includes("_approve(d, true)"));
+check('Driver document transfer stores files locally and sends them through a request-scoped LiveKit room',
+  app.includes('DriverDocumentStore.persistPickedImage') &&
+  read('testapp/lib/services/driver_document_transfer_livekit.dart').includes('publishData(') &&
+  worker.includes('jol-aman-kenchi-docs-') &&
+  !read('testapp/lib/services/driver_document_transfer_livekit.dart').includes('FirebaseStorage'));
+
 for (const item of checks) {
   process.stdout.write(`${item.ok ? 'PASS' : 'FAIL'}  ${item.label}\n`);
 }
