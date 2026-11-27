@@ -1,7 +1,7 @@
 const FIREBASE_API_KEY = "AIzaSyBh5WG_rXaxBjDHOVPXPmmw8gqBCRubIAM";
 const PROJECT_ID = "jol-aman-kenchi";
 // Increment this marker for each published Worker revision.
-const WORKER_REVISION = "2026-11-27.3";
+const WORKER_REVISION = "2026-11-27.4";
 const DISPATCHER_UID = "AMGNzQEr7GfnisJcr7u4BqcdIvh1";
 
 function response(data, status = 200) {
@@ -1355,7 +1355,7 @@ export default {
         const openNow = Math.floor(Date.now() / 1000);
         const open = await env.DB.prepare(`SELECT id, firebase_order_id, pickup_address, pickup_lat, pickup_lng,
           destination_address, destination_lat, destination_lng, passenger_count, payment_method, tariff_type, comment,
-          created_at, response_deadline FROM orders o WHERE status='new'
+          created_at, response_deadline, status FROM orders o WHERE status='new'
           AND EXISTS (SELECT 1 FROM drivers available_driver WHERE available_driver.uid=?
             AND available_driver.approved=1 AND available_driver.online=1
             AND available_driver.latitude BETWEEN -90 AND 90
