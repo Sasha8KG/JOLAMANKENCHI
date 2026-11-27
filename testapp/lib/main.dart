@@ -3218,15 +3218,14 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
     _driverWantsOnline = currentDriver?.isOnline ?? false;
     if(currentDriver!=null)_registerDriverPushNotifications();
     if (_driverWantsOnline && currentDriver != null) {
-      // Capture an existing server-online state as the local preference too,
-      // so the first app restart after this update also restores the line.
+      // Restore GPS/server presence first; only then request the open queue.
       unawaited(_saveDriverLinePreference(currentDriver.id, true));
-      _startLocationTracking();
+      unawaited(_restoreDriverAfterResume());
+    } else {
+      // Offline drivers still need to restore an already assigned trip.
+      unawaited(_pollServerOrders());
     }
-    // Also restore an already assigned trip when the driver is temporarily offline.
-    // The server returns assigned trips separately and keeps the open queue empty.
-    unawaited(_pollServerOrders());
-    // Restore the driver's own server-side earnings summary on cabinet entry.
+    // Earnings are independent of GPS and order-list restoration.
     unawaited(_loadDriverEarnings());
     _ordersPollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       _pollServerOrders();
@@ -3248,19 +3247,33 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
     }());
   }
 
+  bool _resumeRestoreInProgress = false;
+
+  Future<void> _restoreDriverAfterResume() async {
+    if (!mounted || _resumeRestoreInProgress) return;
+    _resumeRestoreInProgress = true;
+    try {
+      final driver = TaxiParkState.currentLoggedInDriver;
+      if (_driverWantsOnline && driver != null) {
+        // Android may pause the GPS stream while the screen is locked.
+        // Confirm a fresh GPS publication before asking for new offers.
+        if (_positionSubscription == null) {
+          await _startLocationTracking();
+        } else {
+          await _refreshDriverHeartbeat(driver);
+        }
+      }
+      if (mounted) await _pollServerOrders();
+      if (mounted) unawaited(_loadDriverEarnings());
+    } finally {
+      _resumeRestoreInProgress = false;
+    }
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed || !mounted) return;
-    // Timers and GPS streams can be paused by Android while the app is backgrounded.
-    unawaited(_pollServerOrders());
-    unawaited(_loadDriverEarnings());
-    final driver = TaxiParkState.currentLoggedInDriver;
-    if (!_driverWantsOnline || driver == null) return;
-    if (_positionSubscription == null) {
-      unawaited(_startLocationTracking());
-    } else {
-      unawaited(_refreshDriverHeartbeat(driver));
-    }
+    unawaited(_restoreDriverAfterResume());
   }
 
   String _serverOrderId(Map<String, dynamic> order) {
@@ -3993,23 +4006,32 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
   Future<void> _logoutDriver() async {
     if (_logoutInProgress || _availabilityChanging || _offlineSyncInProgress) return;
 
-    // Never abandon an assigned trip: the passenger and dispatcher still need
-    // this driver's live status until the trip is completed or cancelled.
-    if (!_assignedOrdersLoaded) {
-      unawaited(_pollServerOrders());
-      _showLocationMessage('Проверяем активные заказы. Повторите выход через несколько секунд.');
-      return;
-    }
-    if (_serverAssignedOrders.isNotEmpty) {
-      _showLocationMessage('Нельзя выйти из аккаунта во время назначенного заказа. Сначала завершите поездку или согласуйте её отмену с диспетчером.');
-      return;
-    }
-
     setState(() => _logoutInProgress = true);
     try {
-      // Always ask the server to confirm offline state, even if the local
-      // screen already says offline. This closes the retry-timer race: a
-      // previous failed request must never be bypassed by signing out.
+      // Always obtain a fresh server snapshot before signing out. The local
+      // loaded flag can remain false after a temporary network failure, even
+      // when there is no active trip; it must not create a permanent dead end.
+      final data = await WorkerApi.openOrders();
+      final snapshot = ServerOrderSnapshot.parse(data);
+      if (!mounted) return;
+      setState(() {
+        _serverAssignedOrders = snapshot.assignedOrders;
+        _serverOpenOrders = _driverWantsOnline
+            ? snapshot.openOrders
+            : <Map<String, dynamic>>[];
+        _assignedOrdersLoaded = true;
+      });
+
+      if (snapshot.assignedOrders.isNotEmpty) {
+        _showLocationMessage(
+          'Нельзя выйти из аккаунта во время назначенного заказа. '
+          'Сначала завершите поездку или согласуйте её отмену с диспетчером.',
+        );
+        return;
+      }
+
+      // No active trip: stop local tracking and ask the server to confirm
+      // offline state before ending Firebase authentication.
       setState(() {
         _driverWantsOnline = false;
         _driverGpsReady = false;
@@ -4018,6 +4040,10 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
           TaxiParkState.currentLoggedInDriver!.isOnline = false;
         }
       });
+      await _saveDriverLinePreference(
+        TaxiParkState.currentLoggedInDriver?.id ?? '',
+        false,
+      );
       _locationRetryTimer?.cancel();
       _locationRetryTimer = null;
       _offlineSyncRetryTimer?.cancel();
@@ -4036,12 +4062,17 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
       TaxiParkState.currentLoggedInDriver = null;
       if (mounted) Navigator.popUntil(context, (route) => route.isFirst);
     } catch (e) {
-      // Keep the account open if the server could not confirm that the driver
-      // is offline. Retry the offline sync in the background.
+      // If the active-order check itself failed, do not guess that the trip
+      // list is empty and do not sign out while the server is unreachable.
       if (!_driverWantsOnline) _scheduleOfflineStateRetry();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: TaxiText('Не удалось безопасно выйти. Аккаунт оставлен открытым: $e')),
+          SnackBar(
+            content: TaxiText(
+              'Не удалось проверить активные заказы или завершить выход. '
+              'Проверьте интернет и повторите попытку: $e',
+            ),
+          ),
         );
       }
     } finally {
