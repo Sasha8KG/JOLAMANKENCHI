@@ -1301,7 +1301,7 @@ export default {
           ).all();
         const assignedOrders = await env.DB.prepare(`SELECT id, firebase_order_id, pickup_address, pickup_lat, pickup_lng,
           destination_address, destination_lat, destination_lng, passenger_count, payment_method, tariff_type, comment,
-          assigned_at, status FROM orders WHERE status IN ('driver_assigned','arrived') AND assigned_driver_uid=? ORDER BY assigned_at DESC LIMIT 5`)
+          assigned_at, status FROM orders WHERE status IN ('driver_assigned','arrived') AND assigned_driver_uid=? ORDER BY assigned_at DESC LIMIT 1`)
           .bind(auth.user.localId).all();
         return response({ status: "ok", orders: open.results || [], assignedOrders: assignedOrders.results || [], firebaseSync: syncResults });
       }
