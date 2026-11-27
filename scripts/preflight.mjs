@@ -413,7 +413,7 @@ check('Driver online update binds the authenticated UID, requested state, and ac
 check('Flutter online API requires both GPS coordinates when online', api.includes('(online && latitude == null)'));
 check('Flutter online API rejects non-finite and out-of-range GPS', api.includes('!latitude.isFinite') && api.includes('!longitude.isFinite') && api.includes('latitude < -90') && api.includes('longitude > 180'));
 check('Driver GPS stream failure marks the driver offline', app.includes('Stop advertising an old position as live while GPS is unavailable.') && app.includes('WorkerApi.setDriverOnline(online: false)'));
-check('Driver heartbeat failure marks the driver offline', app.includes('Do not keep the driver advertised as online when fresh GPS cannot be confirmed.') && app.includes('WorkerApi.setDriverOnline(online: false)'));
+check('Driver heartbeat failure preserves line intent on temporary server errors and marks offline without fresh GPS', app.includes('var freshGpsReceived = false;') && app.includes('if (freshGpsReceived) {') && app.includes('Stop advertising the previous location'));
 const driverScreenStart = app.indexOf('class _DriverMapScreenState');
 const driverDisposeStart = app.indexOf('void dispose()', driverScreenStart);
 const driverDisposeEnd = app.indexOf('\n  Future<void> _logoutDriver()', driverDisposeStart);
@@ -468,7 +468,7 @@ check('Going offline is persisted through the Worker API', app.includes('await W
 check('Going online restarts GPS tracking', app.includes('_driverWantsOnline = true;') && app.includes('await _startLocationTracking();'));
 check('Offline drivers never display new order offers', app.includes('final visibleOpen = _driverWantsOnline ? open : <Map<String, dynamic>>[];') && app.includes('_serverOpenOrders = visibleOpen;'));
 check('GPS retry scheduling requires desired online state', app.includes('if (!mounted || !_driverWantsOnline || _locationRetryTimer?.isActive == true) return;'));
-check('GPS retry callback rechecks desired online state', app.includes('if (mounted && _driverWantsOnline) unawaited(_startLocationTracking());'));
+check('GPS retry callback rechecks desired online state and restores either GPS or heartbeat', app.includes('if (!mounted || !_driverWantsOnline) return;') && app.includes('if (_positionSubscription == null)') && app.includes('unawaited(_refreshDriverHeartbeat(driver));'));
 check('GPS tracking startup requires desired online state', app.includes('driver == null || !mounted || !_driverWantsOnline || _locationTrackingStarting'));
 check('GPS stream ignores updates after the driver goes offline', app.includes('if (!mounted || !_driverWantsOnline) return;'));
 check('Heartbeat refresh requires desired online state', app.includes('if (!mounted || !_driverWantsOnline || _positionSubscription == null'));
@@ -493,7 +493,7 @@ check('Offline transition cancels the GPS retry timer', app.includes('_locationR
 check('Offline transition cancels the location subscription before returning', app.includes('await _positionSubscription?.cancel();'));
 check('GPS startup checks desired state after the initial position lookup', app.includes('if (!mounted || !_driverWantsOnline) return;\n      if (!_isUsableDriverPosition(firstPosition))'));
 check('GPS startup checks desired state after server location publication', app.includes('if (!mounted || !_driverWantsOnline) return;\n      if (!published)'));
-check('GPS startup rejects an unconfirmed online publication', app.includes("throw StateError('Не удалось подтвердить выход на линию на сервере.')"));
+check('GPS startup keeps online intent and retries when server publication is temporarily unavailable', app.includes('final published = await _publishDriverLocation(driver);') && app.includes('if (!published) {') && app.includes('_scheduleLocationRetry();'));
 check('Driver profile restoration uses server online state and saved local preference', app.includes("isOnline: _isEnabled(data['online']) ||") && app.includes('await _readDriverLinePreference(restoringUid)'));
 
 check('Offline state retry timer is declared', app.includes('Timer? _offlineSyncRetryTimer;'));
@@ -552,10 +552,10 @@ check('GPS readiness helper also respects dispatcher-forced offline state', app.
 check('GPS readiness helper avoids setState after disposal', app.includes('if (!mounted || _driverGpsReady == confirmedReady) return;'));
 check('GPS readiness helper applies only the guarded readiness value', app.includes('setState(() => _driverGpsReady = confirmedReady);'));
 check('Starting a new GPS session clears stale readiness', app.includes('_locationTrackingStarting = true;') && app.includes('_setDriverGpsReady(false);'));
-check('GPS readiness becomes true only after server location publication succeeds', app.includes('Не удалось подтвердить выход на линию на сервере.') && app.includes('_setDriverGpsReady(true);'));
+check('GPS readiness becomes true only after server location publication succeeds', app.includes('if (!published) {') && app.includes('_setDriverGpsReady(false);') && app.includes('_setDriverGpsReady(true);'));
 check('GPS stream publication result updates the readiness indicator', app.includes('_publishDriverLocation(driver).then<void>((published) {') && app.includes('_setDriverGpsReady(published);'));
 check('GPS stream errors clear readiness', app.includes('onError: (Object error) {') && app.includes('_setDriverGpsReady(false);'));
-check('Heartbeat success confirms GPS readiness', app.includes('Не удалось обновить геолокацию на сервере.') && app.includes('_setDriverGpsReady(true);'));
+check('Heartbeat success confirms GPS readiness after successful publication', app.includes('final published = await _publishDriverLocation(driver);') && app.includes('if (!published) {') && app.includes('_setDriverGpsReady(true);'));
 check('Heartbeat failure clears GPS readiness', app.includes('_setDriverGpsReady(false);') && app.includes('_scheduleLocationRetry();'));
 check('GPS startup failure clears GPS readiness', app.includes('_setDriverGpsReady(false);') && app.includes('Не удалось включить геолокацию: $e'));
 check('Manual offline transition clears GPS readiness', app.includes('_driverWantsOnline = false;') && app.includes('_driverGpsReady = false;'));
@@ -835,7 +835,7 @@ check('Driver screen registers and removes its lifecycle observer', (app.match(/
 check('Driver order list refreshes immediately after app resumes', app.includes('unawaited(_pollServerOrders());') && app.includes('state != AppLifecycleState.resumed'));
 check('Driver restarts GPS stream after Android paused or dropped it', app.includes('if (_positionSubscription == null)') && app.includes('unawaited(_startLocationTracking());'));
 check('Driver refreshes live GPS heartbeat on resume when stream exists', app.includes('unawaited(_refreshDriverHeartbeat(driver));'));
-check('Driver resume recovery never turns an explicitly offline driver online', app.includes('if (!_driverWantsOnline || driver == null) return;'));
+check('Driver resume recovery never turns an explicitly offline driver online', app.includes('if (_driverWantsOnline && driver != null) {') && app.includes('await _startLocationTracking();') && app.includes('await _refreshDriverHeartbeat(driver);'));
 
 check('GPS and manual pickup changes request a nearby-driver refresh',
   app.includes('unawaited(_refreshNearbyDrivers());') &&
@@ -905,28 +905,28 @@ check('Shared radio message input uses dark text on an explicit white background
 check('Shared radio input has visible hint, cursor and focused borders', app.includes('cursorColor: Color(0xFF8A6500),') && app.includes('hintStyle: TextStyle(color: Colors.black54)') && app.includes('focusedBorder: OutlineInputBorder('));
 
 
-check('Driver logout waits until the server order list has been checked', app.includes('bool _assignedOrdersLoaded = false;') && app.includes('_assignedOrdersLoaded = true;') && app.includes('if (!_assignedOrdersLoaded) {') && app.includes('unawaited(_pollServerOrders());'));
+check('Driver logout fetches and validates a fresh server order snapshot before signing out', app.includes('final data = await WorkerApi.openOrders();') && app.includes('final snapshot = ServerOrderSnapshot.parse(data);') && app.includes('if (snapshot.assignedOrders.isNotEmpty) {'));
 check('Driver cannot log out while an assigned trip remains active', app.includes('if (_serverAssignedOrders.isNotEmpty) {') && app.includes('Нельзя выйти из аккаунта во время назначенного заказа'));
 check('Driver logout has a duplicate-action guard', app.includes('bool _logoutInProgress = false;') && app.includes('if (_logoutInProgress || _availabilityChanging || _offlineSyncInProgress) return;'));
 check('Driver logout disables its button while logout is running', app.includes('(_availabilityChanging || _logoutInProgress) ? null : _logoutDriver'));
 check('Driver logout cancels location retry before leaving the line', app.includes('_locationRetryTimer?.cancel();\n        _locationRetryTimer = null;'));
 check('Driver logout stops the GPS subscription and heartbeat before sign-out', app.includes('await _positionSubscription?.cancel();\n        _positionSubscription = null;\n        _stopLocationHeartbeat();'));
 check('Driver logout confirms server-side offline state before Firebase sign-out', (() => { const start=app.indexOf('Future<void> _logoutDriver()'); const end=app.indexOf('\n  @override', start); const block=app.slice(start,end); const request=block.indexOf('WorkerApi.setDriverOnline(online: false)'); const confirmation=block.indexOf("if (result['online'] != false)"); const signOut=block.indexOf('FirebaseService.signOut()'); return request >= 0 && confirmation > request && signOut > confirmation; })());
-check('Driver logout keeps authentication when server offline confirmation fails', app.includes('Не удалось безопасно выйти. Аккаунт оставлен открытым') && app.includes('if (!_driverWantsOnline) _scheduleOfflineStateRetry();'));
+check('Driver logout keeps authentication when server offline confirmation fails', app.includes('Не удалось проверить активные заказы или завершить выход.') && app.includes('TaxiParkState.currentLoggedInDriver = null;') && app.indexOf('WorkerApi.setDriverOnline(online: false)') < app.indexOf('FirebaseService.signOut()'));
 check('Driver logout clears local availability before requesting server offline state', app.includes('_driverWantsOnline = false;\n          _driverGpsReady = false;\n          _serverOpenOrders = [];'));
 check('Driver logout only clears the driver session after Firebase sign-out succeeds', app.includes('await FirebaseService.signOut().timeout(const Duration(seconds: 20));\n      TaxiParkState.currentLoggedInDriver = null;'));
 
 
-check('Driver logout always asks the server to confirm offline state, including after a previous failed attempt', app.includes('Always ask the server to confirm offline state') && app.includes('final result = await WorkerApi.setDriverOnline(online: false)') && app.includes('await FirebaseService.signOut().timeout(const Duration(seconds: 20));'));
+check('Driver logout always asks the server to confirm offline state before Firebase sign-out', app.includes('final result = await WorkerApi.setDriverOnline(online: false)') && app.includes("if (result['online'] != false)") && app.includes('await FirebaseService.signOut().timeout(const Duration(seconds: 20));'));
 check('Driver logout server-offline request is not conditional on the local online flag', (() => { const start=app.indexOf('Future<void> _logoutDriver()'); const end=app.indexOf('\n  @override',start); const block=app.slice(start,end); return block.includes('WorkerApi.setDriverOnline(online: false)') && !block.includes('if (_driverWantsOnline)'); })());
 check('Driver logout cancels any pending offline retry before its final server confirmation', app.includes('_offlineSyncRetryTimer?.cancel();\n      _offlineSyncRetryTimer = null;\n      await _positionSubscription?.cancel();'));
 check('Driver logout confirms server offline state before Firebase sign-out on every path', (() => { const start=app.indexOf('Future<void> _logoutDriver()'); const end=app.indexOf('\n  @override',start); const block=app.slice(start,end); return block.indexOf('WorkerApi.setDriverOnline(online: false)') >= 0 && block.indexOf('WorkerApi.setDriverOnline(online: false)') < block.indexOf('FirebaseService.signOut()'); })());
-check('Driver logout preserves the session if offline confirmation times out or fails', app.includes('Не удалось безопасно выйти. Аккаунт оставлен открытым') && app.includes('if (!_driverWantsOnline) _scheduleOfflineStateRetry();'));
-check('Driver logout cannot bypass a scheduled offline retry by relying only on local online state', app.includes('even if the local') && app.includes('previous failed request must never be bypassed by signing out'));
+check('Driver logout preserves the session if offline confirmation times out or fails', app.includes('Не удалось проверить активные заказы или завершить выход.') && app.includes('await WorkerApi.setDriverOnline(online: false)') && app.indexOf('FirebaseService.signOut()') > app.indexOf('if (result[\'online\'] != false)'));
+check('Driver logout always confirms server offline state regardless of local online state', app.includes('final result = await WorkerApi.setDriverOnline(online: false)') && !app.includes('if (_driverWantsOnline) {\n        final result = await WorkerApi.setDriverOnline(online: false)'));
 check('Driver logout clears local online and GPS-ready flags before server request', app.includes('_driverWantsOnline = false;\n        _driverGpsReady = false;\n        _serverOpenOrders = [];'));
 check('Driver logout cancels GPS retry and stops the position stream before server request', app.includes('_locationRetryTimer?.cancel();\n      _locationRetryTimer = null;') && app.includes('await _positionSubscription?.cancel();\n      _positionSubscription = null;'));
 check('Driver logout stops the heartbeat before server confirmation', app.includes('_positionSubscription = null;\n      _stopLocationHeartbeat();\n\n      final result = await WorkerApi.setDriverOnline(online: false)'));
-check('Driver logout retains the active-trip and initial-order-check safeguards', app.includes('if (!_assignedOrdersLoaded) {') && app.includes('if (_serverAssignedOrders.isNotEmpty) {'));
+check('Driver logout retains active-trip safeguard using a fresh server snapshot', app.includes('final snapshot = ServerOrderSnapshot.parse(data);') && app.includes('if (snapshot.assignedOrders.isNotEmpty) {'));
 
 
 check('Legacy Firebase Storage helper retains the configured project bucket for existing previews', app.includes("const String taxiFirebaseStorageBucket =\n    'gs://jol-aman-kenchi.firebasestorage.app';") && app.includes('FirebaseStorage.instanceFor(bucket: taxiFirebaseStorageBucket)'));
