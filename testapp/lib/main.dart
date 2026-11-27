@@ -1270,6 +1270,27 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                                   context,
                                   MaterialPageRoute(builder: (_) => const ClientAuthScreen()),
                                 ),
+                              child: Center(
+                                child: Container(
+                                  width: width * 0.82,
+                                  height: height * 0.056,
+                                  alignment: Alignment.center,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF171717),
+                                    border: Border.all(color: const Color(0xFFFFD400), width: 2),
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                  child: const FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: TaxiLocalizedText(
+                                      russian: 'Я пассажир',
+                                      kyrgyz: 'Мен жүргүнчүмүн',
+                                      style: TextStyle(color: Color(0xFFFFD400), fontSize: 18, fontWeight: FontWeight.w900),
+                                    ),
+                                  ),
+                                ),
+                              ),
                               ),
                             ),
                           ),
@@ -1287,6 +1308,27 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                                   context,
                                   MaterialPageRoute(builder: (_) => const DriverEntryScreen()),
                                 ),
+                              child: Center(
+                                child: Container(
+                                  width: width * 0.82,
+                                  height: height * 0.056,
+                                  alignment: Alignment.center,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF171717),
+                                    border: Border.all(color: const Color(0xFFFFD400), width: 2),
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                  child: const FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: TaxiLocalizedText(
+                                      russian: 'Я водитель',
+                                      kyrgyz: 'Мен айдоочумун',
+                                      style: TextStyle(color: Color(0xFFFFD400), fontSize: 18, fontWeight: FontWeight.w900),
+                                    ),
+                                  ),
+                                ),
+                              ),
                               ),
                             ),
                           ),
@@ -1301,6 +1343,27 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                               child: GestureDetector(
                                 behavior: HitTestBehavior.opaque,
                                 onTap: () => _showDispatcherAuth(context),
+                              child: Center(
+                                child: Container(
+                                  width: width * 0.82,
+                                  height: height * 0.056,
+                                  alignment: Alignment.center,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF171717),
+                                    border: Border.all(color: const Color(0xFFFFD400), width: 2),
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                  child: const FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: TaxiLocalizedText(
+                                      russian: 'Диспетчер',
+                                      kyrgyz: 'Диспетчер',
+                                      style: TextStyle(color: Color(0xFFFFD400), fontSize: 18, fontWeight: FontWeight.w900),
+                                    ),
+                                  ),
+                                ),
+                              ),
                               ),
                             ),
                           ),

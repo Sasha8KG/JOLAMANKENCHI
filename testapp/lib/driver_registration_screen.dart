@@ -152,13 +152,21 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
         throw const WorkerApiException('Пароль не должен состоять только из пробелов.');
       }
 
-      // Если прошлый запуск успел создать Firebase-аккаунт, но не завершил
-      // анкету, повторный запуск войдёт в него и продолжит регистрацию.
+      // Registration must always create a NEW Firebase identity.
+      // Never silently sign into an existing phone account here: otherwise a
+      // second applicant could overwrite the first driver's profile.
+      if (FirebaseAuth.instance.currentUser != null) {
+        await FirebaseService.signOut();
+      }
       try {
         await FirebaseService.registerWithPhone(phone: phone, password: password);
       } on FirebaseAuthException catch (e) {
-        if (e.code != 'email-already-in-use') rethrow;
-        await FirebaseService.signInWithPhone(phone: phone, password: password);
+        if (e.code == 'email-already-in-use') {
+          throw const WorkerApiException(
+            'Этот номер уже зарегистрирован. Для нового водителя укажите другой номер телефона; вход в существующий аккаунт выполняется отдельно.',
+          );
+        }
+        rethrow;
       }
 
       if (!mounted) return;
@@ -199,8 +207,8 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
     } on FirebaseAuthException catch (e) {
       _message(_firebaseMessage(e));
     } on WorkerApiException catch (e) {
-      // Не удаляем созданный Firebase-аккаунт и не выходим из него:
-      // следующая попытка сможет продолжить анкету на том же номере.
+      // Keep a newly created account available only for an explicit retry;
+      // never switch to an existing account as part of registration.
       _message('Не удалось завершить отправку анкеты: ${e.message}');
     } catch (_) {
       _message('Не удалось завершить регистрацию. Проверьте интернет и повторите попытку.');

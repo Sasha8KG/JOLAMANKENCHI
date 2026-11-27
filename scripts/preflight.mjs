@@ -36,6 +36,18 @@ const localization = read('testapp/lib/services/taxi_localization.dart');
 const registration = read('testapp/lib/driver_registration_screen.dart');
 const storageRules = read('backend/firebase-storage.rules');
 
+check('Driver registration never silently signs into an existing phone account',
+  registration.includes("e.code == 'email-already-in-use'") &&
+  registration.includes('Этот номер уже зарегистрирован') &&
+  !registration.includes('FirebaseService.signInWithPhone(phone: phone, password: password)'));
+check('Worker rejects a driver phone already owned by a different UID',
+  worker.includes('SELECT uid FROM drivers WHERE phone=? AND uid<>? LIMIT 1') &&
+  worker.includes('phoneOwner'));
+check('Main menu role labels are real localized widgets over the image',
+  ["russian: 'Я пассажир'", "kyrgyz: 'Мен жүргүнчүмүн'",
+   "russian: 'Я водитель'", "kyrgyz: 'Мен айдоочумун'",
+   "russian: 'Диспетчер'", "kyrgyz: 'Диспетчер'"].every((label) => app.includes(label)));
+
 check('Android applicationId is com.jolamankenchi.taxi', /applicationId\s+["']com\.jolamankenchi\.taxi["']/.test(gradle));
 check('Release signing uses private keystore config', /signingConfig signingConfigs\.release/.test(gradle));
 check('Release signing refuses missing secrets', /requestsRelease && !jakSigningConfigured/.test(gradle) && /JAK_KEYSTORE_PASSWORD/.test(gradle));

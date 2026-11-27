@@ -477,6 +477,17 @@ export default {
         const phone = phoneDigits.startsWith("0")
           ? "+996" + phoneDigits.slice(1)
           : "+" + phoneDigits;
+        // A phone number belongs to one driver profile only. Exclude the
+        // current UID so an applicant can safely retry their own submission.
+        const phoneOwner = await env.DB.prepare(
+          "SELECT uid FROM drivers WHERE phone=? AND uid<>? LIMIT 1"
+        ).bind(phone, auth.user.localId).first();
+        if (phoneOwner) {
+          return response({
+            status: "error",
+            message: "Этот номер телефона уже привязан к другой анкете водителя. Укажите другой номер."
+          }, 409);
+        }
         if (hasForbiddenControlCharacters(carModel) || carModel.length < 2 || carModel.length > 60) {
           return response({ status: "error", message: "Укажите марку и модель автомобиля от 2 до 60 символов." }, 400);
         }
