@@ -11,7 +11,7 @@ class ServerOrderSnapshot {
 
   static const int maxOpenOrders = 10;
   // Keep this limit aligned with the Worker /orders/open assignedOrders LIMIT 5.
-  static const int maxAssignedOrders = 5;
+  static const int maxAssignedOrders = 1;
 
   static ServerOrderSnapshot parse(Map<String, dynamic> payload) {
     final rawOpen = payload['orders'];
