@@ -3729,6 +3729,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
         _heartbeatCheckInProgress ||
         TaxiParkState.currentLoggedInDriver?.id != driver.id) return;
     _heartbeatCheckInProgress = true;
+    var freshGpsReceived = false;
     try {
       final position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
@@ -3739,24 +3740,33 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
       if (!_isUsableDriverPosition(position)) {
         throw StateError('GPS не предоставил свежие и точные координаты.');
       }
+      freshGpsReceived = true;
       driver.currentLocation = LatLng(position.latitude, position.longitude);
       driver.locationUpdatedAt = position.timestamp;
       _driverRouteRetryAfter = null;
       setState(() {});
       final published = await _publishDriverLocation(driver);
       if (!published) {
-        throw StateError('Не удалось обновить геолокацию на сервере.');
+        // A temporary Worker timeout is not a driver's decision to leave.
+        _setDriverGpsReady(false);
+        _scheduleLocationRetry();
+        return;
       }
       _setDriverGpsReady(true);
     } catch (_) {
       if (!mounted || !_driverWantsOnline || TaxiParkState.currentLoggedInDriver?.id != driver.id) return;
       _setDriverGpsReady(false);
-      // Do not keep the driver advertised as online when fresh GPS cannot be confirmed.
-      _positionSubscription?.cancel();
-      _positionSubscription = null;
-      _stopLocationHeartbeat();
-      unawaited(WorkerApi.setDriverOnline(online: false).then<void>((_) {}).catchError((_) {}));
-      _scheduleLocationRetry();
+      if (freshGpsReceived) {
+        // GPS is healthy; retry only the server publication.
+        _scheduleLocationRetry();
+      } else {
+        // Without a fresh fix, stop advertising the previous location.
+        _positionSubscription?.cancel();
+        _positionSubscription = null;
+        _stopLocationHeartbeat();
+        unawaited(WorkerApi.setDriverOnline(online: false).then<void>((_) {}).catchError((_) {}));
+        _scheduleLocationRetry();
+      }
     } finally {
       _heartbeatCheckInProgress = false;
     }
@@ -3781,7 +3791,14 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
     if (!mounted || !_driverWantsOnline || _locationRetryTimer?.isActive == true) return;
     _locationRetryTimer = Timer(const Duration(seconds: 20), () {
       _locationRetryTimer = null;
-      if (mounted && _driverWantsOnline) unawaited(_startLocationTracking());
+      if (!mounted || !_driverWantsOnline) return;
+      final driver = TaxiParkState.currentLoggedInDriver;
+      if (driver == null) return;
+      if (_positionSubscription == null) {
+        unawaited(_startLocationTracking());
+      } else {
+        unawaited(_refreshDriverHeartbeat(driver));
+      }
     });
   }
 
@@ -3825,11 +3842,16 @@ class _DriverMapScreenState extends State<DriverMapScreen> with WidgetsBindingOb
       driver.locationUpdatedAt = firstPosition.timestamp;
       _driverRouteRetryAfter = null;
       if (mounted) setState(() {});
-      // A temporary API outage must not advertise a driver without a confirmed location.
+      // A temporary server outage must not erase the driver's line intent.
       final published = await _publishDriverLocation(driver);
       if (!mounted || !_driverWantsOnline) return;
       if (!published) {
-        throw StateError('Не удалось подтвердить выход на линию на сервере.');
+        _setDriverGpsReady(false);
+        _showLocationMessage(
+          'GPS определён, но сервер временно не подтвердил связь. Повторяем подключение.',
+        );
+        _scheduleLocationRetry();
+        return;
       }
       _setDriverGpsReady(true);
 
