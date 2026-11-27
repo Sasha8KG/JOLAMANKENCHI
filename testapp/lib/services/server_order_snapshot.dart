@@ -10,6 +10,8 @@ class ServerOrderSnapshot {
   });
 
   static const int maxOpenOrders = 100;
+  // Keep this limit aligned with the Worker /orders/open assignedOrders LIMIT 5.
+  static const int maxAssignedOrders = 5;
 
   static ServerOrderSnapshot parse(Map<String, dynamic> payload) {
     final rawOpen = payload['orders'];
@@ -17,7 +19,7 @@ class ServerOrderSnapshot {
     if (rawOpen is! List || rawAssigned is! List) {
       throw const FormatException('Сервер прислал неполный список заказов.');
     }
-    if (rawOpen.length > maxOpenOrders || rawAssigned.length > 1) {
+    if (rawOpen.length > maxOpenOrders || rawAssigned.length > maxAssignedOrders) {
       throw const FormatException('Сервер прислал слишком много активных заказов.');
     }
     final open = _normalize(rawOpen, expectedStatus: 'new');
